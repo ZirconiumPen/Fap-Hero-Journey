@@ -361,6 +361,9 @@ func _load_settings() -> void:
 	_auto_toggle.button_pressed = auto_connect
 	_style_toggle(_auto_toggle, auto_connect)
 
+	var saved_device: String = _config.get_value("intiface", "selected_device", "")
+	_restore_device_selection(saved_device)
+
 
 func _apply_defaults() -> void:
 	_master_slider.value = 1.0
@@ -378,6 +381,8 @@ func _save_settings() -> void:
 	_config.set_value("display",  "resolution_index", _res_dropdown.selected)
 	_config.set_value("intiface", "address",          _address_input.text)
 	_config.set_value("intiface", "auto_connect",     _auto_toggle.button_pressed)
+	if _device_dropdown.selected >= 0 and _device_dropdown.item_count > 0:
+		_config.set_value("intiface", "selected_device", _device_dropdown.get_item_text(_device_dropdown.selected))
 	_config.save(SETTINGS_PATH)
 
 
@@ -405,6 +410,7 @@ func _connect_signals() -> void:
 	_auto_toggle.toggled.connect(_on_auto_connect_toggled)
 	_connect_btn.pressed.connect(_on_connect_pressed)
 	_scan_btn.pressed.connect(_on_scan_pressed)
+	_device_dropdown.item_selected.connect(_on_device_selected)
 
 	ButtplugService.connect("Connected",     _on_bp_connected)
 	ButtplugService.connect("Disconnected",  _on_bp_disconnected)
@@ -479,6 +485,24 @@ func _on_bp_disconnected() -> void:
 func _on_bp_device_added(name: String, _index: int) -> void:
 	_device_dropdown.add_item(name)
 	_device_dropdown.disabled = false
+	var saved: String = _config.get_value("intiface", "selected_device", "")
+	if name == saved:
+		_device_dropdown.selected = _device_dropdown.item_count - 1
+
+
+func _on_device_selected(index: int) -> void:
+	var name: String = _device_dropdown.get_item_text(index)
+	_config.set_value("intiface", "selected_device", name)
+	_config.save(SETTINGS_PATH)
+
+
+func _restore_device_selection(device_name: String) -> void:
+	if device_name.is_empty():
+		return
+	for i: int in _device_dropdown.item_count:
+		if _device_dropdown.get_item_text(i) == device_name:
+			_device_dropdown.selected = i
+			return
 
 
 func _on_bp_device_removed(index: int) -> void:

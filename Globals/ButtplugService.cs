@@ -102,10 +102,34 @@ public partial class ButtplugService : Node
 		return result;
 	}
 
+	public int GetSelectedDeviceIndex()
+	{
+		if (_client == null || !_client.Connected)
+			return -1;
+
+		var config = new ConfigFile();
+		string selectedName = "";
+		if (config.Load("user://settings.cfg") == Error.Ok)
+			selectedName = config.GetValue("intiface", "selected_device", Variant.From("")).AsString();
+
+		if (!string.IsNullOrEmpty(selectedName))
+		{
+			foreach (var device in _client.Devices)
+				if (device.Name == selectedName)
+					return (int)device.Index;
+		}
+
+		// Fallback: first available device
+		foreach (var device in _client.Devices)
+			return (int)device.Index;
+
+		return -1;
+	}
+
 	public bool DeviceSupportsLinear(int deviceIndex)
 	{
 		var device = GetDeviceAt(deviceIndex);
-		return device != null && device.HasOutput(Buttplug.Core.Messages.OutputType.HwPositionWithDuration);
+		return device != null && device.HasOutput(Buttplug.Core.Messages.OutputType.Position);
 	}
 
 	public async void SendVibrate(int deviceIndex, double intensity)

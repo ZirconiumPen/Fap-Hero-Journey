@@ -3,16 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|c:\\users\\mason\\documents\\fap-hero-journey\\globals\\buttplugservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|solutionrelative:globals\\buttplugservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|c:\\users\\mason\\documents\\fap-hero-journey\\globals\\funscriptplayer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|solutionrelative:globals\\funscriptplayer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|c:\\users\\mason\\documents\\fap-hero-journey\\globals\\gamestate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|solutionrelative:globals\\gamestate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|c:\\users\\mason\\documents\\fap-hero-journey\\globals\\buttplugservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{943CFDDA-AB65-4711-B4F3-5C6184B203CE}|Fap Hero Journey.csproj|solutionrelative:globals\\buttplugservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mason\\Documents\\fap-hero-journey\\scripts\\main\\Main.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -29,11 +29,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "GameState.cs",
               "DocumentMoniker": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\Globals\\GameState.cs",
               "RelativeDocumentMoniker": "Globals\\GameState.cs",
@@ -41,32 +41,34 @@
               "RelativeToolTip": "Globals\\GameState.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-18T00:10:56.458Z"
+              "WhenOpened": "2026-05-18T00:10:56.458Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "ButtplugService.cs",
               "DocumentMoniker": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\Globals\\ButtplugService.cs",
               "RelativeDocumentMoniker": "Globals\\ButtplugService.cs",
               "ToolTip": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\Globals\\ButtplugService.cs",
               "RelativeToolTip": "Globals\\ButtplugService.cs",
-              "ViewState": "AgIAAH0AAAAAAAAAAAAAwJoAAABCAAAAAAAAAA==",
+              "ViewState": "AgIAAIAAAAAAAAAAAAApwJYAAAATAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-05-17T22:41:41.474Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "FunscriptPlayer.cs",
               "DocumentMoniker": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\Globals\\FunscriptPlayer.cs",
               "RelativeDocumentMoniker": "Globals\\FunscriptPlayer.cs",
               "ToolTip": "C:\\Users\\Mason\\Documents\\fap-hero-journey\\Globals\\FunscriptPlayer.cs",
               "RelativeToolTip": "Globals\\FunscriptPlayer.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAANAAAAAAAAAA==",
+              "ViewState": "AgIAADgAAAAAAAAAAIA1wFsAAAAnAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-17T21:50:57.603Z"
+              "WhenOpened": "2026-05-17T21:50:57.603Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",

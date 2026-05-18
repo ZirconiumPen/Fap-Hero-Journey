@@ -67,6 +67,7 @@ const JourneyCardScene = preload("res://scenes/journey_select/JourneyCard.tscn")
 @onready var _round_scroll: ScrollContainer = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundListScroll
 @onready var _round_list:   VBoxContainer   = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundListScroll/RoundList
 @onready var _play_btn:     Button          = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/PlayButton
+@onready var _edit_btn:     Button          = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/EditButton
 
 var _journeys:        Array      = []
 var _sort_field:      String     = "name"
@@ -182,6 +183,7 @@ func _apply_theme() -> void:
 	_style_button(_sort_duration, COLOR_PURPLE_MID)
 	_style_button(_sort_actions,  COLOR_PURPLE_MID)
 	_style_button(_play_btn,      COLOR_PURPLE_BRIGHT)
+	_style_button(_edit_btn,      COLOR_PURPLE_MID)
 
 	_style_modal_panel()
 
@@ -292,6 +294,7 @@ func _connect_signals() -> void:
 	_sort_actions.pressed.connect(_on_sort_pressed.bind("actions"))
 	_backdrop.gui_input.connect(_on_backdrop_input)
 	_play_btn.pressed.connect(_on_play_pressed)
+	_edit_btn.pressed.connect(_on_edit_pressed)
 
 
 func _on_sort_pressed(field: String) -> void:
@@ -319,6 +322,13 @@ func _on_play_pressed() -> void:
 		return
 	GameState.StartJourney(_current_journey)
 	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
+
+
+func _on_edit_pressed() -> void:
+	if _current_journey.is_empty():
+		return
+	JourneyBuilder.edit_journey = _current_journey
+	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
 
 # ---------------------------------------------------------------------------
 # Journey scanning

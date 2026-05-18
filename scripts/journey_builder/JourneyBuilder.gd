@@ -1,3 +1,4 @@
+class_name JourneyBuilder
 extends Control
 
 # ---------------------------------------------------------------------------
@@ -32,6 +33,10 @@ const VIDEO_EXTENSIONS:     Array[String] = ["mp4", "m4v", "mkv", "avi", "mov", 
 const FUNSCRIPT_EXTENSIONS: Array[String] = ["funscript", "json"]
 const IMAGE_EXTENSIONS:     Array[String] = ["png", "jpg", "jpeg", "webp"]
 
+# EIRTeam.FFmpeg only decodes H.264; everything else gets transcoded on save.
+const H264_NAMES: Array[String] = ["h264", "avc1", "avc"]
+const TRANSCODE_PROGRESS_FILE: String = "user://transcode_progress.txt"
+
 const DropZoneScript = preload("res://scripts/journey_builder/DropZone.gd")
 
 @onready var _bg:            ColorRect       = $Background
@@ -53,8 +58,13 @@ const DropZoneScript = preload("res://scripts/journey_builder/DropZone.gd")
 @onready var _status_lbl:    Label           = $Scroll/Content/BottomSection/StatusLabel
 @onready var _save_btn:      Button          = $Scroll/Content/BottomSection/SaveButton
 
+static var edit_journey: Dictionary = {}
+
 var _cover_path: String = ""
 var _rounds:     Array  = []  # Array[Dictionary] — {name, funscript_path, video_path, coins}
+
+var _transcode_cancel: bool = false
+var _transcode_pid:    int  = -1
 
 
 func _ready() -> void:
@@ -62,6 +72,9 @@ func _ready() -> void:
 	_apply_theme()
 	_connect_signals()
 	_refresh_rounds()
+	if not edit_journey.is_empty():
+		_load_journey(edit_journey)
+		edit_journey = {}
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +422,57 @@ func _update_cover_preview() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Load existing journey for editing
+# ---------------------------------------------------------------------------
+
+func _load_journey(journey: Dictionary) -> void:
+	_name_field.text   = journey.get("title", "")
+	_author_field.text = journey.get("author", "")
+	_desc_field.text   = journey.get("description", "")
+
+	var diff: String  = journey.get("difficulty", "Easy")
+	var diff_idx: int = DIFFICULTIES.find(diff)
+	if diff_idx >= 0:
+		_diff_option.selected = diff_idx
+
+	var cover: String = journey.get("cover_path", "")
+	if cover != "":
+		_cover_path = cover
+		_update_cover_preview()
+
+	_rounds.clear()
+	var rounds: Array = journey.get("rounds", []).duplicate()
+	rounds.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return (a.get("order", 0) as int) < (b.get("order", 0) as int)
+	)
+	for r: Dictionary in rounds:
+		_rounds.append({
+			"name":           r.get("name", ""),
+			"funscript_path": r.get("funscript_path", ""),
+			"video_path":     _find_video_in_round(r.get("folder", "")),
+			"coins":          r.get("coins", 0),
+		})
+	_refresh_rounds()
+
+
+func _find_video_in_round(folder: String) -> String:
+	if folder == "":
+		return ""
+	var dir: DirAccess = DirAccess.open(folder)
+	if dir == null:
+		return ""
+	dir.list_dir_begin()
+	var fname: String = dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir() and fname.get_extension().to_lower() in VIDEO_EXTENSIONS:
+			dir.list_dir_end()
+			return folder + "/" + fname
+		fname = dir.get_next()
+	dir.list_dir_end()
+	return ""
+
+
+# ---------------------------------------------------------------------------
 # Round list
 # ---------------------------------------------------------------------------
 
@@ -579,6 +643,36 @@ func _on_save_pressed() -> void:
 			_save_btn.disabled = false
 			return
 
+	# Check ffmpeg availability up-front if any round has a video, so we don't
+	# spew ERR_CANT_FORK from ffprobe before we've had a chance to error cleanly.
+	var any_video: bool = false
+	for r: Dictionary in _rounds:
+		if r.get("video_path", "") != "":
+			any_video = true
+			break
+
+	var ffmpeg_ok: bool = _ffmpeg_available() if any_video else false
+
+	# Pre-scan: identify which videos need transcoding to H.264.
+	var transcode_plan: Dictionary = {}  # round_idx -> { codec: String, duration: float }
+	if ffmpeg_ok:
+		for i in _rounds.size():
+			var vid: String = _rounds[i].get("video_path", "")
+			if vid == "":
+				continue
+			var codec: String = _get_video_codec(vid)
+			if codec == "" or codec in H264_NAMES:
+				continue
+			transcode_plan[i] = {
+				"codec":    codec,
+				"duration": _video_duration_seconds(vid),
+			}
+
+	if not transcode_plan.is_empty() and not ffmpeg_ok:
+		_show_status("Videos need transcoding (non-H.264) but ffmpeg is not on PATH. Install ffmpeg and restart Godot.", true)
+		_save_btn.disabled = false
+		return
+
 	var folder_name: String = _sanitize_folder_name(journey_name)
 	var journey_dir: String = JOURNEYS_DIR + "/" + folder_name
 	var abs_dir: String     = ProjectSettings.globalize_path(journey_dir)
@@ -587,6 +681,11 @@ func _on_save_pressed() -> void:
 	if _cover_path != "":
 		var ext: String = _cover_path.get_extension().to_lower()
 		_copy_file(_cover_path, abs_dir + "/cover." + ext)
+
+	var modal: Control = null
+	if not transcode_plan.is_empty():
+		modal = _create_transcode_modal()
+		add_child(modal)
 
 	var rounds_json: Array = []
 	for i in _rounds.size():
@@ -601,7 +700,19 @@ func _on_save_pressed() -> void:
 
 		var vid_src: String = r.get("video_path", "")
 		if vid_src != "":
-			_copy_file(vid_src, round_dir + "/" + vid_src.get_file())
+			if i in transcode_plan:
+				var info: Dictionary = transcode_plan[i]
+				var vid_dst: String  = round_dir + "/" + vid_src.get_file().get_basename() + ".mp4"
+				_update_modal_round(modal, i + 1, _rounds.size(), round_name, info["codec"])
+				var ok: bool = await _transcode_video(vid_src, vid_dst, info["duration"], modal)
+				if not ok:
+					if modal:
+						modal.queue_free()
+					_show_status("Transcoding cancelled. Journey not saved.", true)
+					_save_btn.disabled = false
+					return
+			else:
+				_copy_file(vid_src, round_dir + "/" + vid_src.get_file())
 
 		rounds_json.append({
 			"Name":         round_name,
@@ -609,6 +720,9 @@ func _on_save_pressed() -> void:
 			"CoinsAwarded": r.get("coins", 0) as int,
 			"RoundType":    "Normal",
 		})
+
+	if modal:
+		modal.queue_free()
 
 	var data: Dictionary = {
 		"Name":        journey_name,
@@ -630,6 +744,236 @@ func _on_save_pressed() -> void:
 	_show_status("Journey saved! Returning to catalogue...", false)
 	await get_tree().create_timer(1.5).timeout
 	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
+
+
+# ---------------------------------------------------------------------------
+# Transcoding
+# ---------------------------------------------------------------------------
+
+func _ffmpeg_binary(name: String) -> String:
+	# Try bundled binary first (works in both editor and exported builds), then PATH.
+	var exe: String = name + ".exe" if OS.get_name() == "Windows" else name
+	var bundled: String = ProjectSettings.globalize_path("res://bin/" + exe)
+	if FileAccess.file_exists(bundled):
+		return bundled
+	var next_to_app: String = OS.get_executable_path().get_base_dir() + "/bin/" + exe
+	if FileAccess.file_exists(next_to_app):
+		return next_to_app
+	return name  # fall back to PATH lookup
+
+
+func _ffmpeg_available() -> bool:
+	var out: Array = []
+	return OS.execute(_ffmpeg_binary("ffprobe"), ["-version"], out, true, false) == 0
+
+
+func _get_video_codec(path: String) -> String:
+	var out: Array = []
+	var args: PackedStringArray = [
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=codec_name",
+		"-of", "csv=p=0",
+		ProjectSettings.globalize_path(path),
+	]
+	if OS.execute(_ffmpeg_binary("ffprobe"), args, out, true, false) != 0 or out.is_empty():
+		return ""
+	return (out[0] as String).strip_edges().to_lower()
+
+
+func _video_duration_seconds(path: String) -> float:
+	var out: Array = []
+	var args: PackedStringArray = [
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "csv=p=0",
+		ProjectSettings.globalize_path(path),
+	]
+	if OS.execute(_ffmpeg_binary("ffprobe"), args, out, true, false) != 0 or out.is_empty():
+		return 0.0
+	return (out[0] as String).strip_edges().to_float()
+
+
+func _transcode_video(input: String, output: String, duration: float, modal: Control) -> bool:
+	_transcode_cancel = false
+
+	var progress_abs: String = ProjectSettings.globalize_path(TRANSCODE_PROGRESS_FILE)
+	# Truncate any prior progress file so old data doesn't mislead the parser.
+	var pf: FileAccess = FileAccess.open(progress_abs, FileAccess.WRITE)
+	if pf:
+		pf.close()
+
+	var args: PackedStringArray = [
+		"-y",
+		"-hide_banner",
+		"-loglevel", "error",
+		"-i", ProjectSettings.globalize_path(input),
+		"-c:v", "libx264",
+		"-preset", "fast",
+		"-crf", "22",
+		"-pix_fmt", "yuv420p",
+		"-c:a", "aac",
+		"-b:a", "192k",
+		"-progress", progress_abs,
+		ProjectSettings.globalize_path(output),
+	]
+
+	_transcode_pid = OS.create_process(_ffmpeg_binary("ffmpeg"), args)
+	if _transcode_pid <= 0:
+		return false
+
+	while OS.is_process_running(_transcode_pid):
+		if _transcode_cancel:
+			OS.kill(_transcode_pid)
+			_transcode_pid = -1
+			return false
+		_poll_progress(progress_abs, duration, modal)
+		await get_tree().create_timer(0.4).timeout
+
+	# Final poll to flush "progress=end".
+	_poll_progress(progress_abs, duration, modal)
+	_transcode_pid = -1
+	return FileAccess.file_exists(output)
+
+
+func _poll_progress(progress_path: String, duration: float, modal: Control) -> void:
+	if modal == null:
+		return
+	var f: FileAccess = FileAccess.open(progress_path, FileAccess.READ)
+	if f == null:
+		return
+	var text: String = f.get_as_text()
+	f.close()
+	var us: int = 0
+	var speed: String = ""
+	for raw_line: String in text.split("\n"):
+		var line: String = raw_line.strip_edges()
+		if line.begins_with("out_time_us="):
+			us = line.substr(12).to_int()
+		elif line.begins_with("out_time_ms="):
+			us = line.substr(12).to_int()
+		elif line.begins_with("speed="):
+			speed = line.substr(6)
+	var current_s: float = us / 1_000_000.0
+	var progress: float = 0.0
+	if duration > 0.0:
+		progress = clampf(current_s / duration, 0.0, 1.0)
+	_update_modal_progress(modal, progress, current_s, duration, speed)
+
+
+# ---------------------------------------------------------------------------
+# Transcode modal UI
+# ---------------------------------------------------------------------------
+
+func _create_transcode_modal() -> Control:
+	var modal: Control = Control.new()
+	modal.name = "TranscodeModal"
+	modal.anchor_right = 1.0
+	modal.anchor_bottom = 1.0
+	modal.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var backdrop: ColorRect = ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.85)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	modal.add_child(backdrop)
+
+	var panel: PanelContainer = PanelContainer.new()
+	var ps: StyleBoxFlat = StyleBoxFlat.new()
+	ps.bg_color            = COLOR_PANEL_BG
+	ps.border_color        = COLOR_PURPLE_BRIGHT
+	ps.border_width_left   = 2; ps.border_width_right  = 2
+	ps.border_width_top    = 2; ps.border_width_bottom = 2
+	ps.content_margin_left = 32; ps.content_margin_right  = 32
+	ps.content_margin_top  = 24; ps.content_margin_bottom = 24
+	panel.add_theme_stylebox_override("panel", ps)
+	panel.anchor_left = 0.5; panel.anchor_right = 0.5
+	panel.anchor_top = 0.5;  panel.anchor_bottom = 0.5
+	panel.offset_left = -260; panel.offset_right = 260
+	panel.offset_top = -120;  panel.offset_bottom = 120
+	modal.add_child(panel)
+
+	var vb: VBoxContainer = VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	panel.add_child(vb)
+
+	var title: Label = Label.new()
+	title.name = "Title"
+	title.text = "TRANSCODING VIDEO"
+	_style_label(title, COLOR_PURPLE_BRIGHT, 16, true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+
+	var round_lbl: Label = Label.new()
+	round_lbl.name = "RoundLabel"
+	round_lbl.text = ""
+	_style_label(round_lbl, COLOR_WHITE_SOFT, 13, false)
+	round_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(round_lbl)
+
+	var bar: ProgressBar = ProgressBar.new()
+	bar.name = "Bar"
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 14)
+	var bar_bg: StyleBoxFlat = StyleBoxFlat.new()
+	bar_bg.bg_color = COLOR_PURPLE_DARK
+	bar.add_theme_stylebox_override("background", bar_bg)
+	var bar_fill: StyleBoxFlat = StyleBoxFlat.new()
+	bar_fill.bg_color = COLOR_PURPLE_BRIGHT
+	bar.add_theme_stylebox_override("fill", bar_fill)
+	vb.add_child(bar)
+
+	var status_lbl: Label = Label.new()
+	status_lbl.name = "Status"
+	status_lbl.text = "Starting..."
+	_style_label(status_lbl, COLOR_PURPLE_MID, 12, false)
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(status_lbl)
+
+	var cancel_btn: Button = Button.new()
+	cancel_btn.text = "CANCEL"
+	cancel_btn.custom_minimum_size = Vector2(120, 0)
+	_style_button(cancel_btn, COLOR_MAGENTA)
+	cancel_btn.pressed.connect(func() -> void: _transcode_cancel = true)
+	var btn_row: HBoxContainer = HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_child(cancel_btn)
+	vb.add_child(btn_row)
+
+	return modal
+
+
+func _update_modal_round(modal: Control, round_num: int, total: int, round_name: String, codec: String) -> void:
+	if modal == null:
+		return
+	var lbl: Label = modal.get_node("PanelContainer/VBoxContainer/RoundLabel") as Label
+	if lbl == null:
+		# Fallback: walk children since we didn't name the intermediate panel/vbox.
+		lbl = modal.find_child("RoundLabel", true, false) as Label
+	if lbl:
+		lbl.text = "Round %d / %d — %s  (%s → h264)" % [round_num, total, round_name, codec.to_upper()]
+
+
+func _update_modal_progress(modal: Control, progress: float, current_s: float, total_s: float, speed: String) -> void:
+	if modal == null:
+		return
+	var bar: ProgressBar = modal.find_child("Bar", true, false) as ProgressBar
+	if bar:
+		bar.value = progress
+	var status: Label = modal.find_child("Status", true, false) as Label
+	if status:
+		var pct: int = int(round(progress * 100.0))
+		var cur: String = _format_time(current_s)
+		var tot: String = _format_time(total_s) if total_s > 0.0 else "?"
+		var spd: String = ("  •  " + speed) if speed != "" else ""
+		status.text = "%s / %s  •  %d%%%s" % [cur, tot, pct, spd]
+
+
+func _format_time(seconds: float) -> String:
+	var s: int = int(seconds)
+	return "%02d:%02d" % [s / 60, s % 60]
 
 
 func _sanitize_folder_name(name: String) -> String:
