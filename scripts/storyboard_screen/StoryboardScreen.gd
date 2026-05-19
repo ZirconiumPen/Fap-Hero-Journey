@@ -2,11 +2,6 @@ extends Control
 
 signal completed(coins: int)
 
-const COLOR_BAR_BG:  Color = Color(0.02, 0.004, 0.035, 0.94)
-const COLOR_CYAN:    Color = Color(0.10, 0.85,  0.90,  1.0)
-const COLOR_WHITE:   Color = Color(0.878, 0.780, 1.0,  1.0)
-const COLOR_MUTED:   Color = Color(0.55, 0.47,  0.72,  1.0)
-
 const VN_BAR_HEIGHT: int = 210
 
 @onready var _bg_image:  TextureRect    = $BgImage
@@ -159,8 +154,8 @@ func _apply_layout() -> void:
 
 func _apply_theme() -> void:
 	var bar_style: StyleBoxFlat = StyleBoxFlat.new()
-	bar_style.bg_color           = COLOR_BAR_BG
-	bar_style.border_color       = COLOR_CYAN
+	bar_style.bg_color           = UITheme.BAR_BG
+	bar_style.border_color       = UITheme.CYAN
 	bar_style.border_width_top   = 2
 	bar_style.content_margin_left   = 0
 	bar_style.content_margin_right  = 0
@@ -168,14 +163,14 @@ func _apply_theme() -> void:
 	bar_style.content_margin_bottom = 0
 	_vn_bar.add_theme_stylebox_override("panel", bar_style)
 
-	_speaker.add_theme_color_override("font_color",    COLOR_CYAN)
+	_speaker.add_theme_color_override("font_color",    UITheme.CYAN)
 	_speaker.add_theme_font_size_override("font_size", 14)
 	_speaker.uppercase = true
 
-	_dialogue.add_theme_color_override("font_color",    COLOR_WHITE)
+	_dialogue.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
 	_dialogue.add_theme_font_size_override("font_size", 19)
 	_dialogue.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	_hint.add_theme_color_override("font_color",    COLOR_MUTED)
+	_hint.add_theme_color_override("font_color",    UITheme.DARK_TEXT)
 	_hint.add_theme_font_size_override("font_size", 11)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

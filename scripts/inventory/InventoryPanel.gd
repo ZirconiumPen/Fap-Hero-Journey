@@ -2,16 +2,6 @@ extends Control
 
 signal closed
 
-const COLOR_PANEL_BG:      Color = Color(0.035, 0.005, 0.055, 0.97)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_DARK_TEXT:     Color = Color(0.55,  0.47,  0.72,  1.0)
-const COLOR_AMBER:         Color = Color(1.0,   0.65,  0.15,  1.0)
-const COLOR_TOXIC_GREEN:   Color = Color(0.45,  1.0,   0.35,  1.0)
-const COLOR_CARD_BG:       Color = Color(0.02,  0.0,   0.04,  1.0)
-
 const PANEL_WIDTH: int   = 300
 const SLIDE_TIME:  float = 0.18
 
@@ -102,27 +92,27 @@ func _make_item_row(slot_idx: int, data: Dictionary) -> Control:
 	var name_lbl: Label = Label.new()
 	name_lbl.text = (data.get("name", "?") as String).to_upper()
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
+	name_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	name_lbl.add_theme_font_size_override("font_size", 14)
 	top_row.add_child(name_lbl)
 
 	var dur_lbl: Label = Label.new()
 	var dur_ms: int = data.get("duration_ms", 0)
 	dur_lbl.text = "%ds" % int(dur_ms / 1000.0)
-	dur_lbl.add_theme_color_override("font_color", COLOR_TOXIC_GREEN)
+	dur_lbl.add_theme_color_override("font_color", UITheme.TOXIC_GREEN)
 	dur_lbl.add_theme_font_size_override("font_size", 11)
 	top_row.add_child(dur_lbl)
 
 	var desc_lbl: Label = Label.new()
 	desc_lbl.text = data.get("description", "")
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.add_theme_color_override("font_color", COLOR_DARK_TEXT)
+	desc_lbl.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	desc_lbl.add_theme_font_size_override("font_size", 11)
 	col.add_child(desc_lbl)
 
 	var use_lbl: Label = Label.new()
 	use_lbl.text = "> CLICK TO ACTIVATE"
-	use_lbl.add_theme_color_override("font_color", COLOR_AMBER)
+	use_lbl.add_theme_color_override("font_color", UITheme.AMBER)
 	use_lbl.add_theme_font_size_override("font_size", 10)
 	col.add_child(use_lbl)
 
@@ -174,8 +164,8 @@ func _apply_layout() -> void:
 
 func _apply_theme() -> void:
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = COLOR_PANEL_BG
-	panel_style.border_color        = COLOR_PURPLE_BRIGHT
+	panel_style.bg_color = UITheme.PANEL_BG_DEEP
+	panel_style.border_color        = UITheme.PURPLE_BRIGHT
 	panel_style.border_width_left   = 3
 	panel_style.content_margin_left   = 18
 	panel_style.content_margin_right  = 18
@@ -183,15 +173,15 @@ func _apply_theme() -> void:
 	panel_style.content_margin_bottom = 18
 	_panel.add_theme_stylebox_override("panel", panel_style)
 
-	_title.add_theme_color_override("font_color", COLOR_PURPLE_BRIGHT)
+	_title.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
 	_title.add_theme_font_size_override("font_size", 20)
 	_title.uppercase = true
 
-	_subtitle.add_theme_color_override("font_color", COLOR_DARK_TEXT)
+	_subtitle.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	_subtitle.add_theme_font_size_override("font_size", 11)
 	_subtitle.uppercase = true
 
-	_empty_lbl.add_theme_color_override("font_color", COLOR_DARK_TEXT)
+	_empty_lbl.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	_empty_lbl.add_theme_font_size_override("font_size", 13)
 	_empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -200,8 +190,8 @@ func _apply_theme() -> void:
 
 func _row_stylebox() -> StyleBoxFlat:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = COLOR_CARD_BG
-	s.border_color        = COLOR_PURPLE_MID
+	s.bg_color = UITheme.CARD_BG
+	s.border_color        = UITheme.PURPLE_MID
 	s.border_width_left   = 2
 	s.border_width_right  = 1
 	s.border_width_top    = 1
@@ -210,14 +200,14 @@ func _row_stylebox() -> StyleBoxFlat:
 
 
 func _style_close_button(btn: Button) -> void:
-	btn.add_theme_color_override("font_color",       COLOR_MAGENTA)
-	btn.add_theme_color_override("font_hover_color", COLOR_WHITE_SOFT)
+	btn.add_theme_color_override("font_color",       UITheme.MAGENTA)
+	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.focus_mode = Control.FOCUS_NONE
 
 	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = Color(0, 0, 0, 0)
-	s.border_color        = COLOR_MAGENTA
+	s.border_color        = UITheme.MAGENTA
 	s.border_width_left   = 1
 	s.border_width_right  = 1
 	s.border_width_top    = 1
@@ -229,10 +219,10 @@ func _style_close_button(btn: Button) -> void:
 	btn.add_theme_stylebox_override("normal", s)
 
 	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(COLOR_MAGENTA.r, COLOR_MAGENTA.g, COLOR_MAGENTA.b, 0.25)
+	s_hover.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.25)
 	btn.add_theme_stylebox_override("hover", s_hover)
 
 	var s_pressed: StyleBoxFlat = s.duplicate()
-	s_pressed.bg_color = COLOR_MAGENTA
+	s_pressed.bg_color = UITheme.MAGENTA
 	btn.add_theme_stylebox_override("pressed", s_pressed)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())

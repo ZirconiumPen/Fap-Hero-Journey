@@ -7,16 +7,6 @@ extends Control
 # funscript files found in user://journeys/<folder>/<round-name>/.
 # ---------------------------------------------------------------------------
 
-const COLOR_BG:            Color = Color(0.0,   0.0,   0.0,   1.0)
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 1.0)
-const COLOR_PURPLE_DARK:   Color = Color(0.176, 0.024, 0.259, 1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_SEPARATOR:     Color = Color(0.698, 0.118, 1.0,   0.5)
-const COLOR_DANGER:        Color = Color(0.9,   0.15,  0.15,  1.0)
-
 const TOP_BAR_HEIGHT:   int = 64
 const GRID_TOP_MARGIN:  int = 16
 const GRID_PADDING:     int = 40
@@ -167,44 +157,44 @@ func _update_grid_columns() -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_theme() -> void:
-	_bg.color = COLOR_BG
+	_bg.color = UITheme.BG
 
 	# TopBar background via a Panel behind the HBoxContainer would need an extra
 	# node; instead we apply a dark strip by styling the scroll container top offset.
-	_style_label(_title_lbl,  COLOR_PURPLE_BRIGHT, 18, true)
+	_style_label(_title_lbl,  UITheme.PURPLE_BRIGHT, 18, true)
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
 
-	_style_label(_sort_lbl,   COLOR_PURPLE_MID,    13, true)
-	_style_label(_empty_lbl,  COLOR_PURPLE_MID,    15, true)
+	_style_label(_sort_lbl,   UITheme.PURPLE_MID,    13, true)
+	_style_label(_empty_lbl,  UITheme.PURPLE_MID,    15, true)
 	_empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_empty_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_empty_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 
-	_style_button(_back_btn,      COLOR_MAGENTA)
-	_style_button(_sort_name,     COLOR_PURPLE_BRIGHT)
-	_style_button(_sort_duration, COLOR_PURPLE_MID)
-	_style_button(_sort_actions,  COLOR_PURPLE_MID)
-	_style_button(_play_btn,      COLOR_PURPLE_BRIGHT)
-	_style_button(_edit_btn,      COLOR_PURPLE_MID)
-	_style_button(_delete_btn,    COLOR_DANGER)
+	_style_button(_back_btn,      UITheme.MAGENTA)
+	_style_button(_sort_name,     UITheme.PURPLE_BRIGHT)
+	_style_button(_sort_duration, UITheme.PURPLE_MID)
+	_style_button(_sort_actions,  UITheme.PURPLE_MID)
+	_style_button(_play_btn,      UITheme.PURPLE_BRIGHT)
+	_style_button(_edit_btn,      UITheme.PURPLE_MID)
+	_style_button(_delete_btn,    UITheme.DANGER)
 
 	_style_modal_panel()
 
-	_style_label(_modal_title,  COLOR_PURPLE_BRIGHT, 22, true)
-	_style_label(_modal_author, COLOR_PURPLE_MID,    13, false)
-	_style_label(_modal_diff,   COLOR_MAGENTA,       15, true)
-	_style_label(_modal_desc,   COLOR_WHITE_SOFT,    12, false)
+	_style_label(_modal_title,  UITheme.PURPLE_BRIGHT, 22, true)
+	_style_label(_modal_author, UITheme.PURPLE_MID,    13, false)
+	_style_label(_modal_diff,   UITheme.MAGENTA,       15, true)
+	_style_label(_modal_desc,   UITheme.WHITE_SOFT,    12, false)
 	_modal_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	_style_label(_stat_rounds,  COLOR_WHITE_SOFT, 13, true)
-	_style_label(_stat_actions, COLOR_WHITE_SOFT, 13, true)
-	_style_label(_stat_length,  COLOR_WHITE_SOFT, 13, true)
+	_style_label(_stat_rounds,  UITheme.WHITE_SOFT, 13, true)
+	_style_label(_stat_actions, UITheme.WHITE_SOFT, 13, true)
+	_style_label(_stat_length,  UITheme.WHITE_SOFT, 13, true)
 
-	_style_label(_rounds_hdr, COLOR_SEPARATOR, 11, true)
+	_style_label(_rounds_hdr, UITheme.SEPARATOR, 11, true)
 
 	var sep_style: StyleBoxFlat = StyleBoxFlat.new()
-	sep_style.bg_color = COLOR_SEPARATOR
+	sep_style.bg_color = UITheme.SEPARATOR
 	for sep_path in [
 		"DetailModal/ModalPanel/ModalLayout/DetailsColumn/StatsDivider",
 		"DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundsDivider",
@@ -219,8 +209,8 @@ func _apply_theme() -> void:
 
 func _style_modal_panel() -> void:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = COLOR_PANEL_BG
-	s.border_color        = COLOR_PURPLE_BRIGHT
+	s.bg_color = UITheme.PANEL_BG
+	s.border_color        = UITheme.PURPLE_BRIGHT
 	s.border_width_left   = BORDER_WIDTH
 	s.border_width_right  = BORDER_WIDTH
 	s.border_width_top    = BORDER_WIDTH
@@ -229,7 +219,7 @@ func _style_modal_panel() -> void:
 	s.corner_radius_top_right    = 4
 	s.corner_radius_bottom_left  = 4
 	s.corner_radius_bottom_right = 4
-	s.shadow_color = Color(COLOR_MAGENTA.r, COLOR_MAGENTA.g, COLOR_MAGENTA.b, 0.5)
+	s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.5)
 	s.shadow_size  = 16
 	s.content_margin_left   = 20
 	s.content_margin_right  = 28
@@ -246,12 +236,12 @@ func _style_label(label: Label, color: Color, size: int, uppercase: bool = false
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.text = btn.text.to_upper()
-	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, COLOR_PURPLE_DARK))
-	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, COLOR_PURPLE_MID))
+	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, UITheme.PURPLE_DARK))
+	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, UITheme.PURPLE_MID))
 	btn.add_theme_stylebox_override("pressed", _make_btn_style(accent, accent))
 	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 
@@ -273,9 +263,9 @@ func _make_btn_style(border: Color, fill: Color) -> StyleBoxFlat:
 
 func _set_active_sort() -> void:
 	var arrow: String = " ▲" if _sort_asc else " ▼"
-	_style_button(_sort_name,     COLOR_PURPLE_BRIGHT if _sort_field == "name"     else COLOR_PURPLE_MID)
-	_style_button(_sort_duration, COLOR_PURPLE_BRIGHT if _sort_field == "duration" else COLOR_PURPLE_MID)
-	_style_button(_sort_actions,  COLOR_PURPLE_BRIGHT if _sort_field == "actions"  else COLOR_PURPLE_MID)
+	_style_button(_sort_name,     UITheme.PURPLE_BRIGHT if _sort_field == "name"     else UITheme.PURPLE_MID)
+	_style_button(_sort_duration, UITheme.PURPLE_BRIGHT if _sort_field == "duration" else UITheme.PURPLE_MID)
+	_style_button(_sort_actions,  UITheme.PURPLE_BRIGHT if _sort_field == "actions"  else UITheme.PURPLE_MID)
 	_sort_name.text     = ("NAME"     + arrow) if _sort_field == "name"     else "NAME"
 	_sort_duration.text = ("DURATION" + arrow) if _sort_field == "duration" else "DURATION"
 	_sort_actions.text  = ("ACTIONS"  + arrow) if _sort_field == "actions"  else "ACTIONS"
@@ -344,7 +334,7 @@ func _on_delete_pressed() -> void:
 	dialog.title = "Delete Journey"
 	dialog.dialog_text = "Permanently delete \"%s\"?\n\nAll videos, funscripts, and cover images in the journey folder will be removed. This cannot be undone." % title
 	dialog.ok_button_text = "DELETE"
-	dialog.get_ok_button().add_theme_color_override("font_color", COLOR_DANGER)
+	dialog.get_ok_button().add_theme_color_override("font_color", UITheme.DANGER)
 	dialog.confirmed.connect(func() -> void:
 		_confirm_delete()
 		dialog.queue_free()
@@ -499,73 +489,86 @@ func _parse_journey(path: String, folder: String) -> Dictionary:
 	var raw_forks: Array = data.get("Forks", [])
 	var parsed_forks: Array = []
 	for raw_fork: Dictionary in raw_forks:
-		var fork_entry: Dictionary = {
-			"after_order": raw_fork.get("AfterOrder", raw_fork.get("after_order", 0)),
-			"title":       raw_fork.get("Title",       raw_fork.get("title",       "")),
-			"description": raw_fork.get("Description", raw_fork.get("description", "")),
-			"paths":       [],
-		}
-		var raw_paths: Array = raw_fork.get("Paths", raw_fork.get("paths", []))
-		for raw_path: Dictionary in raw_paths:
-			var img_file: String = raw_path.get("Image", raw_path.get("image", ""))
-			var path_entry: Dictionary = {
-				"name":        raw_path.get("Name",        raw_path.get("name",        "Path")),
-				"description": raw_path.get("Description", raw_path.get("description", "")),
-				"image_path":  (path + "/" + img_file) if img_file != "" else "",
-				"rounds":      [],
-			}
-			var raw_pr_rounds: Array = raw_path.get("Rounds", raw_path.get("rounds", []))
-			for raw_pr: Dictionary in raw_pr_rounds:
-				var pr_name: String   = raw_pr.get("Name", raw_pr.get("name", "Round"))
-				var pr_folder: String = path + "/" + pr_name
-				var pr_fs: Dictionary = _read_funscript_stats(pr_folder)
-				path_entry["rounds"].append({
-					"name":           pr_name,
-					"folder":         pr_folder,
-					"funscript_path": pr_fs["path"],
-					"coins":          raw_pr.get("CoinsAwarded", raw_pr.get("coins", 0)),
-					"order":          raw_pr.get("Order",        raw_pr.get("order", 0)),
-					"action_count":   pr_fs["count"],
-					"length_ms":      pr_fs["length_ms"],
-				})
-			path_entry["shops"] = []
-			var raw_pr_shops: Array = raw_path.get("Shops", raw_path.get("shops", []))
-			for raw_ps in raw_pr_shops:
-				if raw_ps is Dictionary:
-					path_entry["shops"].append({
-						"after_order": raw_ps.get("AfterOrder", raw_ps.get("after_order", 0)),
-						"title":       raw_ps.get("Title",      raw_ps.get("title",       "")),
-					})
-				else:
-					path_entry["shops"].append({"after_order": int(raw_ps), "title": ""})
-			path_entry["storyboards"] = []
-			var raw_pr_sbs: Array = raw_path.get("Storyboards", raw_path.get("storyboards", []))
-			for raw_psb in raw_pr_sbs:
-				if not raw_psb is Dictionary:
-					continue
-				var psb_img_file: String = raw_psb.get("Image", raw_psb.get("image", ""))
-				var psb_lines_raw: Array = raw_psb.get("Lines", raw_psb.get("lines", []))
-				var psb_lines: Array = []
-				for raw_pl in psb_lines_raw:
-					if not raw_pl is Dictionary:
-						continue
-					var pl_img_file: String = raw_pl.get("Image", raw_pl.get("image", ""))
-					psb_lines.append({
-						"speaker": raw_pl.get("Speaker", raw_pl.get("speaker", "")),
-						"text":    raw_pl.get("Text",    raw_pl.get("text",    "")),
-						"image":   (path + "/" + pl_img_file) if pl_img_file != "" else "",
-					})
-				path_entry["storyboards"].append({
-					"order":  raw_psb.get("Order",        raw_psb.get("order",        0)),
-					"coins":  raw_psb.get("CoinsAwarded", raw_psb.get("coins",        0)),
-					"image":  (path + "/" + psb_img_file) if psb_img_file != "" else "",
-					"lines":  psb_lines,
-				})
-			fork_entry["paths"].append(path_entry)
-		parsed_forks.append(fork_entry)
+		parsed_forks.append(_parse_fork(raw_fork, path))
 	journey["forks"] = parsed_forks
 
 	return journey
+
+
+# Recursively parses a fork's JSON dict. Each path can contain nested forks
+# in its "Forks" array.
+func _parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary:
+	var fork_entry: Dictionary = {
+		"after_order": raw_fork.get("AfterOrder", raw_fork.get("after_order", 0)),
+		"title":       raw_fork.get("Title",       raw_fork.get("title",       "")),
+		"description": raw_fork.get("Description", raw_fork.get("description", "")),
+		"paths":       [],
+	}
+	var raw_paths: Array = raw_fork.get("Paths", raw_fork.get("paths", []))
+	for raw_path: Dictionary in raw_paths:
+		var img_file: String = raw_path.get("Image", raw_path.get("image", ""))
+		var path_entry: Dictionary = {
+			"name":        raw_path.get("Name",        raw_path.get("name",        "Path")),
+			"description": raw_path.get("Description", raw_path.get("description", "")),
+			"image_path":  (journey_path + "/" + img_file) if img_file != "" else "",
+			"rounds":      [],
+			"shops":       [],
+			"storyboards": [],
+			"forks":       [],
+		}
+		var raw_pr_rounds: Array = raw_path.get("Rounds", raw_path.get("rounds", []))
+		for raw_pr: Dictionary in raw_pr_rounds:
+			var pr_name: String   = raw_pr.get("Name", raw_pr.get("name", "Round"))
+			var pr_folder: String = journey_path + "/" + pr_name
+			var pr_fs: Dictionary = _read_funscript_stats(pr_folder)
+			path_entry["rounds"].append({
+				"name":           pr_name,
+				"folder":         pr_folder,
+				"funscript_path": pr_fs["path"],
+				"coins":          raw_pr.get("CoinsAwarded", raw_pr.get("coins", 0)),
+				"order":          raw_pr.get("Order",        raw_pr.get("order", 0)),
+				"action_count":   pr_fs["count"],
+				"length_ms":      pr_fs["length_ms"],
+			})
+		var raw_pr_shops: Array = raw_path.get("Shops", raw_path.get("shops", []))
+		for raw_ps in raw_pr_shops:
+			if raw_ps is Dictionary:
+				path_entry["shops"].append({
+					"after_order": raw_ps.get("AfterOrder", raw_ps.get("after_order", 0)),
+					"title":       raw_ps.get("Title",      raw_ps.get("title",       "")),
+				})
+			else:
+				path_entry["shops"].append({"after_order": int(raw_ps), "title": ""})
+		var raw_pr_sbs: Array = raw_path.get("Storyboards", raw_path.get("storyboards", []))
+		for raw_psb in raw_pr_sbs:
+			if not raw_psb is Dictionary:
+				continue
+			var psb_img_file: String = raw_psb.get("Image", raw_psb.get("image", ""))
+			var psb_lines_raw: Array = raw_psb.get("Lines", raw_psb.get("lines", []))
+			var psb_lines: Array = []
+			for raw_pl in psb_lines_raw:
+				if not raw_pl is Dictionary:
+					continue
+				var pl_img_file: String = raw_pl.get("Image", raw_pl.get("image", ""))
+				psb_lines.append({
+					"speaker": raw_pl.get("Speaker", raw_pl.get("speaker", "")),
+					"text":    raw_pl.get("Text",    raw_pl.get("text",    "")),
+					"image":   (journey_path + "/" + pl_img_file) if pl_img_file != "" else "",
+				})
+			path_entry["storyboards"].append({
+				"order":  raw_psb.get("Order",        raw_psb.get("order",        0)),
+				"coins":  raw_psb.get("CoinsAwarded", raw_psb.get("coins",        0)),
+				"image":  (journey_path + "/" + psb_img_file) if psb_img_file != "" else "",
+				"lines":  psb_lines,
+			})
+		# Nested forks — recurse.
+		var raw_pr_forks: Array = raw_path.get("Forks", raw_path.get("forks", []))
+		for raw_nf in raw_pr_forks:
+			if not raw_nf is Dictionary:
+				continue
+			path_entry["forks"].append(_parse_fork(raw_nf, journey_path))
+		fork_entry["paths"].append(path_entry)
+	return fork_entry
 
 
 func _find_cover_image(path: String) -> String:
@@ -701,7 +704,7 @@ func _populate_modal(journey: Dictionary) -> void:
 
 	var diff: String = journey.get("difficulty", "Unknown")
 	_modal_diff.text = "◆  " + diff.to_upper()
-	var diff_color: Color = DIFF_COLORS.get(diff, COLOR_WHITE_SOFT)
+	var diff_color: Color = DIFF_COLORS.get(diff, UITheme.WHITE_SOFT)
 	_modal_diff.add_theme_color_override("font_color", diff_color)
 
 	var rounds: Array = journey.get("rounds", [])
@@ -736,133 +739,193 @@ func _populate_modal(journey: Dictionary) -> void:
 			lbl.custom_minimum_size = Vector2(col[1], 0)
 		if col[2]:
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		lbl.add_theme_color_override("font_color", COLOR_SEPARATOR)
+		lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
 		lbl.add_theme_font_size_override("font_size", 10)
 		lbl.uppercase = true
 		hdr.add_child(lbl)
 	var hdr_line: HSeparator = HSeparator.new()
 	var hdr_style: StyleBoxFlat = StyleBoxFlat.new()
-	hdr_style.bg_color = Color(COLOR_SEPARATOR.r, COLOR_SEPARATOR.g, COLOR_SEPARATOR.b, 0.3)
+	hdr_style.bg_color = Color(UITheme.SEPARATOR.r, UITheme.SEPARATOR.g, UITheme.SEPARATOR.b, 0.3)
 	hdr_line.add_theme_stylebox_override("separator", hdr_style)
 	_round_list.add_child(hdr_line)
 
-	var forks_data:      Array = journey.get("forks",       [])
-	var storyboards_data:Array = journey.get("storyboards", [])
+	var forks_data:       Array = journey.get("forks",       [])
+	var storyboards_data: Array = journey.get("storyboards", [])
+
+	_add_seq_to_list(
+		_round_list,
+		rounds,
+		shops_data,
+		storyboards_data,
+		forks_data,
+		0
+	)
+
+
+# ---------------------------------------------------------------------------
+# Recursive sequence renderer
+# ---------------------------------------------------------------------------
+
+# Builds and inserts interleaved rows for rounds/shops/storyboards/forks into
+# `list`. `indent` is the nesting depth (0 = top level); each level adds
+# INDENT_PX pixels of left margin via a MarginContainer wrapper.
+const INDENT_PX: int = 16
+
+func _add_seq_to_list(
+	list:         VBoxContainer,
+	rounds:       Array,
+	shops:        Array,
+	storyboards:  Array,
+	forks:        Array,
+	indent:       int
+) -> void:
 	var seq: Array = []
 	for rd: Dictionary in rounds:
-		seq.append({"type": "round", "data": rd, "key": (rd.get("order", 0) as int) * 3})
-	for sb: Dictionary in storyboards_data:
-		seq.append({"type": "storyboard", "data": sb, "key": (sb.get("order", 0) as int) * 3})
-	for sh: Dictionary in shops_data:
-		seq.append({"type": "shop", "data": sh, "key": (sh.get("after_order", 0) as int) * 3 + 1})
-	for fk: Dictionary in forks_data:
-		seq.append({"type": "fork", "data": fk, "key": (fk.get("after_order", 0) as int) * 3 + 2})
+		seq.append({"type": "round",      "data": rd, "key": (rd.get("order",       0) as int) * 3})
+	for sb: Dictionary in storyboards:
+		seq.append({"type": "storyboard", "data": sb, "key": (sb.get("order",       0) as int) * 3})
+	for sh: Dictionary in shops:
+		seq.append({"type": "shop",       "data": sh, "key": (sh.get("after_order", 0) as int) * 3 + 1})
+	for fk: Dictionary in forks:
+		seq.append({"type": "fork",       "data": fk, "key": (fk.get("after_order", 0) as int) * 3 + 2})
 	seq.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["key"] as int) < (b["key"] as int))
 
 	for item: Dictionary in seq:
-		if item["type"] == "fork":
-			var fork: Dictionary = item["data"]
-			var fork_row: HBoxContainer = HBoxContainer.new()
-			fork_row.add_theme_constant_override("separation", 8)
-			_round_list.add_child(fork_row)
-			var fork_lbl: Label = Label.new()
-			var paths: Array = fork.get("paths", [])
-			var fork_title: String = fork.get("title", "")
-			if fork_title != "":
-				fork_lbl.text = "  ⑂  FORK: %s  (%d PATHS)" % [fork_title.to_upper(), paths.size()]
-			else:
-				fork_lbl.text = "  ⑂  FORK  (%d PATHS)" % paths.size()
-			fork_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			fork_lbl.add_theme_color_override("font_color", COLOR_PURPLE_BRIGHT)
-			fork_lbl.add_theme_font_size_override("font_size", 11)
-			fork_row.add_child(fork_lbl)
-			continue
+		match item["type"]:
+			"fork":
+				_add_fork_to_list(list, item["data"], indent)
+			"shop":
+				var shop: Dictionary = item["data"]
+				var shop_row: HBoxContainer = HBoxContainer.new()
+				shop_row.add_theme_constant_override("separation", 8)
+				var shop_lbl: Label = Label.new()
+				var shop_title: String = shop.get("title", "")
+				if shop_title != "":
+					shop_lbl.text = "  ◆  SHOP: %s" % shop_title.to_upper()
+				else:
+					shop_lbl.text = "  ◆  SHOP"
+				shop_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				shop_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
+				shop_lbl.add_theme_font_size_override("font_size", 11)
+				shop_row.add_child(shop_lbl)
+				list.add_child(_indent_wrap(shop_row, indent))
+			"storyboard":
+				var sb: Dictionary = item["data"]
+				var sb_row: HBoxContainer = HBoxContainer.new()
+				sb_row.add_theme_constant_override("separation", 8)
+				var sb_lbl: Label = Label.new()
+				var sb_line_count: int = (sb.get("lines", []) as Array).size()
+				sb_lbl.text = "  ◈  STORYBOARD  (%d LINE%s)" % [sb_line_count, "S" if sb_line_count != 1 else ""]
+				sb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb_lbl.add_theme_color_override("font_color", Color(0.10, 0.85, 0.90, 1.0))
+				sb_lbl.add_theme_font_size_override("font_size", 11)
+				sb_row.add_child(sb_lbl)
+				var sb_coins: int = sb.get("coins", 0)
+				if sb_coins > 0:
+					var sb_coins_lbl: Label = Label.new()
+					sb_coins_lbl.text = "♦ %d" % sb_coins
+					sb_coins_lbl.custom_minimum_size = Vector2(72, 0)
+					sb_coins_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+					sb_coins_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
+					sb_coins_lbl.add_theme_font_size_override("font_size", 12)
+					sb_row.add_child(sb_coins_lbl)
+				list.add_child(_indent_wrap(sb_row, indent))
+			"round":
+				var round_data: Dictionary = item["data"]
+				var order: int = round_data.get("order", 0)
+				var row: HBoxContainer = HBoxContainer.new()
+				row.add_theme_constant_override("separation", 12)
+				var order_lbl: Label = Label.new()
+				order_lbl.text = "%02d." % order
+				order_lbl.custom_minimum_size = Vector2(36, 0)
+				order_lbl.add_theme_color_override("font_color", UITheme.PURPLE_MID)
+				order_lbl.add_theme_font_size_override("font_size", 12)
+				row.add_child(order_lbl)
+				var name_lbl: Label = Label.new()
+				name_lbl.text = (round_data.get("name", "") as String).to_upper()
+				name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				name_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
+				name_lbl.add_theme_font_size_override("font_size", 13)
+				row.add_child(name_lbl)
+				var dur_secs: int = (round_data.get("length_ms", 0) as int) / 1000
+				var dur_lbl: Label = Label.new()
+				dur_lbl.text = _format_duration(dur_secs)
+				dur_lbl.custom_minimum_size = Vector2(56, 0)
+				dur_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				dur_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
+				dur_lbl.add_theme_font_size_override("font_size", 12)
+				row.add_child(dur_lbl)
+				var acts_lbl: Label = Label.new()
+				acts_lbl.text = str(round_data.get("action_count", 0)) + " actions"
+				acts_lbl.custom_minimum_size = Vector2(72, 0)
+				acts_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				acts_lbl.add_theme_color_override("font_color", UITheme.PURPLE_MID)
+				acts_lbl.add_theme_font_size_override("font_size", 12)
+				row.add_child(acts_lbl)
+				var coins_lbl: Label = Label.new()
+				coins_lbl.text = "♦ " + str(round_data.get("coins", 0))
+				coins_lbl.custom_minimum_size = Vector2(72, 0)
+				coins_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				coins_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
+				coins_lbl.add_theme_font_size_override("font_size", 12)
+				row.add_child(coins_lbl)
+				list.add_child(_indent_wrap(row, indent))
 
-		if item["type"] == "shop":
-			var shop: Dictionary = item["data"]
-			var shop_row: HBoxContainer = HBoxContainer.new()
-			shop_row.add_theme_constant_override("separation", 8)
-			_round_list.add_child(shop_row)
-			var shop_lbl: Label = Label.new()
-			var shop_title: String = shop.get("title", "")
-			if shop_title != "":
-				shop_lbl.text = "  ◆  SHOP: %s" % shop_title.to_upper()
-			else:
-				shop_lbl.text = "  ◆  SHOP"
-			shop_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			shop_lbl.add_theme_color_override("font_color", COLOR_MAGENTA)
-			shop_lbl.add_theme_font_size_override("font_size", 11)
-			shop_row.add_child(shop_lbl)
-			continue
 
-		if item["type"] == "storyboard":
-			var sb: Dictionary = item["data"]
-			var sb_row: HBoxContainer = HBoxContainer.new()
-			sb_row.add_theme_constant_override("separation", 8)
-			_round_list.add_child(sb_row)
-			var sb_lbl: Label = Label.new()
-			var sb_line_count: int = (sb.get("lines", []) as Array).size()
-			sb_lbl.text = "  ◈  STORYBOARD  (%d LINE%s)" % [sb_line_count, "S" if sb_line_count != 1 else ""]
-			sb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			sb_lbl.add_theme_color_override("font_color", Color(0.10, 0.85, 0.90, 1.0))
-			sb_lbl.add_theme_font_size_override("font_size", 11)
-			sb_row.add_child(sb_lbl)
-			var sb_coins: int = sb.get("coins", 0)
-			if sb_coins > 0:
-				var sb_coins_lbl: Label = Label.new()
-				sb_coins_lbl.text = "♦ %d" % sb_coins
-				sb_coins_lbl.custom_minimum_size = Vector2(72, 0)
-				sb_coins_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-				sb_coins_lbl.add_theme_color_override("font_color", COLOR_MAGENTA)
-				sb_coins_lbl.add_theme_font_size_override("font_size", 12)
-				sb_row.add_child(sb_coins_lbl)
-			continue
+# Renders a fork header + each path (with path header + recursed items).
+func _add_fork_to_list(list: VBoxContainer, fork: Dictionary, indent: int) -> void:
+	# Fork header row
+	var fork_row: HBoxContainer = HBoxContainer.new()
+	fork_row.add_theme_constant_override("separation", 8)
+	var fork_lbl: Label = Label.new()
+	var paths: Array = fork.get("paths", [])
+	var fork_title: String = fork.get("title", "")
+	if fork_title != "":
+		fork_lbl.text = "⑂  FORK: %s  (%d PATHS)" % [fork_title.to_upper(), paths.size()]
+	else:
+		fork_lbl.text = "⑂  FORK  (%d PATHS)" % paths.size()
+	fork_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fork_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
+	fork_lbl.add_theme_font_size_override("font_size", 11)
+	fork_row.add_child(fork_lbl)
+	list.add_child(_indent_wrap(fork_row, indent))
 
-		var round_data: Dictionary = item["data"]
-		var order: int = round_data.get("order", 0)
+	# Each path
+	for pi: int in paths.size():
+		var path: Dictionary = paths[pi]
+		var path_name: String = path.get("name", "Path %d" % (pi + 1))
 
-		var row: HBoxContainer = HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		_round_list.add_child(row)
+		# Path header
+		var path_row: HBoxContainer = HBoxContainer.new()
+		path_row.add_theme_constant_override("separation", 8)
+		var path_lbl: Label = Label.new()
+		path_lbl.text = "▸  PATH %d: %s" % [pi + 1, path_name.to_upper()]
+		path_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		path_lbl.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
+		path_lbl.add_theme_font_size_override("font_size", 11)
+		path_row.add_child(path_lbl)
+		list.add_child(_indent_wrap(path_row, indent + 1))
 
-		var order_lbl: Label = Label.new()
-		order_lbl.text = "%02d." % order
-		order_lbl.custom_minimum_size = Vector2(36, 0)
-		order_lbl.add_theme_color_override("font_color", COLOR_PURPLE_MID)
-		order_lbl.add_theme_font_size_override("font_size", 12)
-		row.add_child(order_lbl)
+		# Path contents (recurse)
+		_add_seq_to_list(
+			list,
+			path.get("rounds",      []),
+			path.get("shops",       []),
+			path.get("storyboards", []),
+			path.get("forks",       []),
+			indent + 2
+		)
 
-		var name_lbl: Label = Label.new()
-		name_lbl.text = (round_data.get("name", "") as String).to_upper()
-		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
-		name_lbl.add_theme_font_size_override("font_size", 13)
-		row.add_child(name_lbl)
 
-		var dur_secs: int = (round_data.get("length_ms", 0) as int) / 1000
-		var dur_lbl: Label = Label.new()
-		dur_lbl.text = _format_duration(dur_secs)
-		dur_lbl.custom_minimum_size = Vector2(56, 0)
-		dur_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		dur_lbl.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
-		dur_lbl.add_theme_font_size_override("font_size", 12)
-		row.add_child(dur_lbl)
-
-		var acts_lbl: Label = Label.new()
-		acts_lbl.text = str(round_data.get("action_count", 0)) + " actions"
-		acts_lbl.custom_minimum_size = Vector2(72, 0)
-		acts_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		acts_lbl.add_theme_color_override("font_color", COLOR_PURPLE_MID)
-		acts_lbl.add_theme_font_size_override("font_size", 12)
-		row.add_child(acts_lbl)
-
-		var coins_lbl: Label = Label.new()
-		coins_lbl.text = "♦ " + str(round_data.get("coins", 0))
-		coins_lbl.custom_minimum_size = Vector2(72, 0)
-		coins_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		coins_lbl.add_theme_color_override("font_color", COLOR_MAGENTA)
-		coins_lbl.add_theme_font_size_override("font_size", 12)
-		row.add_child(coins_lbl)
+# Wraps a control in a MarginContainer that adds `indent * INDENT_PX` of left padding.
+func _indent_wrap(child: Control, indent: int) -> Control:
+	if indent == 0:
+		return child
+	var mc: MarginContainer = MarginContainer.new()
+	mc.add_theme_constant_override("margin_left", indent * INDENT_PX)
+	mc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mc.add_child(child)
+	return mc
 
 
 func _format_duration(total_seconds: int) -> String:

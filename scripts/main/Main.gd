@@ -6,16 +6,6 @@ extends Control
 # neon-sign glowing border that occasionally flickers.
 # ---------------------------------------------------------------------------
 
-const COLOR_BG:            Color = Color(0.0,   0.0,   0.0,   1.0)  # #000000
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 1.0)  # #0e0216
-const COLOR_PURPLE_DARK:   Color = Color(0.176, 0.024, 0.259, 1.0)  # #2d0642
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)  # #6810a0
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)  # #b21eff
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)  # #e000e0
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)  # #e0c7ff
-const COLOR_SEPARATOR:     Color = Color(0.698, 0.118, 1.0,   0.5)
-const COLOR_TAGLINE:       Color = Color(0.698, 0.118, 1.0,   1.0)
-
 const FONT_SIZE_EYEBROW:  int = 12
 const FONT_SIZE_TITLE:    int = 54
 const FONT_SIZE_SUBTITLE: int = 24
@@ -134,33 +124,33 @@ func _apply_layout() -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_theme() -> void:
-	_bg.color = COLOR_BG
+	_bg.color = UITheme.BG
 	_update_panel_border()
 
-	_style_label(_eyebrow,  COLOR_MAGENTA,        FONT_SIZE_EYEBROW,  true)
-	_style_label(_title,    COLOR_PURPLE_BRIGHT,   FONT_SIZE_TITLE,    true)
-	_style_label(_subtitle, COLOR_MAGENTA,         FONT_SIZE_SUBTITLE, true)
+	_style_label(_eyebrow,  UITheme.MAGENTA,        FONT_SIZE_EYEBROW,  true)
+	_style_label(_title,    UITheme.PURPLE_BRIGHT,   FONT_SIZE_TITLE,    true)
+	_style_label(_subtitle, UITheme.MAGENTA,         FONT_SIZE_SUBTITLE, true)
 
 	var sep: StyleBoxFlat     = StyleBoxFlat.new()
-	sep.bg_color              = COLOR_SEPARATOR
+	sep.bg_color              = UITheme.SEPARATOR
 	sep.content_margin_top    = 1
 	sep.content_margin_bottom = 1
 	_divider.add_theme_stylebox_override("separator", sep)
 
-	_style_button(_start_btn,   COLOR_PURPLE_BRIGHT)
-	_style_button(_options_btn, COLOR_MAGENTA)
-	_style_button(_build_btn,   COLOR_PURPLE_MID)
-	_style_button(_quit_btn,    COLOR_PURPLE_MID)
+	_style_button(_start_btn,   UITheme.PURPLE_BRIGHT)
+	_style_button(_options_btn, UITheme.MAGENTA)
+	_style_button(_build_btn,   UITheme.PURPLE_MID)
+	_style_button(_quit_btn,    UITheme.PURPLE_MID)
 
-	_style_label(_tagline, COLOR_TAGLINE, FONT_SIZE_TAGLINE, true)
+	_style_label(_tagline, UITheme.PURPLE_BRIGHT, FONT_SIZE_TAGLINE, true)
 
 
 func _update_panel_border() -> void:
-	var border_col: Color = Color(COLOR_PURPLE_BRIGHT.r, COLOR_PURPLE_BRIGHT.g, COLOR_PURPLE_BRIGHT.b, _border_alpha)
-	var shadow_col: Color = Color(COLOR_MAGENTA.r, COLOR_MAGENTA.g, COLOR_MAGENTA.b, _border_alpha * 0.5)
+	var border_col: Color = Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, _border_alpha)
+	var shadow_col: Color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, _border_alpha * 0.5)
 
 	var s: StyleBoxFlat       = StyleBoxFlat.new()
-	s.bg_color                = COLOR_PANEL_BG
+	s.bg_color                = UITheme.PANEL_BG
 	s.border_color            = border_col
 	s.border_width_left       = BORDER_WIDTH
 	s.border_width_right      = BORDER_WIDTH
@@ -187,13 +177,13 @@ func _style_label(label: Label, color: Color, size: int, uppercase: bool = false
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
 	btn.add_theme_font_size_override("font_size", FONT_SIZE_BUTTON)
 	btn.text = btn.text.to_upper()
 
-	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, COLOR_PURPLE_DARK))
-	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, COLOR_PURPLE_MID))
+	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, UITheme.PURPLE_DARK))
+	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, UITheme.PURPLE_MID))
 	btn.add_theme_stylebox_override("pressed", _make_btn_style(accent, accent))
 	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 

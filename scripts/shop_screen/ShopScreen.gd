@@ -2,18 +2,6 @@ extends Control
 
 signal closed
 
-const COLOR_PANEL_BG:      Color = Color(0.035, 0.005, 0.055, 0.96)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_DARK_TEXT:     Color = Color(0.55,  0.47,  0.72,  1.0)
-const COLOR_AMBER:         Color = Color(1.0,   0.65,  0.15,  1.0)
-const COLOR_TOXIC_GREEN:   Color = Color(0.45,  1.0,   0.35,  1.0)
-const COLOR_DANGER:        Color = Color(0.95,  0.18,  0.18,  1.0)
-const COLOR_CARD_BG:       Color = Color(0.02,  0.0,   0.04,  1.0)
-const COLOR_CARD_BG_DIM:   Color = Color(0.01,  0.0,   0.02,  1.0)
-
 const CARDS_PER_VISIT: int = 3
 
 @onready var _backdrop:   ColorRect      = $Backdrop
@@ -103,7 +91,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 	var category: String = data.get("category", "modifier")
 	var badge: Label = Label.new()
 	badge.text = "[ %s ]" % category.to_upper()
-	badge.add_theme_color_override("font_color", COLOR_AMBER)
+	badge.add_theme_color_override("font_color", UITheme.AMBER)
 	badge.add_theme_font_size_override("font_size", 10)
 	col.add_child(badge)
 
@@ -111,7 +99,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 	var name_lbl: Label = Label.new()
 	name_lbl.text = (data.get("name", "?") as String).to_upper()
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_lbl.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
+	name_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	name_lbl.add_theme_font_size_override("font_size", 18)
 	col.add_child(name_lbl)
 
@@ -120,7 +108,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 	desc_lbl.text = data.get("description", "")
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	desc_lbl.add_theme_color_override("font_color", COLOR_DARK_TEXT)
+	desc_lbl.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	desc_lbl.add_theme_font_size_override("font_size", 12)
 	col.add_child(desc_lbl)
 
@@ -128,7 +116,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 	var dur_ms: int = data.get("duration_ms", 0)
 	var dur_lbl: Label = Label.new()
 	dur_lbl.text = "DURATION: %ds" % int(dur_ms / 1000.0)
-	dur_lbl.add_theme_color_override("font_color", COLOR_TOXIC_GREEN)
+	dur_lbl.add_theme_color_override("font_color", UITheme.TOXIC_GREEN)
 	dur_lbl.add_theme_font_size_override("font_size", 11)
 	col.add_child(dur_lbl)
 
@@ -140,7 +128,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 
 	var price_lbl: Label = Label.new()
 	price_lbl.text = "♦ %d" % price
-	price_lbl.add_theme_color_override("font_color", COLOR_MAGENTA)
+	price_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
 	price_lbl.add_theme_font_size_override("font_size", 22)
 	price_row.add_child(price_lbl)
 
@@ -148,7 +136,7 @@ func _make_card(id: String, data: Dictionary) -> Control:
 	var buy: Button = Button.new()
 	buy.text = "> BUY"
 	buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_button(buy, COLOR_PURPLE_BRIGHT)
+	_style_button(buy, UITheme.PURPLE_BRIGHT)
 	buy.pressed.connect(_on_buy_pressed.bind(id, buy, card))
 	col.add_child(buy)
 
@@ -201,8 +189,8 @@ func _update_buy_button(id: String, buy: Button, card: PanelContainer) -> void:
 		buy.text = "✓ OWNED"
 		buy.disabled = true
 		card.add_theme_stylebox_override("panel", _card_stylebox(true))
-		buy.add_theme_color_override("font_color", COLOR_TOXIC_GREEN)
-		buy.add_theme_color_override("font_disabled_color", COLOR_TOXIC_GREEN)
+		buy.add_theme_color_override("font_color", UITheme.TOXIC_GREEN)
+		buy.add_theme_color_override("font_disabled_color", UITheme.TOXIC_GREEN)
 		return
 
 	if CoinService.CanAfford(price):
@@ -211,7 +199,7 @@ func _update_buy_button(id: String, buy: Button, card: PanelContainer) -> void:
 	else:
 		buy.text = "✕ INSUFFICIENT  ♦ %d" % price
 		buy.disabled = true
-		buy.add_theme_color_override("font_disabled_color", COLOR_DANGER)
+		buy.add_theme_color_override("font_disabled_color", UITheme.DANGER)
 
 
 func _refresh_coins() -> void:
@@ -260,13 +248,13 @@ func _apply_layout() -> void:
 func _apply_theme() -> void:
 	# Panel: cyberpunk-rundown — magenta border with amber accent edges.
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = COLOR_PANEL_BG
-	panel_style.border_color        = COLOR_MAGENTA
+	panel_style.bg_color = UITheme.PANEL_BG_SHOP
+	panel_style.border_color        = UITheme.MAGENTA
 	panel_style.border_width_left   = 1
 	panel_style.border_width_right  = 1
 	panel_style.border_width_top    = 3
 	panel_style.border_width_bottom = 3
-	panel_style.shadow_color = Color(COLOR_MAGENTA.r, COLOR_MAGENTA.g, COLOR_MAGENTA.b, 0.45)
+	panel_style.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.45)
 	panel_style.shadow_size  = 24
 	panel_style.content_margin_left   = 28
 	panel_style.content_margin_right  = 28
@@ -274,14 +262,14 @@ func _apply_theme() -> void:
 	panel_style.content_margin_bottom = 22
 	_panel.add_theme_stylebox_override("panel", panel_style)
 
-	_title.add_theme_color_override("font_color", COLOR_MAGENTA)
+	_title.add_theme_color_override("font_color", UITheme.MAGENTA)
 	_title.add_theme_font_size_override("font_size", 30)
 	_title.uppercase = true
 
 	# Coin badge
 	var coin_style: StyleBoxFlat = StyleBoxFlat.new()
-	coin_style.bg_color            = Color(COLOR_AMBER.r, COLOR_AMBER.g, COLOR_AMBER.b, 0.10)
-	coin_style.border_color        = COLOR_AMBER
+	coin_style.bg_color            = Color(UITheme.AMBER.r, UITheme.AMBER.g, UITheme.AMBER.b, 0.10)
+	coin_style.border_color        = UITheme.AMBER
 	coin_style.border_width_left   = 1
 	coin_style.border_width_right  = 1
 	coin_style.border_width_top    = 1
@@ -291,20 +279,20 @@ func _apply_theme() -> void:
 	coin_style.content_margin_top    = 6
 	coin_style.content_margin_bottom = 6
 	_coin_badge.add_theme_stylebox_override("panel", coin_style)
-	_coin_lbl.add_theme_color_override("font_color", COLOR_AMBER)
+	_coin_lbl.add_theme_color_override("font_color", UITheme.AMBER)
 	_coin_lbl.add_theme_font_size_override("font_size", 18)
 
-	_subtitle.add_theme_color_override("font_color", COLOR_DARK_TEXT)
+	_subtitle.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	_subtitle.add_theme_font_size_override("font_size", 12)
 	_subtitle.uppercase = true
 
-	_style_button(_continue, COLOR_AMBER)
+	_style_button(_continue, UITheme.AMBER)
 
 
 func _card_stylebox(owned: bool) -> StyleBoxFlat:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = COLOR_CARD_BG_DIM if owned else COLOR_CARD_BG
-	s.border_color        = COLOR_TOXIC_GREEN if owned else COLOR_PURPLE_MID
+	s.bg_color = UITheme.CARD_BG_DIM if owned else UITheme.CARD_BG
+	s.border_color        = UITheme.TOXIC_GREEN if owned else UITheme.PURPLE_MID
 	s.border_width_left   = 1
 	s.border_width_right  = 1
 	s.border_width_top    = 1
@@ -318,7 +306,7 @@ func _card_stylebox(owned: bool) -> StyleBoxFlat:
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
 	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
 	btn.add_theme_font_size_override("font_size", 13)
 

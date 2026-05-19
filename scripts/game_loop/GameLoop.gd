@@ -16,19 +16,13 @@ const InventoryPanelScene  = preload("res://scenes/inventory/InventoryPanel.tscn
 # _load_video() body with that extension's API.
 # ---------------------------------------------------------------------------
 
-const COLOR_BG:           Color = Color(0.0,   0.0,   0.0,   1.0)
-const COLOR_PANEL_BG:     Color = Color(0.055, 0.008, 0.086, 0.88)
-const COLOR_PURPLE_BRIGHT:Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_PURPLE_MID:   Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_MAGENTA:      Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:   Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_AMBER:        Color = Color(1.0,   0.65,  0.15,  1.0)
-const COLOR_TOXIC_GREEN:  Color = Color(0.45,  1.0,   0.35,  1.0)
-const COLOR_BG_ZERO:      Color = Color(0.0,   0.0,   0.0,   0.0)
-
 const HUD_BAR_HEIGHT:  int   = 68
 const HUD_HIDE_DELAY:  float = 3.0
 const VIDEO_EXTS:      Array = ["mp4", "mkv", "webm", "avi", "mov", "ogv"]
+
+# Sequence-boundary fade timings (~1.2s total).
+const TRANSITION_FADE_TIME: float = 0.45
+const TRANSITION_HOLD_TIME: float = 0.30
 
 @onready var _bg:          ColorRect         = $Background
 @onready var _video:       VideoStreamPlayer = $VideoPlayer
@@ -46,6 +40,7 @@ const VIDEO_EXTS:      Array = ["mp4", "mkv", "webm", "avi", "mov", "ogv"]
 @onready var _chips_row:   HBoxContainer     = $HUD/EffectChipsRow
 @onready var _hide_timer:  Timer             = $HUD/HideTimer
 @onready var _end_timer:   Timer             = $EndTimer
+@onready var _transition:  ColorRect         = $TransitionLayer/TransitionOverlay
 
 var _paused: bool = false
 var _inventory_panel: Control = null
@@ -104,10 +99,12 @@ func _on_storyboard_completed(coins: int) -> void:
 	GameState.Advance()
 	if GameState.IsSequenceDone():
 		Transition.change_scene("res://scenes/end_screen/EndScreen.tscn")
-	else:
+		return
+	await _transition_swap(func() -> void:
 		_video.paused = false
 		FunscriptPlayer.Resume()
 		_load_current_item()
+	)
 
 
 func _show_shop_screen(shop_data: Dictionary) -> void:
@@ -120,13 +117,15 @@ func _show_shop_screen(shop_data: Dictionary) -> void:
 
 
 func _on_shop_closed() -> void:
-	_video.paused = false
-	FunscriptPlayer.Resume()
 	GameState.Advance()
 	if GameState.IsSequenceDone():
 		Transition.change_scene("res://scenes/end_screen/EndScreen.tscn")
-	else:
+		return
+	await _transition_swap(func() -> void:
+		_video.paused = false
+		FunscriptPlayer.Resume()
 		_load_current_item()
+	)
 
 
 func _show_fork_screen(fork_data: Dictionary) -> void:
@@ -140,9 +139,11 @@ func _show_fork_screen(fork_data: Dictionary) -> void:
 
 func _on_fork_path_chosen(path_index: int) -> void:
 	GameState.ResolveFork(path_index)
-	_video.paused = false
-	FunscriptPlayer.Resume()
-	_load_current_round()
+	await _transition_swap(func() -> void:
+		_video.paused = false
+		FunscriptPlayer.Resume()
+		_load_current_item()
+	)
 
 
 func _load_current_round() -> void:
@@ -240,6 +241,7 @@ func _start_no_video_fallback() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_round_ended() -> void:
+	GameState.LogRound(GameState.CurrentRound())
 	ScoreService.EndRound()
 	FunscriptPlayer.Stop()
 
@@ -249,9 +251,32 @@ func _on_round_ended() -> void:
 
 	if GameState.IsLastRound():
 		Transition.change_scene("res://scenes/end_screen/EndScreen.tscn")
-	else:
+		return
+	await _transition_swap(func() -> void:
 		GameState.Advance()
 		_load_current_item()
+	)
+
+
+# Fade-to-black → hold → run swap → fade-from-black. Used at every sequence
+# boundary so transitions feel intentional instead of jump-cut. The transition
+# overlay lives on a high-layer CanvasLayer, so it always sits above shop /
+# storyboard / fork screens that may be added/removed during the swap.
+func _transition_swap(swap_action: Callable) -> void:
+	_transition.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var tween_in: Tween = create_tween()
+	tween_in.tween_property(_transition, "modulate:a", 1.0, TRANSITION_FADE_TIME).set_ease(Tween.EASE_IN)
+	await tween_in.finished
+
+	await get_tree().create_timer(TRANSITION_HOLD_TIME).timeout
+	swap_action.call()
+
+	var tween_out: Tween = create_tween()
+	tween_out.tween_property(_transition, "modulate:a", 0.0, TRANSITION_FADE_TIME).set_ease(Tween.EASE_OUT)
+	await tween_out.finished
+
+	_transition.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func _go_to_menu() -> void:
@@ -373,8 +398,8 @@ func _refresh_effect_chips() -> void:
 func _make_chip(effect: Dictionary) -> Control:
 	var chip: PanelContainer = PanelContainer.new()
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = Color(COLOR_AMBER.r, COLOR_AMBER.g, COLOR_AMBER.b, 0.12)
-	s.border_color        = COLOR_AMBER
+	s.bg_color            = Color(UITheme.AMBER.r, UITheme.AMBER.g, UITheme.AMBER.b, 0.12)
+	s.border_color        = UITheme.AMBER
 	s.border_width_left   = 1
 	s.border_width_right  = 1
 	s.border_width_top    = 1
@@ -386,7 +411,7 @@ func _make_chip(effect: Dictionary) -> Control:
 	chip.add_theme_stylebox_override("panel", s)
 
 	var lbl: Label = Label.new()
-	lbl.add_theme_color_override("font_color", COLOR_AMBER)
+	lbl.add_theme_color_override("font_color", UITheme.AMBER)
 	lbl.add_theme_font_size_override("font_size", 11)
 	lbl.set_meta("effect_id", effect.get("id", ""))
 	_update_chip_text(lbl, effect)
@@ -475,11 +500,11 @@ func _apply_layout() -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_theme() -> void:
-	_bg.color = COLOR_BG
+	_bg.color = UITheme.BG
 
 	var bar_style: StyleBoxFlat = StyleBoxFlat.new()
-	bar_style.bg_color            = COLOR_PANEL_BG
-	bar_style.border_color        = COLOR_PURPLE_BRIGHT
+	bar_style.bg_color            = UITheme.PANEL_BG_GAME
+	bar_style.border_color        = UITheme.PURPLE_BRIGHT
 	bar_style.border_width_top    = 1
 	bar_style.content_margin_left  = 20
 	bar_style.content_margin_right = 20
@@ -487,29 +512,29 @@ func _apply_theme() -> void:
 	bar_style.content_margin_bottom = 14
 	_hud_bar.add_theme_stylebox_override("panel", bar_style)
 
-	_round_lbl.add_theme_color_override("font_color",    COLOR_WHITE_SOFT)
+	_round_lbl.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
 	_round_lbl.add_theme_font_size_override("font_size", 13)
 	_round_lbl.uppercase = true
 
-	_score_lbl.add_theme_color_override("font_color",    COLOR_MAGENTA)
+	_score_lbl.add_theme_color_override("font_color",    UITheme.MAGENTA)
 	_score_lbl.add_theme_font_size_override("font_size", 13)
 	_score_lbl.uppercase = true
 
-	_coin_lbl.add_theme_color_override("font_color",    COLOR_AMBER)
+	_coin_lbl.add_theme_color_override("font_color",    UITheme.AMBER)
 	_coin_lbl.add_theme_font_size_override("font_size", 13)
 	_coin_lbl.uppercase = true
 
 	_style_progress()
-	_style_button(_pause_btn,   COLOR_PURPLE_BRIGHT)
-	_style_button(_inv_btn,     COLOR_AMBER)
-	_style_button(_menu_btn,    COLOR_MAGENTA)
-	_style_button(_options_btn, COLOR_PURPLE_MID)
+	_style_button(_pause_btn,   UITheme.PURPLE_BRIGHT)
+	_style_button(_inv_btn,     UITheme.AMBER)
+	_style_button(_menu_btn,    UITheme.MAGENTA)
+	_style_button(_options_btn, UITheme.PURPLE_MID)
 
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
 	btn.add_theme_font_size_override("font_size", 13)
 	btn.text = btn.text.to_upper()
 
@@ -545,7 +570,7 @@ func _style_progress() -> void:
 	bg.corner_radius_bottom_right = 4
 
 	var fill: StyleBoxFlat = StyleBoxFlat.new()
-	fill.bg_color                  = COLOR_PURPLE_BRIGHT
+	fill.bg_color                  = UITheme.PURPLE_BRIGHT
 	fill.corner_radius_top_left    = 4
 	fill.corner_radius_top_right   = 4
 	fill.corner_radius_bottom_left = 4

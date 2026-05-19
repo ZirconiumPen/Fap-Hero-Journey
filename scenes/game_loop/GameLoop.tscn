@@ -71,3 +71,13 @@ one_shot = true
 
 [node name="EndTimer" type="Timer" parent="."]
 one_shot = true
+
+[node name="TransitionLayer" type="CanvasLayer" parent="."]
+layer = 100
+
+[node name="TransitionOverlay" type="ColorRect" parent="TransitionLayer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 1)
+mouse_filter = 2
+modulate = Color(1, 1, 1, 0)

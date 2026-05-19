@@ -9,13 +9,6 @@ extends PanelContainer
 
 signal file_dropped(path: String)
 
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 1.0)
-const COLOR_PURPLE_DARK:   Color = Color(0.176, 0.024, 0.259, 1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_BG:            Color = Color(0.0,   0.0,   0.0,   1.0)
-
 var accepted_extensions: Array = []
 var picker_title:        String = "Select File"
 var picker_filters:      Array  = ["*.* ; All Files"]
@@ -134,8 +127,8 @@ func _update_style() -> void:
 	var filled: bool = _current_path != ""
 
 	var s: StyleBoxFlat   = StyleBoxFlat.new()
-	s.bg_color            = COLOR_PURPLE_DARK if filled else COLOR_PANEL_BG
-	s.border_color        = COLOR_PURPLE_BRIGHT if filled else COLOR_PURPLE_MID
+	s.bg_color            = UITheme.PURPLE_DARK if filled else UITheme.PANEL_BG
+	s.border_color        = UITheme.PURPLE_BRIGHT if filled else UITheme.PURPLE_MID
 	s.border_width_left   = 2
 	s.border_width_right  = 2
 	s.border_width_top    = 2
@@ -148,12 +141,12 @@ func _update_style() -> void:
 
 	if _label:
 		_label.add_theme_color_override("font_color",
-			COLOR_WHITE_SOFT if filled else COLOR_PURPLE_MID)
+			UITheme.WHITE_SOFT if filled else UITheme.PURPLE_MID)
 
 	if _browse_btn:
 		var bs: StyleBoxFlat   = StyleBoxFlat.new()
-		bs.bg_color            = COLOR_PURPLE_DARK
-		bs.border_color        = COLOR_PURPLE_MID
+		bs.bg_color            = UITheme.PURPLE_DARK
+		bs.border_color        = UITheme.PURPLE_MID
 		bs.border_width_left   = 1
 		bs.border_width_right  = 1
 		bs.border_width_top    = 1
@@ -165,8 +158,8 @@ func _update_style() -> void:
 		_browse_btn.add_theme_stylebox_override("normal",   bs)
 		_browse_btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
 		var bs_h: StyleBoxFlat = bs.duplicate()
-		bs_h.border_color = COLOR_PURPLE_BRIGHT
+		bs_h.border_color = UITheme.PURPLE_BRIGHT
 		_browse_btn.add_theme_stylebox_override("hover",    bs_h)
 		_browse_btn.add_theme_stylebox_override("pressed",  bs_h)
-		_browse_btn.add_theme_color_override("font_color",       COLOR_PURPLE_BRIGHT)
-		_browse_btn.add_theme_color_override("font_hover_color", COLOR_WHITE_SOFT)
+		_browse_btn.add_theme_color_override("font_color",       UITheme.PURPLE_BRIGHT)
+		_browse_btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)

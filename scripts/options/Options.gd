@@ -6,17 +6,6 @@ extends Control
 # Settings are persisted to user://settings.cfg via ConfigFile.
 # ---------------------------------------------------------------------------
 
-const COLOR_BG:            Color = Color(0.0,   0.0,   0.0,   1.0)
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 1.0)
-const COLOR_PURPLE_DARK:   Color = Color(0.176, 0.024, 0.259, 1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_SEPARATOR:     Color = Color(0.698, 0.118, 1.0,   0.5)
-const COLOR_OK:            Color = Color(0.35,  0.95,  0.35,  1.0)
-const COLOR_ERROR:         Color = Color(1.0,   0.25,  0.05,  1.0)
-
 const TOP_BAR_HEIGHT:  int = 64
 const PANEL_HALF_W:    int = 480
 const PANEL_PAD_V:     int = 24
@@ -180,16 +169,16 @@ func _apply_layout() -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_theme() -> void:
-	_bg.color = COLOR_BG
+	_bg.color = UITheme.BG
 
-	_style_label(_title_lbl, COLOR_PURPLE_BRIGHT, 18, true)
+	_style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
 
-	_style_button(_back_btn, COLOR_MAGENTA)
-	_style_button(_open_folder_btn, COLOR_PURPLE_MID)
-	_style_button(_connect_btn, COLOR_PURPLE_BRIGHT)
-	_style_button(_scan_btn, COLOR_PURPLE_MID)
+	_style_button(_back_btn, UITheme.MAGENTA)
+	_style_button(_open_folder_btn, UITheme.PURPLE_MID)
+	_style_button(_connect_btn, UITheme.PURPLE_BRIGHT)
+	_style_button(_scan_btn, UITheme.PURPLE_MID)
 
 	_style_panel()
 
@@ -201,7 +190,7 @@ func _apply_theme() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/IntifaceHeader",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialHeader",
 	]:
-		_style_label(get_node(header_path), COLOR_PURPLE_BRIGHT, 13, true)
+		_style_label(get_node(header_path), UITheme.PURPLE_BRIGHT, 13, true)
 
 	var sep_style: StyleBoxFlat = _make_separator_style()
 	for sep_path in [
@@ -226,11 +215,11 @@ func _apply_theme() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialBaudRow/SerialBaudLabel",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialAutoRow/SerialAutoLabel",
 	]:
-		_style_label(get_node(row_label_path), COLOR_WHITE_SOFT, 14, false)
+		_style_label(get_node(row_label_path), UITheme.WHITE_SOFT, 14, false)
 
-	_style_label(_master_value, COLOR_PURPLE_BRIGHT, 14, false)
-	_style_label(_status_lbl,   COLOR_ERROR,         13, false)
-	_style_label(_serial_status_lbl, COLOR_ERROR,    13, false)
+	_style_label(_master_value, UITheme.PURPLE_BRIGHT, 14, false)
+	_style_label(_status_lbl,   UITheme.ERROR,         13, false)
+	_style_label(_serial_status_lbl, UITheme.ERROR,    13, false)
 
 	_style_slider(_master_slider)
 	_style_option_button(_res_dropdown)
@@ -242,15 +231,15 @@ func _apply_theme() -> void:
 	_style_toggle(_fs_toggle,   false)
 	_style_toggle(_auto_toggle, false)
 	_style_toggle(_serial_auto_toggle, false)
-	_style_button(_serial_refresh_btn, COLOR_PURPLE_MID)
-	_style_button(_serial_connect_btn, COLOR_PURPLE_BRIGHT)
-	_style_button(_serial_test_btn,    COLOR_PURPLE_MID)
+	_style_button(_serial_refresh_btn, UITheme.PURPLE_MID)
+	_style_button(_serial_connect_btn, UITheme.PURPLE_BRIGHT)
+	_style_button(_serial_test_btn,    UITheme.PURPLE_MID)
 
 
 func _style_panel() -> void:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = COLOR_PANEL_BG
-	s.border_color        = COLOR_PURPLE_BRIGHT
+	s.bg_color            = UITheme.PANEL_BG
+	s.border_color        = UITheme.PURPLE_BRIGHT
 	s.border_width_left   = BORDER_WIDTH
 	s.border_width_right  = BORDER_WIDTH
 	s.border_width_top    = BORDER_WIDTH
@@ -259,7 +248,7 @@ func _style_panel() -> void:
 	s.corner_radius_top_right    = 4
 	s.corner_radius_bottom_left  = 4
 	s.corner_radius_bottom_right = 4
-	s.shadow_color = Color(COLOR_MAGENTA.r, COLOR_MAGENTA.g, COLOR_MAGENTA.b, 0.5)
+	s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.5)
 	s.shadow_size  = 12
 	s.content_margin_left   = 32
 	s.content_margin_right  = 32
@@ -269,7 +258,7 @@ func _style_panel() -> void:
 
 func _make_separator_style() -> StyleBoxFlat:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = COLOR_SEPARATOR
+	s.bg_color = UITheme.SEPARATOR
 	return s
 
 
@@ -281,12 +270,12 @@ func _style_label(label: Label, color: Color, size: int, uppercase: bool = false
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.text = btn.text.to_upper()
-	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, COLOR_PURPLE_DARK))
-	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, COLOR_PURPLE_MID))
+	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, UITheme.PURPLE_DARK))
+	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, UITheme.PURPLE_MID))
 	btn.add_theme_stylebox_override("pressed", _make_btn_style(accent, accent))
 	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 
@@ -307,17 +296,17 @@ func _make_btn_style(border: Color, fill: Color) -> StyleBoxFlat:
 
 
 func _style_toggle(btn: Button, pressed: bool) -> void:
-	var active_color:   Color = COLOR_PURPLE_BRIGHT
-	var inactive_color: Color = COLOR_PURPLE_MID
+	var active_color:   Color = UITheme.PURPLE_BRIGHT
+	var inactive_color: Color = UITheme.PURPLE_MID
 	var accent: Color = active_color if pressed else inactive_color
 	btn.add_theme_color_override("font_color",          accent)
-	btn.add_theme_color_override("font_hover_color",    COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color",  COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",    UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color",  UITheme.BG)
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.text = btn.text.to_upper()
-	var fill: Color = COLOR_PURPLE_MID if pressed else COLOR_PURPLE_DARK
+	var fill: Color = UITheme.PURPLE_MID if pressed else UITheme.PURPLE_DARK
 	btn.add_theme_stylebox_override("normal",   _make_btn_style(accent, fill))
-	btn.add_theme_stylebox_override("hover",    _make_btn_style(accent, COLOR_PURPLE_MID))
+	btn.add_theme_stylebox_override("hover",    _make_btn_style(accent, UITheme.PURPLE_MID))
 	btn.add_theme_stylebox_override("pressed",  _make_btn_style(active_color, active_color))
 	btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
 	btn.text = "ON" if pressed else "OFF"
@@ -325,8 +314,8 @@ func _style_toggle(btn: Button, pressed: bool) -> void:
 
 func _style_slider(slider: HSlider) -> void:
 	var track: StyleBoxFlat = StyleBoxFlat.new()
-	track.bg_color          = COLOR_PURPLE_DARK
-	track.border_color      = COLOR_PURPLE_MID
+	track.bg_color          = UITheme.PURPLE_DARK
+	track.border_color      = UITheme.PURPLE_MID
 	track.border_width_left = 1
 	track.border_width_right = 1 
 	track.border_width_top = 1
@@ -335,29 +324,29 @@ func _style_slider(slider: HSlider) -> void:
 	track.content_margin_bottom = 4
 
 	var fill: StyleBoxFlat = StyleBoxFlat.new()
-	fill.bg_color = COLOR_PURPLE_BRIGHT
+	fill.bg_color = UITheme.PURPLE_BRIGHT
 	fill.content_margin_top = 4
 	fill.content_margin_bottom = 4
 
 	slider.add_theme_stylebox_override("slider",       track)
 	slider.add_theme_stylebox_override("grabber_area", fill)
-	slider.add_theme_color_override("grabber_color",   COLOR_MAGENTA)
+	slider.add_theme_color_override("grabber_color",   UITheme.MAGENTA)
 	slider.custom_minimum_size.y = 24
 
 
 func _style_option_button(opt: OptionButton) -> void:
-	opt.add_theme_color_override("font_color",       COLOR_WHITE_SOFT)
-	opt.add_theme_color_override("font_hover_color", COLOR_PURPLE_BRIGHT)
+	opt.add_theme_color_override("font_color",       UITheme.WHITE_SOFT)
+	opt.add_theme_color_override("font_hover_color", UITheme.PURPLE_BRIGHT)
 	opt.add_theme_font_size_override("font_size", 14)
-	opt.add_theme_stylebox_override("normal", _make_btn_style(COLOR_PURPLE_MID,    COLOR_PURPLE_DARK))
-	opt.add_theme_stylebox_override("hover",  _make_btn_style(COLOR_PURPLE_BRIGHT, COLOR_PURPLE_MID))
+	opt.add_theme_stylebox_override("normal", _make_btn_style(UITheme.PURPLE_MID,    UITheme.PURPLE_DARK))
+	opt.add_theme_stylebox_override("hover",  _make_btn_style(UITheme.PURPLE_BRIGHT, UITheme.PURPLE_MID))
 	opt.add_theme_stylebox_override("focus",  StyleBoxEmpty.new())
 
 
 func _style_line_edit(edit: LineEdit) -> void:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color          = COLOR_PURPLE_DARK
-	s.border_color      = COLOR_PURPLE_MID
+	s.bg_color          = UITheme.PURPLE_DARK
+	s.border_color      = UITheme.PURPLE_MID
 	
 	s.border_width_left = 2
 	s.border_width_right = 2
@@ -370,10 +359,10 @@ func _style_line_edit(edit: LineEdit) -> void:
 	s.content_margin_bottom = 8
 	
 	edit.add_theme_stylebox_override("normal", s)
-	edit.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
-	edit.add_theme_color_override("font_placeholder_color", COLOR_PURPLE_MID)
-	edit.add_theme_color_override("caret_color", COLOR_PURPLE_BRIGHT)
-	edit.add_theme_color_override("selection_color", Color(COLOR_PURPLE_BRIGHT.r, COLOR_PURPLE_BRIGHT.g, COLOR_PURPLE_BRIGHT.b, 0.4))
+	edit.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
+	edit.add_theme_color_override("font_placeholder_color", UITheme.PURPLE_MID)
+	edit.add_theme_color_override("caret_color", UITheme.PURPLE_BRIGHT)
+	edit.add_theme_color_override("selection_color", Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.4))
 	edit.add_theme_font_size_override("font_size", 14)
 
 
@@ -580,13 +569,13 @@ func _on_connect_pressed() -> void:
 		var address: String = _address_input.text.strip_edges()
 		if address.is_empty():
 			address = DEFAULT_BP_ADDRESS
-		_set_status("● CONNECTING…", COLOR_PURPLE_MID)
+		_set_status("● CONNECTING…", UITheme.PURPLE_MID)
 		_connect_btn.disabled = true
 		ButtplugService.ConnectToIntiface(address)
 
 
 func _on_scan_pressed() -> void:
-	_set_status("● SCANNING…", COLOR_PURPLE_MID)
+	_set_status("● SCANNING…", UITheme.PURPLE_MID)
 	_scan_btn.disabled = true
 	ButtplugService.StartScan()
 
@@ -638,14 +627,14 @@ func _on_bp_scan_finished() -> void:
 	_scan_btn.disabled = false
 	var count: int = _device_dropdown.item_count
 	if count > 0:
-		_set_status("● %d DEVICE%s FOUND" % [count, "S" if count > 1 else ""], COLOR_OK)
+		_set_status("● %d DEVICE%s FOUND" % [count, "S" if count > 1 else ""], UITheme.OK)
 	else:
-		_set_status("● NO DEVICES FOUND", COLOR_ERROR)
+		_set_status("● NO DEVICES FOUND", UITheme.ERROR)
 
 
 func _on_bp_error(message: String) -> void:
 	_connect_btn.disabled = false
-	_set_status("● ERROR: " + message.left(60).to_upper(), COLOR_ERROR)
+	_set_status("● ERROR: " + message.left(60).to_upper(), UITheme.ERROR)
 	_is_connected = false
 	_set_connected_ui(false)
 
@@ -658,13 +647,13 @@ func _set_connected_ui(connected: bool) -> void:
 	_connect_btn.disabled = false
 	_scan_btn.disabled    = not connected
 	if connected:
-		_style_button(_connect_btn, COLOR_MAGENTA)
+		_style_button(_connect_btn, UITheme.MAGENTA)
 		_connect_btn.text = "> DISCONNECT"
-		_set_status("● CONNECTED", COLOR_OK)
+		_set_status("● CONNECTED", UITheme.OK)
 	else:
-		_style_button(_connect_btn, COLOR_PURPLE_BRIGHT)
+		_style_button(_connect_btn, UITheme.PURPLE_BRIGHT)
 		_connect_btn.text = "> CONNECT"
-		_set_status("● DISCONNECTED", COLOR_ERROR)
+		_set_status("● DISCONNECTED", UITheme.ERROR)
 
 
 func _set_status(text: String, color: Color) -> void:
@@ -700,20 +689,20 @@ func _on_serial_connect_pressed() -> void:
 		SerialDeviceService.Disconnect()
 		return
 	if _serial_port_dropdown.selected < 0 or _serial_port_dropdown.item_count == 0:
-		_set_serial_status("● NO PORT SELECTED", COLOR_ERROR)
+		_set_serial_status("● NO PORT SELECTED", UITheme.ERROR)
 		return
 	var port: String = _serial_port_dropdown.get_item_text(_serial_port_dropdown.selected)
 	var baud: int    = _serial_baud_input.text.to_int()
 	if baud <= 0:
 		baud = DEFAULT_BAUD_RATE
-	_set_serial_status("● CONNECTING…", COLOR_PURPLE_MID)
+	_set_serial_status("● CONNECTING…", UITheme.PURPLE_MID)
 	_serial_connect_btn.disabled = true
 	SerialDeviceService.Connect(port, baud)
 
 
 func _on_serial_test_pressed() -> void:
 	if not SerialDeviceService.SerialConnected:
-		_set_serial_status("● NOT CONNECTED", COLOR_ERROR)
+		_set_serial_status("● NOT CONNECTED", UITheme.ERROR)
 		return
 	# Quick stroke: top in 600ms, bottom in 600ms, midpoint in 400ms.
 	SerialDeviceService.SendLinear(600, 1.0)
@@ -725,21 +714,21 @@ func _on_serial_test_pressed() -> void:
 
 func _on_serial_connected() -> void:
 	_serial_connect_btn.disabled = false
-	_set_serial_status("● CONNECTED", COLOR_OK)
-	_style_button(_serial_connect_btn, COLOR_MAGENTA)
+	_set_serial_status("● CONNECTED", UITheme.OK)
+	_style_button(_serial_connect_btn, UITheme.MAGENTA)
 	_serial_connect_btn.text = "> DISCONNECT"
 
 
 func _on_serial_disconnected() -> void:
 	_serial_connect_btn.disabled = false
-	_set_serial_status("● DISCONNECTED", COLOR_ERROR)
-	_style_button(_serial_connect_btn, COLOR_PURPLE_BRIGHT)
+	_set_serial_status("● DISCONNECTED", UITheme.ERROR)
+	_style_button(_serial_connect_btn, UITheme.PURPLE_BRIGHT)
 	_serial_connect_btn.text = "> CONNECT"
 
 
 func _on_serial_error(message: String) -> void:
 	_serial_connect_btn.disabled = false
-	_set_serial_status("● ERROR: " + message.left(60).to_upper(), COLOR_ERROR)
+	_set_serial_status("● ERROR: " + message.left(60).to_upper(), UITheme.ERROR)
 
 
 func _set_serial_status(text: String, color: Color) -> void:
@@ -749,10 +738,10 @@ func _set_serial_status(text: String, color: Color) -> void:
 
 func _sync_serial_state() -> void:
 	if SerialDeviceService.SerialConnected:
-		_set_serial_status("● CONNECTED", COLOR_OK)
-		_style_button(_serial_connect_btn, COLOR_MAGENTA)
+		_set_serial_status("● CONNECTED", UITheme.OK)
+		_style_button(_serial_connect_btn, UITheme.MAGENTA)
 		_serial_connect_btn.text = "> DISCONNECT"
 	else:
-		_set_serial_status("● DISCONNECTED", COLOR_ERROR)
-		_style_button(_serial_connect_btn, COLOR_PURPLE_BRIGHT)
+		_set_serial_status("● DISCONNECTED", UITheme.ERROR)
+		_style_button(_serial_connect_btn, UITheme.PURPLE_BRIGHT)
 		_serial_connect_btn.text = "> CONNECT"

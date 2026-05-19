@@ -10,6 +10,11 @@ public partial class GameState : Node
 	private List<Dictionary> _sequence = new();
 	private int _seqIndex = 0;
 
+	// Chronological play log — entries are either:
+	//   { "type": "fork_choice", "fork_title": string, "path_name": string, "path_index": int }
+	//   { "type": "round",       "data": Dictionary }
+	private List<Dictionary> _playLog = new();
+
 	// Current position in the sequence (includes fork markers before resolution).
 	public int RoundIndex => _seqIndex;
 
@@ -23,6 +28,7 @@ public partial class GameState : Node
 		Journey   = data;
 		_seqIndex = 0;
 		_sequence = BuildSequence(data);
+		_playLog.Clear();
 	}
 
 	private static List<Dictionary> BuildSequence(Dictionary data)
@@ -141,12 +147,22 @@ public partial class GameState : Node
 			pathIndex = 0;
 
 		var chosen       = paths[pathIndex].AsGodotDictionary();
+
+		// Record this choice in the play log so the end screen can show the path taken.
+		_playLog.Add(new Dictionary {
+			["type"]       = "fork_choice",
+			["fork_title"] = forkData.ContainsKey("title") ? forkData["title"].AsString() : "",
+			["path_name"]  = chosen.ContainsKey("name") ? chosen["name"].AsString() : "Path " + (pathIndex + 1),
+			["path_index"] = pathIndex,
+		});
+
 		var chosenRounds      = chosen.ContainsKey("rounds")      ? chosen["rounds"].AsGodotArray()      : new Array();
 		var chosenShops       = chosen.ContainsKey("shops")       ? chosen["shops"].AsGodotArray()       : new Array();
 		var chosenStoryboards = chosen.ContainsKey("storyboards") ? chosen["storyboards"].AsGodotArray() : new Array();
+		var chosenForks       = chosen.ContainsKey("forks")       ? chosen["forks"].AsGodotArray()       : new Array();
 
-		// Interleave path rounds, shops, and storyboards by the same sort-key scheme as
-		// BuildSequence so authoring order is preserved on resolution.
+		// Interleave path rounds, shops, storyboards, and nested forks by the same sort-key
+		// scheme as BuildSequence so authoring order is preserved on resolution.
 		var subItems = new List<(int SortKey, Dictionary Data)>();
 		foreach (var r in chosenRounds)
 		{
@@ -165,6 +181,12 @@ public partial class GameState : Node
 			var sd = s.AsGodotDictionary();
 			int afterOrder = sd.ContainsKey("after_order") ? sd["after_order"].AsInt32() : 0;
 			subItems.Add((afterOrder * 3 + 1, new Dictionary { ["type"] = "shop", ["data"] = sd }));
+		}
+		foreach (var nf in chosenForks)
+		{
+			var nfd = nf.AsGodotDictionary();
+			int afterOrder = nfd.ContainsKey("after_order") ? nfd["after_order"].AsInt32() : 0;
+			subItems.Add((afterOrder * 3 + 2, new Dictionary { ["type"] = "fork", ["data"] = nfd }));
 		}
 		subItems.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
 
@@ -194,6 +216,24 @@ public partial class GameState : Node
 			if (item.ContainsKey("type") && item["type"].AsString() == "round")
 				result.Add(item["data"]);
 		}
+		return result;
+	}
+
+	// Called by GameLoop after each round ends (before ScoreService.EndRound).
+	public void LogRound(Dictionary roundData)
+	{
+		_playLog.Add(new Dictionary {
+			["type"] = "round",
+			["data"] = roundData,
+		});
+	}
+
+	// Returns the full chronological log of fork choices and rounds played.
+	public Array GetPlayLog()
+	{
+		var result = new Array();
+		foreach (var entry in _playLog)
+			result.Add(entry);
 		return result;
 	}
 

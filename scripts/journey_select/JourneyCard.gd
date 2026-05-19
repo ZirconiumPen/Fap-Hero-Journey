@@ -2,12 +2,6 @@ extends PanelContainer
 
 signal selected
 
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 1.0)
-const COLOR_PURPLE_DARK:   Color = Color(0.176, 0.024, 0.259, 1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-
 const JourneySelect    = preload("res://scripts/journey_select/JourneySelect.gd")
 const CARD_MIN_WIDTH:  int = 280
 const CARD_MIN_HEIGHT: int = 340
@@ -26,7 +20,7 @@ func _ready() -> void:
 	_cover.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 	_cover.custom_minimum_size   = Vector2.ZERO
 
-	_title.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
+	_title.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	_title.add_theme_font_size_override("font_size", 13)
 	_title.uppercase = true
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -47,14 +41,14 @@ func setup(journey: Dictionary) -> void:
 
 func _set_style(hovered: bool) -> void:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color     = COLOR_PURPLE_DARK if hovered else COLOR_PANEL_BG
-	s.border_color = COLOR_PURPLE_BRIGHT if hovered else COLOR_PURPLE_MID
+	s.bg_color     = UITheme.PURPLE_DARK if hovered else UITheme.PANEL_BG
+	s.border_color = UITheme.PURPLE_BRIGHT if hovered else UITheme.PURPLE_MID
 	s.border_width_left   = BORDER_WIDTH
 	s.border_width_right  = BORDER_WIDTH
 	s.border_width_top    = BORDER_WIDTH
 	s.border_width_bottom = BORDER_WIDTH
 	if hovered:
-		s.shadow_color = Color(COLOR_PURPLE_BRIGHT.r, COLOR_PURPLE_BRIGHT.g, COLOR_PURPLE_BRIGHT.b, 0.45)
+		s.shadow_color = Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.45)
 		s.shadow_size  = 10
 	s.content_margin_left   = 0
 	s.content_margin_right  = 0
@@ -65,12 +59,12 @@ func _set_style(hovered: bool) -> void:
 
 func _on_hover_enter() -> void:
 	_set_style(true)
-	_title.add_theme_color_override("font_color", COLOR_PURPLE_BRIGHT)
+	_title.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
 
 
 func _on_hover_exit() -> void:
 	_set_style(false)
-	_title.add_theme_color_override("font_color", COLOR_WHITE_SOFT)
+	_title.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 
 
 func _gui_input(event: InputEvent) -> void:

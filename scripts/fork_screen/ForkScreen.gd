@@ -2,14 +2,6 @@ extends Control
 
 signal path_chosen(index: int)
 
-const COLOR_BG:            Color = Color(0.0,   0.0,   0.0,   0.0)
-const COLOR_PANEL_BG:      Color = Color(0.055, 0.008, 0.086, 0.92)
-const COLOR_PURPLE_BRIGHT: Color = Color(0.698, 0.118, 1.0,   1.0)
-const COLOR_PURPLE_MID:    Color = Color(0.408, 0.063, 0.627, 1.0)
-const COLOR_MAGENTA:       Color = Color(0.878, 0.0,   0.878, 1.0)
-const COLOR_WHITE_SOFT:    Color = Color(0.878, 0.780, 1.0,   1.0)
-const COLOR_DARK_TEXT:     Color = Color(0.55,  0.47,  0.72,  1.0)
-
 @onready var _backdrop:   ColorRect    = $Backdrop
 @onready var _center_box: VBoxContainer = $CenterBox
 @onready var _fork_title: Label        = $CenterBox/ForkTitle
@@ -81,7 +73,7 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	var border: Panel = Panel.new()
 	var border_style: StyleBoxFlat = StyleBoxFlat.new()
 	border_style.bg_color            = Color(0, 0, 0, 0)
-	border_style.border_color        = COLOR_PURPLE_MID
+	border_style.border_color        = UITheme.PURPLE_MID
 	border_style.border_width_left   = 1
 	border_style.border_width_right  = 1
 	border_style.border_width_top    = 1
@@ -115,7 +107,7 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	name_lbl.text                 = path_name.to_upper()
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	name_lbl.add_theme_color_override("font_color",    COLOR_WHITE_SOFT)
+	name_lbl.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
 	name_lbl.add_theme_font_size_override("font_size", 22)
 	col.add_child(name_lbl)
 
@@ -125,7 +117,7 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 		desc_lbl.text                 = desc
 		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		desc_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-		desc_lbl.add_theme_color_override("font_color",    COLOR_DARK_TEXT)
+		desc_lbl.add_theme_color_override("font_color",    UITheme.DARK_TEXT)
 		desc_lbl.add_theme_font_size_override("font_size", 13)
 		col.add_child(desc_lbl)
 
@@ -133,13 +125,13 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	var rounds_lbl: Label = Label.new()
 	rounds_lbl.text                 = "%d ROUND%s" % [rounds.size(), "S" if rounds.size() != 1 else ""]
 	rounds_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rounds_lbl.add_theme_color_override("font_color",    COLOR_PURPLE_BRIGHT)
+	rounds_lbl.add_theme_color_override("font_color",    UITheme.PURPLE_BRIGHT)
 	rounds_lbl.add_theme_font_size_override("font_size", 13)
 	col.add_child(rounds_lbl)
 
 	var btn: Button = Button.new()
 	btn.text = "> CHOOSE"
-	_style_button(btn, COLOR_PURPLE_BRIGHT)
+	_style_button(btn, UITheme.PURPLE_BRIGHT)
 	btn.pressed.connect(_on_path_chosen.bind(index))
 	col.add_child(btn)
 
@@ -218,20 +210,20 @@ func _apply_layout() -> void:
 
 
 func _apply_base_theme() -> void:
-	_fork_title.add_theme_color_override("font_color",    COLOR_WHITE_SOFT)
+	_fork_title.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
 	_fork_title.add_theme_font_size_override("font_size", 32)
 	_fork_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fork_title.uppercase = true
 
-	_fork_sub.add_theme_color_override("font_color",    COLOR_DARK_TEXT)
+	_fork_sub.add_theme_color_override("font_color",    UITheme.DARK_TEXT)
 	_fork_sub.add_theme_font_size_override("font_size", 15)
 	_fork_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   COLOR_WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", COLOR_BG)
+	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.BG_ZERO)
 	btn.add_theme_font_size_override("font_size", 14)
 
 	var s: StyleBoxFlat = StyleBoxFlat.new()
