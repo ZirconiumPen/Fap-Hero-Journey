@@ -452,22 +452,13 @@ func _make_side_storyboard_editor(arr: Array, idx: int, graph: Control, reselect
 	var refresh_self: Callable = func() -> void:
 		reselect.call(idx)
 
+	# Opening slot — insert before the first line (also serves as "add first line").
+	lines_col.add_child(_make_insert_line_btn(lines_arr, 0, refresh_self))
+
 	for li in lines_arr.size():
 		lines_col.add_child(_make_side_storyboard_line_block(lines_arr, li, refresh_self))
-
-	var add_row: HBoxContainer = HBoxContainer.new()
-	add_row.add_theme_constant_override("separation", 6)
-	col.add_child(add_row)
-
-	var add_line_btn: Button = Button.new()
-	add_line_btn.text = "+ ADD LINE"
-	add_line_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(add_line_btn, UITheme.STORYBOARD)
-	add_line_btn.pressed.connect(func() -> void:
-		lines_arr.append({"speaker": "", "text": "", "image": ""})
-		refresh_self.call()
-	)
-	add_row.add_child(add_line_btn)
+		# Slot after each line; the last one doubles as "append at end".
+		lines_col.add_child(_make_insert_line_btn(lines_arr, li + 1, refresh_self))
 
 	var paste_btn: Button = Button.new()
 	paste_btn.text = "⎘ PASTE LINES"
@@ -476,7 +467,7 @@ func _make_side_storyboard_editor(arr: Array, idx: int, graph: Control, reselect
 	paste_btn.pressed.connect(func() -> void:
 		_show_paste_lines_popup(lines_arr, refresh_self)
 	)
-	add_row.add_child(paste_btn)
+	col.add_child(paste_btn)
 
 	col.add_child(_side_section_separator())
 	col.add_child(_side_action_row(arr, idx, graph, reselect))
@@ -672,6 +663,48 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	col.add_child(row)
 
 	return panel
+
+
+# Thin "insert a new line here" button placed between line blocks in the
+# storyboard editor.  Subtle by default, highlights on hover so it doesn't
+# compete visually with the line content above/below it.
+func _make_insert_line_btn(lines_arr: Array, insert_at: int, refresh: Callable) -> Control:
+	var btn: Button = Button.new()
+	btn.text = "╋  INSERT LINE"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size   = Vector2(0, 24)
+	btn.focus_mode            = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 10)
+
+	var c: Color = UITheme.STORYBOARD
+
+	var s_n: StyleBoxFlat = StyleBoxFlat.new()
+	s_n.bg_color           = Color(c.r, c.g, c.b, 0.04)
+	s_n.border_color       = Color(c.r, c.g, c.b, 0.22)
+	s_n.border_width_left  = 1; s_n.border_width_right  = 1
+	s_n.border_width_top   = 1; s_n.border_width_bottom = 1
+	s_n.content_margin_top = 2; s_n.content_margin_bottom = 2
+	btn.add_theme_stylebox_override("normal", s_n)
+
+	var s_h: StyleBoxFlat = s_n.duplicate()
+	s_h.bg_color     = Color(c.r, c.g, c.b, 0.15)
+	s_h.border_color = c
+	btn.add_theme_stylebox_override("hover", s_h)
+
+	var s_p: StyleBoxFlat = s_n.duplicate()
+	s_p.bg_color = Color(c.r, c.g, c.b, 0.28)
+	btn.add_theme_stylebox_override("pressed", s_p)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	btn.add_theme_color_override("font_color",         Color(c.r, c.g, c.b, 0.45))
+	btn.add_theme_color_override("font_hover_color",   c)
+	btn.add_theme_color_override("font_pressed_color", c)
+
+	btn.pressed.connect(func() -> void:
+		lines_arr.insert(insert_at, {"speaker": "", "text": "", "image": ""})
+		refresh.call()
+	)
+	return btn
 
 
 func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
