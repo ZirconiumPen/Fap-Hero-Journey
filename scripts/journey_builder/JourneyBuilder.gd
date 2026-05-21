@@ -250,14 +250,20 @@ func _on_viewport_files_dropped(files: PackedStringArray) -> void:
 		if fs_files.size() > 1:
 			if not _selected_arr[_selected_idx].has("axis_scripts"):
 				_selected_arr[_selected_idx]["axis_scripts"] = {}
+			if not _selected_arr[_selected_idx].has("vib_scripts"):
+				_selected_arr[_selected_idx]["vib_scripts"] = {}
 			for f: String in fs_files:
-				var axis: String = _detect_funscript_axis(f)
-				if axis == "L0":
-					_selected_arr[_selected_idx]["funscript_path"] = f
-					if (_selected_arr[_selected_idx].get("name", "") as String).strip_edges() == "":
-						_selected_arr[_selected_idx]["name"] = f.get_file().get_basename()
+				var vib_ch: String = _detect_vib_channel(f)
+				if vib_ch != "":
+					_selected_arr[_selected_idx]["vib_scripts"][vib_ch] = f
 				else:
-					_selected_arr[_selected_idx]["axis_scripts"][axis] = f
+					var axis: String = _detect_funscript_axis(f)
+					if axis == "L0":
+						_selected_arr[_selected_idx]["funscript_path"] = f
+						if (_selected_arr[_selected_idx].get("name", "") as String).strip_edges() == "":
+							_selected_arr[_selected_idx]["name"] = f.get_file().get_basename()
+					else:
+						_selected_arr[_selected_idx]["axis_scripts"][axis] = f
 			# Refresh the side panel so the new paths show up in the DropZones.
 			_graph.call_deferred("select_item", _selected_arr, _selected_idx)
 			return
@@ -301,6 +307,20 @@ func _detect_funscript_axis(path: String) -> String:
 		if stem.ends_with(suffix):
 			return name_codes[suffix]
 	return "L0"
+
+
+# Returns "vib1" or "vib2" when the filename carries a recognised vibrator-script
+# suffix (.vib1, _vib1, .vibe1, _vibe1 → "vib1"; .vib2 variants → "vib2").
+# Returns "" for any other filename (not a vib script).
+func _detect_vib_channel(path: String) -> String:
+	var stem: String = path.get_file().get_basename().to_lower()
+	for s: String in [".vib1", "_vib1", ".vibe1", "_vibe1"]:
+		if stem.ends_with(s):
+			return "vib1"
+	for s: String in [".vib2", "_vib2", ".vibe2", "_vibe2"]:
+		if stem.ends_with(s):
+			return "vib2"
+	return ""
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +573,18 @@ func _on_save_pressed() -> void:
 				_delete_stale_axis_files(round_dir, axis, ax_dst_name)
 				axis_scripts_rel[axis] = round_name + "/" + ax_dst_name
 
+			# Copy vibrator-channel scripts and collect relative paths for the JSON.
+			var vib_scripts_in: Dictionary = it.get("vib_scripts", {})
+			var vib_scripts_rel: Dictionary = {}
+			for ch_key: String in vib_scripts_in:
+				var vib_src: String = vib_scripts_in[ch_key]
+				if vib_src == "":
+					continue
+				var vib_dst_name: String = round_name + "_" + ch_key + "." + vib_src.get_extension()
+				_copy_file(vib_src, round_dir + "/" + vib_dst_name)
+				_delete_stale_vib_files(round_dir, ch_key, vib_dst_name)
+				vib_scripts_rel[ch_key] = round_name + "/" + vib_dst_name
+
 			var vid_src: String = it.get("video_path","")
 			if vid_src != "":
 				if i in transcode_plan:
@@ -603,6 +635,7 @@ func _on_save_pressed() -> void:
 				"RoundType":      "Normal",
 				"FunscriptPath":  round_name + "/" + fs_dst_name,
 				"AxisScripts":    axis_scripts_rel,
+				"VibScripts":     vib_scripts_rel,
 				"ActionCount":    fs_stats["count"],
 				"LengthMs":       fs_stats["length_ms"],
 			})
@@ -782,6 +815,16 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 					_copy_file(ax_src, pr_dir + "/" + ax_dst_name)
 					_delete_stale_axis_files(pr_dir, axis, ax_dst_name)
 					pr_axis_rel[axis] = pr_name + "/" + ax_dst_name
+				var pr_vib_in: Dictionary = pi_item.get("vib_scripts", {})
+				var pr_vib_rel: Dictionary = {}
+				for ch_key: String in pr_vib_in:
+					var vib_src: String = pr_vib_in[ch_key]
+					if vib_src == "":
+						continue
+					var vib_dst_name: String = pr_name + "_" + ch_key + "." + vib_src.get_extension()
+					_copy_file(vib_src, pr_dir + "/" + vib_dst_name)
+					_delete_stale_vib_files(pr_dir, ch_key, vib_dst_name)
+					pr_vib_rel[ch_key] = pr_name + "/" + vib_dst_name
 				var pr_orig_folder: String = pi_item.get("original_folder", "")
 				if pr_orig_folder != "":
 					var pr_orig_abs: String = ProjectSettings.globalize_path(pr_orig_folder)
@@ -793,6 +836,7 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 					"CoinsAwarded":  pi_item.get("coins",0) as int,
 					"FunscriptPath": pr_name + "/" + pr_fs_dst_name if pr_fs_dst_name != "" else "",
 					"AxisScripts":   pr_axis_rel,
+					"VibScripts":    pr_vib_rel,
 					"ActionCount":   pr_fs_stats["count"],
 					"LengthMs":      pr_fs_stats["length_ms"],
 				})
@@ -1193,8 +1237,9 @@ func _delete_stale_files(dir_path: String, keep_filename: String, extensions: Ar
 
 
 # Like _delete_stale_files but specifically for the L0 (main stroke) funscript.
-# Skips files that look like secondary-axis scripts (`*_L1.*`, `*_R0.*`, etc.)
-# so they are never accidentally deleted when the L0 name changes.
+# Skips files that look like secondary-axis scripts (`*_L1.*`, `*_R0.*`, etc.) or
+# vibrator-channel scripts (`*_vib1.*`, `*_vib2.*`) so they are never accidentally
+# deleted when the L0 name changes.
 func _delete_stale_l0_files(dir_path: String, keep_filename: String) -> void:
 	var da: DirAccess = DirAccess.open(dir_path)
 	if da == null:
@@ -1206,12 +1251,17 @@ func _delete_stale_l0_files(dir_path: String, keep_filename: String) -> void:
 		if not da.current_is_dir() and fname != keep_filename \
 				and fname.get_extension().to_lower() in JourneyData.FUNSCRIPT_EXTENSIONS:
 			var stem: String = fname.get_basename()
-			var is_axis: bool = false
+			var is_secondary: bool = false
 			for ax: String in JourneyData.EXTRA_AXES:
 				if stem.ends_with("_" + ax):
-					is_axis = true
+					is_secondary = true
 					break
-			if not is_axis:
+			if not is_secondary:
+				for vk: String in ["_vib1", "_vib2", "_vibe1", "_vibe2"]:
+					if stem.ends_with(vk):
+						is_secondary = true
+						break
+			if not is_secondary:
 				to_delete.append(dir_path + "/" + fname)
 		fname = da.get_next()
 	da.list_dir_end()
@@ -1232,6 +1282,26 @@ func _delete_stale_axis_files(dir_path: String, axis: String, keep_filename: Str
 		if not da.current_is_dir() and fname != keep_filename \
 				and fname.get_extension().to_lower() in JourneyData.FUNSCRIPT_EXTENSIONS \
 				and fname.get_basename().ends_with("_" + axis):
+			to_delete.append(dir_path + "/" + fname)
+		fname = da.get_next()
+	da.list_dir_end()
+	for p: String in to_delete:
+		DirAccess.remove_absolute(p)
+
+
+# Removes stale vibrator-channel funscript files for a specific channel key
+# (i.e. `*_vib1.funscript`) but are not the newly written `keep_filename`.
+func _delete_stale_vib_files(dir_path: String, ch_key: String, keep_filename: String) -> void:
+	var da: DirAccess = DirAccess.open(dir_path)
+	if da == null:
+		return
+	da.list_dir_begin()
+	var to_delete: PackedStringArray = []
+	var fname: String = da.get_next()
+	while fname != "":
+		if not da.current_is_dir() and fname != keep_filename \
+				and fname.get_extension().to_lower() in JourneyData.FUNSCRIPT_EXTENSIONS \
+				and fname.get_basename().ends_with("_" + ch_key):
 			to_delete.append(dir_path + "/" + fname)
 		fname = da.get_next()
 	da.list_dir_end()

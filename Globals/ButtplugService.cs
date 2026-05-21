@@ -1,6 +1,8 @@
 using Godot;
 using Buttplug.Client;
+using Buttplug.Core.Messages;
 using System;
+using System.Linq;
 
 public partial class ButtplugService : Node
 {
@@ -145,7 +147,53 @@ public partial class ButtplugService : Node
 	public bool DeviceSupportsLinear(int deviceIndex)
 	{
 		var device = GetDeviceAt(deviceIndex);
-		return device != null && device.HasOutput(Buttplug.Core.Messages.OutputType.Position);
+		return device != null && device.HasOutput(OutputType.Position);
+	}
+
+	// Returns the number of independent vibration channels (actuators) on the device.
+	// Most single-motor devices return 1; dual-motor devices (e.g. We-Vibe Sync,
+	// Lovense Nora/Max 2) return 2.
+	public int GetVibrationChannelCount(int deviceIndex)
+	{
+		var device = GetDeviceAt(deviceIndex);
+		if (device == null)
+			return 0;
+
+		try 
+		{ 
+			return device.GetFeaturesWithOutput(OutputType.Vibrate).Count(); 
+		}
+		catch 
+		{ 
+			return 1; 
+		}
+	}
+
+	// Send a vibration command to a specific actuator channel by its index.
+	// Channel 0 = primary motor, channel 1 = secondary motor.
+	// Falls back to all-channels if the index is out of range.
+	public async void SendVibrateChannel(int deviceIndex, int channelIndex, double intensity)
+	{
+		var device = GetDeviceAt(deviceIndex);
+		if (device == null) 
+			return;
+
+		try
+		{
+			var features = device.GetFeaturesWithOutput(OutputType.Vibrate).ToList();
+			if (channelIndex < 0 || channelIndex >= features.Count)
+			{
+				// Index out of range — fall back to all-channels.
+				await device.RunOutputAsync(DeviceOutput.Vibrate.Percent(intensity), default);
+				return;
+			}
+
+			await features[channelIndex].RunOutputAsync(DeviceOutput.Vibrate.Percent(intensity), default);
+		}
+		catch (Exception e)
+		{
+			GD.PrintErr($"ButtplugService: SendVibrateChannel failed: {e.Message}");
+		}
 	}
 
 	public async void SendVibrate(int deviceIndex, double intensity)

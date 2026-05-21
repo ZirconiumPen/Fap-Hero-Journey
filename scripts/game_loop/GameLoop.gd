@@ -208,6 +208,17 @@ func _load_current_round() -> void:
 		if ax_path != "":
 			FunscriptPlayer.LoadAxisScript(axis, ax_path)
 
+	# Load vibrator-channel scripts (Buttplug vibrators only; ignored for linear
+	# devices and serial output). Clear first so stale channels from a prior round
+	# are never sent to the device.
+	FunscriptPlayer.ClearVibScripts()
+	var vib_scripts: Dictionary = round.get("vib_scripts", {})
+	for ch_key: String in vib_scripts:
+		var vib_path: String = vib_scripts[ch_key]
+		if vib_path != "":
+			var channel: int = 0 if ch_key == "vib1" else 1
+			FunscriptPlayer.LoadVibScript(channel, vib_path)
+
 	var folder: String = round.get("folder", "")
 	var video_path: String = _find_video(folder)
 	_load_video(video_path)

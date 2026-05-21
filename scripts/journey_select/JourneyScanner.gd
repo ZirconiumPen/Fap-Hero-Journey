@@ -135,11 +135,20 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 			if rel != "":
 				axis_scripts[axis] = path + "/" + rel
 
+		# Vib scripts — {ch_key: relative_path} in JSON, resolved to absolute paths.
+		var raw_vib: Dictionary = raw.get("VibScripts", raw.get("vib_scripts", {}))
+		var vib_scripts: Dictionary = {}
+		for ch_key: String in raw_vib:
+			var rel: String = raw_vib[ch_key]
+			if rel != "":
+				vib_scripts[ch_key] = path + "/" + rel
+
 		var round_data: Dictionary = {
 			"name":           round_name,
 			"folder":         round_folder,
 			"funscript_path": fs["path"],
 			"axis_scripts":   axis_scripts,
+			"vib_scripts":    vib_scripts,
 			"coins":          raw.get("CoinsAwarded", 0),
 			"order":          raw.get("Order", 0),
 			"action_count":   fs["count"],
@@ -193,11 +202,19 @@ static func parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary
 				if rel != "":
 					pr_axis_scripts[axis] = journey_path + "/" + rel
 
+			var pr_raw_vib: Dictionary = raw_pr.get("VibScripts", raw_pr.get("vib_scripts", {}))
+			var pr_vib_scripts: Dictionary = {}
+			for ch_key: String in pr_raw_vib:
+				var rel: String = pr_raw_vib[ch_key]
+				if rel != "":
+					pr_vib_scripts[ch_key] = journey_path + "/" + rel
+
 			path_entry["rounds"].append({
 				"name":           pr_name,
 				"folder":         pr_folder,
 				"funscript_path": pr_fs["path"],
 				"axis_scripts":   pr_axis_scripts,
+				"vib_scripts":    pr_vib_scripts,
 				"coins":          raw_pr.get("CoinsAwarded", raw_pr.get("coins", 0)),
 				"order":          raw_pr.get("Order",        raw_pr.get("order", 0)),
 				"action_count":   pr_fs["count"],

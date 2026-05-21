@@ -15,10 +15,23 @@ public partial class FunscriptPlayer : Node
         public int Index = 0;
     }
 
+    // Per-channel vibrator script state.
+    // Channel 0 = vib1 (primary motor), channel 1 = vib2 (secondary motor).
+    // Buttplug-only — serial devices ignore these.
+    private class VibState
+    {
+        public List<Action> Actions = new List<Action>();
+        public int Index = 0;
+    }
+
     // Maps T-code axis name → its loaded script state.
     // Explicitly System.Collections.Generic — AxisState is a C# class, not a Godot Variant.
     private readonly System.Collections.Generic.Dictionary<string, AxisState> _axes =
         new System.Collections.Generic.Dictionary<string, AxisState>();
+
+    // Maps vibrator channel index → its loaded script state.
+    private readonly System.Collections.Generic.Dictionary<int, VibState> _vibScripts =
+        new System.Collections.Generic.Dictionary<int, VibState>();
 
     private static readonly string[] KnownAxes = { "L1", "L2", "R0", "R1", "R2" };
 
@@ -96,6 +109,8 @@ public partial class FunscriptPlayer : Node
         _isLinearDevice = null;
 
         foreach (var kv in _axes)
+            kv.Value.Index = 0;
+        foreach (var kv in _vibScripts)
             kv.Value.Index = 0;
 
         string absPath = ProjectSettings.GlobalizePath(path);
@@ -180,6 +195,44 @@ public partial class FunscriptPlayer : Node
         _axes.Clear();
     }
 
+    // Load a per-channel vibrator funscript. channel: 0 = vib1, 1 = vib2.
+    // Call ClearVibScripts() before loading scripts for a new round.
+    public void LoadVibScript(int channel, string path)
+    {
+        var state = new VibState();
+        string absPath = ProjectSettings.GlobalizePath(path);
+        using var file = FileAccess.Open(absPath, FileAccess.ModeFlags.Read);
+        if (file == null)
+        {
+            GD.PrintErr($"FunscriptPlayer: cannot open vib script ch{channel}: {path}");
+            return;
+        }
+        var parser = new Json();
+        if (parser.Parse(file.GetAsText()) != Error.Ok)
+        {
+            GD.PrintErr($"FunscriptPlayer: JSON parse error in vib script ch{channel}: {path}");
+            return;
+        }
+        var funscript = parser.Data.AsGodotDictionary();
+        var rawActions = funscript.ContainsKey("actions") ? funscript["actions"].AsGodotArray() : new Godot.Collections.Array();
+        foreach (var rawAction in rawActions)
+        {
+            var a = rawAction.AsGodotDictionary();
+            state.Actions.Add(new Action
+            {
+                AtMs = a.ContainsKey("at") ? a["at"].AsSingle() : 0f,
+                Pos  = a.ContainsKey("pos") ? a["pos"].AsInt32() : 0,
+            });
+        }
+        _vibScripts[channel] = state;
+    }
+
+    // Remove all vibrator channel scripts (call before loading a new round).
+    public void ClearVibScripts()
+    {
+        _vibScripts.Clear();
+    }
+
     // Send all known axes that have NO loaded script to neutral (50 → 0.5) so the
     // device doesn't stay wherever it was from a previous round.
     // Only runs when at least one axis script is loaded — single-axis devices
@@ -234,6 +287,8 @@ public partial class FunscriptPlayer : Node
         _actionIndex = 0;
 
         foreach (var kv in _axes)
+            kv.Value.Index = 0;
+        foreach (var kv in _vibScripts)
             kv.Value.Index = 0;
 
         _isLinearDevice = null;
@@ -321,9 +376,20 @@ public partial class FunscriptPlayer : Node
             return;
 
         if (_isLinearDevice == true)
+        {
             bp.SendLinear(_deviceIndex, _homeEaseMs, homeNorm);
+        }
+        else if (_vibScripts.Count > 0)
+        {
+            // Explicitly silence every vibration channel loaded from vib scripts.
+            int vibCount = bp.GetVibrationChannelCount(_deviceIndex);
+            for (int ch = 0; ch < Math.Max(1, vibCount); ch++)
+                bp.SendVibrateChannel(_deviceIndex, ch, 0.0);
+        }
         else
+        {
             bp.SendVibrate(_deviceIndex, 0.0);
+        }
     }
 
     // Call this each frame from GameLoop to keep funscript in sync with the video clock.
@@ -394,6 +460,40 @@ public partial class FunscriptPlayer : Node
                                 serial.SendAxis(axis, durMs, targetNorm);
                             }
                             state.Index++;
+                        }
+                    }
+                }
+            }
+
+            // Dispatch vib scripts (Buttplug vibrators only).
+            // Uses the same _positionMs clock as the main script so both are in sync.
+            // Channel 0 (vib1) is mirrored to channel 1 when no vib2 script is loaded
+            // and the device reports 2+ vibration channels.
+            if (_outputMode == OutputMode.Buttplug && _isLinearDevice == false && _vibScripts.Count > 0)
+            {
+                var bpVib = _buttplug;
+                if (bpVib != null && bpVib.BpConnected && _deviceIndex >= 0)
+                {
+                    int vibChannelCount = bpVib.GetVibrationChannelCount(_deviceIndex);
+                    bool hasCh1 = _vibScripts.ContainsKey(1);
+
+                    foreach (var vibEntry in _vibScripts)
+                    {
+                        int channel = vibEntry.Key;
+                        var vstate  = vibEntry.Value;
+                        while (vstate.Index < vstate.Actions.Count)
+                        {
+                            if (vstate.Actions[vstate.Index].AtMs > _positionMs)
+                                break;
+
+                            double intensity = Math.Clamp(vstate.Actions[vstate.Index].Pos / 100.0, 0.0, 1.0);
+                            bpVib.SendVibrateChannel(_deviceIndex, channel, intensity);
+
+                            // Mirror channel 0 → channel 1 when no separate vib2 script.
+                            if (channel == 0 && !hasCh1 && vibChannelCount >= 2)
+                                bpVib.SendVibrateChannel(_deviceIndex, 1, intensity);
+
+                            vstate.Index++;
                         }
                     }
                 }
@@ -574,8 +674,10 @@ public partial class FunscriptPlayer : Node
         }
         else
         {
-            // Vibrators have no stroke direction — just hold the current keyframe intensity.
-            bp.SendVibrate(_deviceIndex, currentPos / 100.0);
+            // Vibrators: hold the current keyframe intensity.
+            // Skip if vib scripts are loaded — per-channel dispatch runs in _Process().
+            if (_vibScripts.Count == 0)
+                bp.SendVibrate(_deviceIndex, currentPos / 100.0);
         }
     }
 

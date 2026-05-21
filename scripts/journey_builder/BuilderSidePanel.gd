@@ -33,6 +33,13 @@ const EXTRA_AXES_INFO: Array = [
 	{"axis": "R2", "label": "R2  —  PITCH  (tilt fwd / back)"},
 ]
 
+# Vibrator channel drop zones shown in the collapsible expander for each round.
+# key matches the vib_scripts dict key used by JourneyBuilder and GameLoop.
+const VIB_CHANNELS_INFO: Array = [
+	{"key": "vib1", "label": "VIB1  —  CHANNEL 0  (primary motor)"},
+	{"key": "vib2", "label": "VIB2  —  CHANNEL 1  (secondary motor)"},
+]
+
 var _owner: JourneyBuilder
 
 
@@ -458,6 +465,9 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 
 	col.add_child(_side_section_separator())
 	col.add_child(_make_axis_expander(arr, idx))
+
+	col.add_child(_side_section_separator())
+	col.add_child(_make_vib_expander(arr, idx))
 
 	col.add_child(_side_section_separator())
 	col.add_child(_side_action_row(arr, idx, graph, reselect))
@@ -984,6 +994,67 @@ func _make_axis_expander(arr: Array, idx: int) -> Control:
 	toggle_btn.toggled.connect(func(pressed: bool) -> void:
 		toggle_btn.text = ("▼  EXTRA AXES  (SERIAL ONLY)" if pressed else "▶  EXTRA AXES  (SERIAL ONLY)")
 		axes_panel.visible = pressed
+	)
+
+	return wrapper
+
+
+# ── Vibrator channel expander ────────────────────────────────────────────────
+
+# Collapsed "▶ VIBRATOR SCRIPTS (BUTTPLUG ONLY)" expander with one DropZone per
+# vibration channel. Accepts .vib1 / .vib2 funscripts for multi-motor devices.
+# When only vib1 is provided and the device has 2+ channels, FunscriptPlayer
+# mirrors it automatically — no need to fill both unless you want distinct patterns.
+func _make_vib_expander(arr: Array, idx: int) -> Control:
+	# Ensure the dict key exists.
+	if not arr[idx].has("vib_scripts"):
+		arr[idx]["vib_scripts"] = {}
+
+	var wrapper: VBoxContainer = VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 4)
+
+	var toggle_btn: Button = Button.new()
+	toggle_btn.text = "▶  VIBRATOR SCRIPTS  (BUTTPLUG ONLY)"
+	toggle_btn.toggle_mode = true
+	toggle_btn.button_pressed = false
+	toggle_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(toggle_btn, UITheme.PURPLE_MID)
+	wrapper.add_child(toggle_btn)
+
+	var vib_panel: VBoxContainer = VBoxContainer.new()
+	vib_panel.add_theme_constant_override("separation", 6)
+	vib_panel.visible = false
+	wrapper.add_child(vib_panel)
+
+	var hint: Label = Label.new()
+	hint.text = "PER-CHANNEL FUNSCRIPTS FOR MULTI-MOTOR VIBRATORS (E.G. WE-VIBE, LOVENSE NORA).  LEAVE EMPTY TO USE THE MAIN FUNSCRIPT FOR ALL CHANNELS."
+	hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	hint.add_theme_font_size_override("font_size", 10)
+	hint.uppercase = true
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vib_panel.add_child(hint)
+
+	for info: Dictionary in VIB_CHANNELS_INFO:
+		var ch_key: String = info["key"]
+		vib_panel.add_child(_side_field_label(info["label"]))
+		var zone: PanelContainer = DropZoneScript.new()
+		zone.accepted_extensions   = JourneyData.FUNSCRIPT_EXTENSIONS.duplicate()
+		zone.picker_title          = "Select %s Funscript" % ch_key.to_upper()
+		zone.picker_filters        = ["*.funscript,*.json ; Funscript Files", "*.* ; All Files"]
+		zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vib_panel.add_child(zone)
+		var current_path: String = (arr[idx]["vib_scripts"] as Dictionary).get(ch_key, "")
+		if current_path != "":
+			zone.call_deferred("set_file", current_path)
+		# Capture key in closure.
+		var captured_key: String = ch_key
+		zone.file_dropped.connect(func(p: String) -> void:
+			arr[idx]["vib_scripts"][captured_key] = p
+		)
+
+	toggle_btn.toggled.connect(func(pressed: bool) -> void:
+		toggle_btn.text = ("▼  VIBRATOR SCRIPTS  (BUTTPLUG ONLY)" if pressed else "▶  VIBRATOR SCRIPTS  (BUTTPLUG ONLY)")
+		vib_panel.visible = pressed
 	)
 
 	return wrapper
