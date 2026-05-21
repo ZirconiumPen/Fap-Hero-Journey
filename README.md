@@ -140,6 +140,30 @@ All axes ease in together from neutral at round start and ease out together on p
 
 ---
 
+## Keybinds
+
+### During a Round
+
+| Key | Action |
+|---|---|
+| `Space` | Pause / Resume |
+| `Tab` | Toggle inventory panel |
+| `Escape` | Close inventory (if open), otherwise return to main menu |
+
+> These are suppressed while a full-screen overlay (shop, fork, storyboard) is active — the overlay handles input first.
+
+### Journey Builder
+
+| Key | Action |
+|---|---|
+| `Ctrl + S` | Save journey |
+| `Middle Mouse + Drag` | Pan the graph canvas |
+| `Scroll Wheel` | Zoom the graph canvas in / out |
+| `Left Click` (node) | Select node and open its editor in the side panel |
+| `Left Click` (empty canvas) | Deselect |
+
+---
+
 ## Settings
 
 Settings are stored in `user://settings.cfg` and managed through the in-app Options screen. No manual editing is required.
