@@ -568,17 +568,24 @@ func _on_save_pressed() -> void:
 					_delete_stale_files(round_dir, vid_dst_name, JourneyData.VIDEO_EXTENSIONS)
 				else:
 					var vid_dst_name: String = vid_src.get_file()
-					_update_modal_label(modal, "Round %d / %d — %s  (copying video)" % [rorder, total_main_rounds, round_name])
-					var copy_ok: bool = await _copy_file_chunked(
-						vid_src, round_dir + "/" + vid_dst_name,
-						func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
-					if not copy_ok:
-						if modal: modal.queue_free()
-						_show_status("Save cancelled. Journey not saved." if _transcode_cancel \
-							else "Failed to copy video for round \"%s\"." % round_name, true)
-						_save_btn.disabled = false
-						return
-					_delete_stale_files(round_dir, vid_dst_name, JourneyData.VIDEO_EXTENSIONS)
+					var vid_dst_path: String = round_dir + "/" + vid_dst_name
+					# Guard: if the source already lives at the destination (the user
+					# only changed the funscript and kept the same video), opening the
+					# destination for WRITE would truncate it to 0 KB before the read
+					# handle can consume it. Skip the copy entirely in that case.
+					var vid_src_abs: String = ProjectSettings.globalize_path(vid_src)
+					if vid_src_abs != vid_dst_path:
+						_update_modal_label(modal, "Round %d / %d — %s  (copying video)" % [rorder, total_main_rounds, round_name])
+						var copy_ok: bool = await _copy_file_chunked(
+							vid_src, vid_dst_path,
+							func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
+						if not copy_ok:
+							if modal: modal.queue_free()
+							_show_status("Save cancelled. Journey not saved." if _transcode_cancel \
+								else "Failed to copy video for round \"%s\"." % round_name, true)
+							_save_btn.disabled = false
+							return
+						_delete_stale_files(round_dir, vid_dst_name, JourneyData.VIDEO_EXTENSIONS)
 
 			# If this round was renamed, remove the old folder now that all files
 			# have been written to the new one.
@@ -750,15 +757,20 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 				var pr_vid: String = pi_item.get("video_path","")
 				if pr_vid != "":
 					var pr_vid_dst_name: String = pr_vid.get_file()
-					_update_modal_label(modal, "Fork round — %s  (copying video)" % pr_name)
-					var pr_copy_ok: bool = await _copy_file_chunked(
-						pr_vid, pr_dir + "/" + pr_vid_dst_name,
-						func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
-					if not pr_copy_ok:
-						# Cancelled / failed — unwind the recursive save.
-						_save_aborted = true
-						return path_entry
-					_delete_stale_files(pr_dir, pr_vid_dst_name, JourneyData.VIDEO_EXTENSIONS)
+					var pr_vid_dst_path: String = pr_dir + "/" + pr_vid_dst_name
+					# Same src==dst guard as the top-level round copy: skip when the
+					# video is already at its destination to avoid a 0 KB truncation.
+					var pr_vid_src_abs: String = ProjectSettings.globalize_path(pr_vid)
+					if pr_vid_src_abs != pr_vid_dst_path:
+						_update_modal_label(modal, "Fork round — %s  (copying video)" % pr_name)
+						var pr_copy_ok: bool = await _copy_file_chunked(
+							pr_vid, pr_vid_dst_path,
+							func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
+						if not pr_copy_ok:
+							# Cancelled / failed — unwind the recursive save.
+							_save_aborted = true
+							return path_entry
+						_delete_stale_files(pr_dir, pr_vid_dst_name, JourneyData.VIDEO_EXTENSIONS)
 				var pr_axis_in: Dictionary = pi_item.get("axis_scripts", {})
 				var pr_axis_rel: Dictionary = {}
 				for axis: String in pr_axis_in:

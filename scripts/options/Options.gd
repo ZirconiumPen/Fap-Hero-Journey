@@ -633,6 +633,16 @@ func _load_settings() -> void:
 		_range_min_lbl.text = "MIN: %d" % roundi(range_lo)
 		_range_max_lbl.text = "MAX: %d" % roundi(range_hi)
 
+	# Load the filler range slider FIRST so that if the toggle or speed-input
+	# signals fire _save_settings() below, the slider already holds the correct
+	# values and won't overwrite them with the initialisation defaults (0/100).
+	var filler_lo: float = float(SettingsService.get_filler_lo())
+	var filler_hi: float = float(SettingsService.get_filler_hi())
+	if _filler_range_slider != null:
+		_filler_range_slider.set_range_values(filler_lo, filler_hi)
+		_filler_range_min_lbl.text = "MIN: %d" % roundi(filler_lo)
+		_filler_range_max_lbl.text = "MAX: %d" % roundi(filler_hi)
+
 	var filler_enabled: bool = SettingsService.get_filler_enabled()
 	if _filler_toggle != null:
 		_filler_toggle.button_pressed = filler_enabled
@@ -640,13 +650,6 @@ func _load_settings() -> void:
 
 	if _filler_speed_input != null:
 		_filler_speed_input.text = str(SettingsService.get_filler_half_cycle_ms())
-
-	var filler_lo: float = float(SettingsService.get_filler_lo())
-	var filler_hi: float = float(SettingsService.get_filler_hi())
-	if _filler_range_slider != null:
-		_filler_range_slider.set_range_values(filler_lo, filler_hi)
-		_filler_range_min_lbl.text = "MIN: %d" % roundi(filler_lo)
-		_filler_range_max_lbl.text = "MAX: %d" % roundi(filler_hi)
 
 
 func _save_settings() -> void:

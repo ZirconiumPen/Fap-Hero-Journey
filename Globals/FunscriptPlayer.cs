@@ -255,8 +255,11 @@ public partial class FunscriptPlayer : Node
 	// Compute ease-in parameters from the first upcoming script action.
 	// Duration is proportional to how far that position is from neutral (50),
 	// so the device always approaches at a consistent speed regardless of gap size.
+	// Skipped entirely for vibrators — intensity jumps are not jarring the way
+	// sudden linear strokes are, so no ease is needed.
 	private void _StartEaseIn()
 	{
+		if (_isLinearDevice == false) return; // vibrators: no ease-in
 		if (_actions.Count == 0) return;
 		int idx = Math.Min(_actionIndex, _actions.Count - 1);
 		float gap = Math.Abs(_actions[idx].Pos - EaseFromPos);
@@ -273,6 +276,7 @@ public partial class FunscriptPlayer : Node
 	// Send a gentle "go to neutral" command so the device doesn't stay
 	// mid-stroke or vibrating when playback halts. Linear → midpoint,
 	// vibrator → 0 intensity. Safe to call when nothing is connected.
+	// For serial devices, all loaded secondary axes are also returned to 0.5.
 	private void EaseToNeutral()
 	{
 		ResolveOutput();
@@ -281,7 +285,13 @@ public partial class FunscriptPlayer : Node
 		{
 			var serial = _serial;
 			if (serial != null && serial.SerialConnected)
+			{
 				serial.SendLinear(EaseDurationMs, CenterPosition);
+				// Return every loaded secondary axis to neutral so none stay
+				// mid-position after a pause, stop, or mid-round exit.
+				foreach (var axis in _axes.Keys)
+					serial.SendAxis(axis, EaseDurationMs, 0.5);
+			}
 			return;
 		}
 
@@ -482,7 +492,9 @@ public partial class FunscriptPlayer : Node
 		// Ease-in blend: interpolate from neutral (50) toward the script positions
 		// over the computed ease duration. Both current and next are blended so the
 		// device doesn't receive an inconsistent target during the blend window.
-		if (_easing)
+		// Vibrators are exempt — _StartEaseIn() never sets _easing for them, but
+		// guard here too so any stale flag can never affect vibrator output.
+		if (_easing && _isLinearDevice != false)
 		{
 			double elapsed = _positionMs - _easeStartMs;
 			float t = (float)Math.Clamp(elapsed / _easeDurationMs, 0.0, 1.0);
