@@ -186,4 +186,16 @@ bin/                ffmpeg / ffprobe binaries (not committed)
 
 ## License
 
-Private / not yet licensed.
+Copyright (c) 2025 SaekoMStudio. All rights reserved.
+
+This software is provided for personal, non-commercial use only.
+Redistribution, resale, or modification without explicit written permission is prohibited.
+
+### Third-party software
+
+This application uses the following open-source components:
+
+- **Godot Engine** — MIT License — https://godotengine.org
+- **EIRTeam.FFmpeg** — MIT License — https://github.com/EIRTeam/EIRTeam.FFmpeg
+- **FFmpeg** — LGPL 2.1 — https://ffmpeg.org
+- **Buttplug.io** — BSD 2-Clause — https://buttplug.io
