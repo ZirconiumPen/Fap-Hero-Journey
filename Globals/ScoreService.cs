@@ -42,15 +42,15 @@ public partial class ScoreService : Node
 	// current without polling every frame.
 	private void _SyncMultiplier()
 	{
-		var inv = GetNode<InventoryService>("/root/InventoryService");
-		double mult = 1.0;
-		foreach (var fx in inv.GetActiveEffects())
+		var inventory = GetNode<InventoryService>("/root/InventoryService");
+		double multiplier = 1.0;
+		foreach (var effectVariant in inventory.GetActiveEffects())
 		{
-			var d = fx.AsGodotDictionary();
-			if (d.ContainsKey("kind") && d["kind"].AsString() == "score_multiplier" && d.ContainsKey("factor"))
-				mult *= d["factor"].AsDouble();
+			var effect = effectVariant.AsGodotDictionary();
+			if (effect.ContainsKey("kind") && effect["kind"].AsString() == "score_multiplier" && effect.ContainsKey("factor"))
+				multiplier *= effect["factor"].AsDouble();
 		}
-		SetMultiplier(mult);
+		SetMultiplier(multiplier);
 	}
 
 	public int TotalScore   => _rounds.Sum(r => r.Score) + _current.Score;
@@ -106,19 +106,19 @@ public partial class ScoreService : Node
 	// Each Dictionary has keys: score, small, medium, large (all int).
 	public Godot.Collections.Array<Godot.Collections.Dictionary> GetRoundBreakdowns()
 	{
-		var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-		foreach (var r in _rounds)
+		var breakdowns = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+		foreach (var round in _rounds)
 		{
-			var d = new Godot.Collections.Dictionary
+			var breakdown = new Godot.Collections.Dictionary
 			{
-				["score"]   = r.Score,
-				["small"]   = r.SmallStrokes,
-				["medium"]  = r.MediumStrokes,
-				["large"]   = r.LargeStrokes,
-				["actions"] = r.ActionCount,
+				["score"]   = round.Score,
+				["small"]   = round.SmallStrokes,
+				["medium"]  = round.MediumStrokes,
+				["large"]   = round.LargeStrokes,
+				["actions"] = round.ActionCount,
 			};
-			result.Add(d);
+			breakdowns.Add(breakdown);
 		}
-		return result;
+		return breakdowns;
 	}
 }

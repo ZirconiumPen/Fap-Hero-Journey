@@ -124,9 +124,9 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 
 	for i in items.size():
 		var item: Dictionary = items[i]
-		var t: String = item.get("type", "round")
+		var item_type: String = item.get("type", "round")
 
-		if t == "fork":
+		if item_type == "fork":
 			# ── Fork node ────────────────────────────────────────────────────
 			var fork_node: Control = _make_node(item, items, i)
 			fork_node.position = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
@@ -213,8 +213,8 @@ func _collect_terminal_items(items: Array, has_successor_after: bool) -> Array:
 	if items.is_empty():
 		return []
 	var last: Dictionary = items[-1]
-	var t: String = last.get("type", "round")
-	if t == "fork":
+	var item_type: String = last.get("type", "round")
+	if item_type == "fork":
 		if has_successor_after:
 			# Fork converges into a successor — the fork's paths are not terminal.
 			return []
@@ -306,11 +306,11 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 
 # is_terminal: true when this node ends the run (no path leads beyond it).
 func _make_node(item: Dictionary, arr: Array, idx: int, is_terminal: bool = false) -> Control:
-	var t: String = item.get("type", "round")
-	var is_boss: bool = t == "round" and item.get("round_type", "normal") == "boss"
+	var item_type: String = item.get("type", "round")
+	var is_boss: bool = item_type == "round" and item.get("round_type", "normal") == "boss"
 	# Terminal nodes use AMBER; boss rounds use DANGER red; else the type colour.
-	var accent: Color = UITheme.AMBER if is_terminal else (UITheme.DANGER if is_boss else _type_color(t))
-	var icon: String = "⚔" if is_boss else _type_icon(t)
+	var accent: Color = UITheme.AMBER if is_terminal else (UITheme.DANGER if is_boss else _type_color(item_type))
+	var icon: String = "⚔" if is_boss else _type_icon(item_type)
 	var primary: String = _type_label(item)
 	var secondary: String = _type_sublabel(item)
 	if is_terminal:
@@ -447,8 +447,8 @@ func _node_stylebox(accent: Color, selected: bool, terminal: bool = false) -> St
 	return s
 
 
-func _type_color(t: String) -> Color:
-	match t:
+func _type_color(item_type: String) -> Color:
+	match item_type:
 		"round":      return UITheme.PURPLE_BRIGHT
 		"shop":       return UITheme.AMBER
 		"storyboard": return UITheme.CYAN
@@ -456,8 +456,8 @@ func _type_color(t: String) -> Color:
 	return UITheme.PURPLE_MID
 
 
-func _type_icon(t: String) -> String:
-	match t:
+func _type_icon(item_type: String) -> String:
+	match item_type:
 		"round":      return "▶"
 		"shop":       return "◆"
 		"storyboard": return "◈"
@@ -466,8 +466,8 @@ func _type_icon(t: String) -> String:
 
 
 func _type_label(item: Dictionary) -> String:
-	var t: String = item.get("type", "round")
-	match t:
+	var item_type: String = item.get("type", "round")
+	match item_type:
 		"round":
 			var n: String = item.get("name", "")
 			return n if n != "" else "Round"
@@ -487,8 +487,8 @@ func _type_label(item: Dictionary) -> String:
 
 
 func _type_sublabel(item: Dictionary) -> String:
-	var t: String = item.get("type", "round")
-	match t:
+	var item_type: String = item.get("type", "round")
+	match item_type:
 		"round":
 			var c: int = item.get("coins", 0)
 			var rlabel: String = "BOSS ROUND" if item.get("round_type", "normal") == "boss" else "ROUND"

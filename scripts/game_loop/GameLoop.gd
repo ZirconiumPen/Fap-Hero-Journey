@@ -129,10 +129,10 @@ func _show_storyboard_screen(sb_data: Dictionary) -> void:
 	_video.paused = true
 	FunscriptPlayer.Pause()
 	_start_storyboard_filler()
-	var sb: Control = StoryboardScene.instantiate()
-	sb.completed.connect(_on_storyboard_completed)
-	add_child(sb)
-	sb.setup(sb_data)
+	var storyboard: Control = StoryboardScene.instantiate()
+	storyboard.completed.connect(_on_storyboard_completed)
+	add_child(storyboard)
+	storyboard.setup(sb_data)
 
 
 func _start_storyboard_filler() -> void:
@@ -370,11 +370,11 @@ func _enter_boss_mode(round: Dictionary) -> void:
 	InventoryService.ClearActiveEffects()
 
 	# Inject the designer's forced modifiers as boss effects.
-	var fx: Array = []
+	var boss_effects: Array = []
 	for mod: Dictionary in round.get("boss_modifiers", []):
-		fx.append(_make_boss_effect(mod))
-	if not fx.is_empty():
-		InventoryService.AddBossEffects(fx)
+		boss_effects.append(_make_boss_effect(mod))
+	if not boss_effects.is_empty():
+		InventoryService.AddBossEffects(boss_effects)
 
 	# Item use is disabled for the whole boss round.
 	if is_instance_valid(_inventory_panel):
@@ -401,19 +401,19 @@ func _exit_boss_mode() -> void:
 # effect dict the active-effects pipeline understands.
 func _make_boss_effect(mod: Dictionary) -> Dictionary:
 	var kind: String = mod.get("kind", "")
-	var fx: Dictionary = {
+	var effect: Dictionary = {
 		"id":   "boss_" + kind,
 		"name": BOSS_EFFECT_NAMES.get(kind, kind.to_upper()),
 		"kind": kind,
 		"boss": true,
 	}
 	if mod.has("factor"):
-		fx["factor"] = mod["factor"]
+		effect["factor"] = mod["factor"]
 	if mod.has("min"):
-		fx["min"] = mod["min"]
+		effect["min"] = mod["min"]
 	if mod.has("max"):
-		fx["max"] = mod["max"]
-	return fx
+		effect["max"] = mod["max"]
+	return effect
 
 
 func _build_beat_bar() -> void:
@@ -470,15 +470,15 @@ func _round_time_left() -> float:
 
 
 func _fit_video_cover() -> void:
-	var tex := _video.get_video_texture()
-	if tex == null:
+	var texture := _video.get_video_texture()
+	if texture == null:
 		return
-	var vs := tex.get_size()
-	if vs.x <= 0.0 or vs.y <= 0.0:
+	var video_size := texture.get_size()
+	if video_size.x <= 0.0 or video_size.y <= 0.0:
 		return
 	_cover_applied = true
 	var screen := get_viewport_rect().size
-	var video_ar := vs.x / vs.y
+	var video_ar := video_size.x / video_size.y
 	var screen_ar := screen.x / screen.y
 	var scaled: Vector2
 	if video_ar > screen_ar:
@@ -700,9 +700,9 @@ func _input(event: InputEvent) -> void:
 
 	# Keyboard hotkeys — evaluated in order of specificity.
 	if event is InputEventKey:
-		var k := event as InputEventKey
-		if k.pressed and not k.echo:
-			match k.keycode:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo:
+			match key_event.keycode:
 				KEY_SPACE:
 					# Space: pause / resume — blocked while a full-screen overlay is open
 					# (shop / fork / storyboard handles its own input first).

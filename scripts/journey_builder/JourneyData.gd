@@ -217,22 +217,22 @@ static func validate(items: Array, journey_name: String) -> String:
 		return "Please add at least one round before saving."
 
 	var round_idx_global: int = 0
-	for it: Dictionary in items:
-		var t: String = it.get("type", "round")
-		match t:
+	for item: Dictionary in items:
+		var item_type: String = item.get("type", "round")
+		match item_type:
 			"round":
 				round_idx_global += 1
-				if (it.get("name", "") as String).strip_edges() == "":
+				if (item.get("name", "") as String).strip_edges() == "":
 					return "Round %d needs a name." % round_idx_global
-				if it.get("funscript_path", "") == "":
-					return "Round \"%s\" needs a funscript." % it.get("name", "?")
+				if item.get("funscript_path", "") == "":
+					return "Round \"%s\" needs a funscript." % item.get("name", "?")
 			"fork":
-				var ctx: String = "fork after round %d" % round_idx_global
-				var ferr: String = validate_fork(it, ctx)
-				if ferr != "":
-					return ferr
+				var context_label: String = "fork after round %d" % round_idx_global
+				var fork_error: String = validate_fork(item, context_label)
+				if fork_error != "":
+					return fork_error
 			"storyboard":
-				var lines: Array = it.get("lines", [])
+				var lines: Array = item.get("lines", [])
 				if lines.is_empty():
 					return "A storyboard needs at least one line."
 	return ""

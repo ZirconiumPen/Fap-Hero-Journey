@@ -279,24 +279,24 @@ func _make_tag_toggle(tag_def: Dictionary) -> Button:
 	btn.focus_mode     = Control.FOCUS_NONE
 	btn.add_theme_font_size_override("font_size", 11)
 
-	var off: StyleBoxFlat = StyleBoxFlat.new()
-	off.bg_color            = Color(color.r, color.g, color.b, 0.06)
-	off.border_color        = Color(color.r, color.g, color.b, 0.45)
-	off.border_width_left   = 1; off.border_width_right  = 1
-	off.border_width_top    = 1; off.border_width_bottom = 1
-	off.corner_radius_top_left    = 6; off.corner_radius_top_right    = 6
-	off.corner_radius_bottom_left = 6; off.corner_radius_bottom_right = 6
-	off.content_margin_left = 11; off.content_margin_right  = 11
-	off.content_margin_top  = 5;  off.content_margin_bottom = 5
+	var off_style: StyleBoxFlat = StyleBoxFlat.new()
+	off_style.bg_color            = Color(color.r, color.g, color.b, 0.06)
+	off_style.border_color        = Color(color.r, color.g, color.b, 0.45)
+	off_style.border_width_left   = 1; off_style.border_width_right  = 1
+	off_style.border_width_top    = 1; off_style.border_width_bottom = 1
+	off_style.corner_radius_top_left    = 6; off_style.corner_radius_top_right    = 6
+	off_style.corner_radius_bottom_left = 6; off_style.corner_radius_bottom_right = 6
+	off_style.content_margin_left = 11; off_style.content_margin_right  = 11
+	off_style.content_margin_top  = 5;  off_style.content_margin_bottom = 5
 
-	var on: StyleBoxFlat = off.duplicate()
-	on.bg_color     = color
-	on.border_color = color
+	var on_style: StyleBoxFlat = off_style.duplicate()
+	on_style.bg_color     = color
+	on_style.border_color = color
 
-	btn.add_theme_stylebox_override("normal",        off)
-	btn.add_theme_stylebox_override("hover",         off)
-	btn.add_theme_stylebox_override("pressed",       on)
-	btn.add_theme_stylebox_override("hover_pressed", on)
+	btn.add_theme_stylebox_override("normal",        off_style)
+	btn.add_theme_stylebox_override("hover",         off_style)
+	btn.add_theme_stylebox_override("pressed",       on_style)
+	btn.add_theme_stylebox_override("hover_pressed", on_style)
 	btn.add_theme_stylebox_override("focus",         StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color",               color)
 	btn.add_theme_color_override("font_hover_color",         color)
@@ -332,11 +332,11 @@ func _build_side_panel_editor(
 		arr: Array,
 		idx: int,
 		graph: Control) -> void:
-	var t: String = item.get("type", "round")
+	var item_type: String = item.get("type", "round")
 
 	var hdr: Label = Label.new()
 	var accent: Color
-	match t:
+	match item_type:
 		"round":      hdr.text = "// ROUND //";      accent = UITheme.PURPLE_BRIGHT
 		"shop":       hdr.text = "// SHOP //";       accent = UITheme.PURPLE_BRIGHT
 		"storyboard": hdr.text = "// STORYBOARD //"; accent = UITheme.STORYBOARD
@@ -352,7 +352,7 @@ func _build_side_panel_editor(
 	var reselect: Callable = func(new_idx: int) -> void:
 		graph.select_item(arr, new_idx)
 
-	match t:
+	match item_type:
 		"round":
 			container.add_child(_make_side_round_editor(arr, idx, graph, reselect))
 		"shop":
@@ -625,8 +625,8 @@ func _make_side_shop_editor(arr: Array, idx: int, graph: Control, reselect: Call
 	mult_edit.placeholder_text = "1.0"
 	UITheme.style_line_edit(mult_edit)
 	mult_edit.text_changed.connect(func(val: String) -> void:
-		var m: float = val.to_float()
-		arr[idx]["price_multiplier"] = m if m > 0.0 else 1.0
+		var multiplier: float = val.to_float()
+		arr[idx]["price_multiplier"] = multiplier if multiplier > 0.0 else 1.0
 	)
 	col.add_child(mult_edit)
 

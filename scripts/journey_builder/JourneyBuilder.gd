@@ -365,22 +365,22 @@ func _update_cover_preview() -> void:
 func _load_journey(journey: Dictionary) -> void:
 	# Parse all data via JourneyData; copy fields into our member vars so the
 	# existing UI handlers can continue to read/write them directly.
-	var d: Dictionary = JourneyData.parse_journey(journey)
-	_journey_name           = d["name"]
-	_journey_author         = d["author"]
-	_journey_desc           = d["description"]
-	_journey_difficulty_idx = d["difficulty_idx"]
-	_journey_tags           = (d.get("tags", []) as Array).duplicate()
-	if (d["cover_path"] as String) != "":
-		_cover_path = d["cover_path"]
+	var parsed: Dictionary = JourneyData.parse_journey(journey)
+	_journey_name           = parsed["name"]
+	_journey_author         = parsed["author"]
+	_journey_desc           = parsed["description"]
+	_journey_difficulty_idx = parsed["difficulty_idx"]
+	_journey_tags           = (parsed.get("tags", []) as Array).duplicate()
+	if (parsed["cover_path"] as String) != "":
+		_cover_path = parsed["cover_path"]
 		_update_cover_preview()
 	# Mutate in place rather than replacing the reference — _setup_graph_view
 	# has already done call_deferred("set_items", _items), which captures the
 	# array reference. If we reassign _items here, that deferred call fires
 	# after _load_journey with the stale (empty) reference and clears the graph.
 	_items.clear()
-	for it in d["items"]:
-		_items.append(it)
+	for item in parsed["items"]:
+		_items.append(item)
 	_refresh_items()
 
 
@@ -416,7 +416,7 @@ func _on_save_pressed() -> void:
 		_save_btn.disabled = false
 		return
 
-	var has_any_round: bool = _items.any(func(it: Dictionary) -> bool: return it.get("type","round") == "round")
+	var has_any_round: bool = _items.any(func(item: Dictionary) -> bool: return item.get("type","round") == "round")
 	if not has_any_round:
 		_show_status("Add at least one round before saving.", true)
 		_save_btn.disabled = false
@@ -424,24 +424,24 @@ func _on_save_pressed() -> void:
 
 	var round_count: int = 0
 	for i in _items.size():
-		var it: Dictionary = _items[i]
-		var t: String = it.get("type", "round")
-		if t == "round":
+		var item: Dictionary = _items[i]
+		var item_type: String = item.get("type", "round")
+		if item_type == "round":
 			round_count += 1
-			if (it.get("name","") as String).strip_edges() == "":
+			if (item.get("name","") as String).strip_edges() == "":
 				_show_status("Round %d needs a name." % round_count, true)
 				_save_btn.disabled = false
 				return
-			if it.get("funscript_path","") == "":
+			if item.get("funscript_path","") == "":
 				_show_status("Round %d needs a funscript file." % round_count, true)
 				_save_btn.disabled = false
 				return
-		elif t == "shop" or t == "storyboard":
+		elif item_type == "shop" or item_type == "storyboard":
 			# Shops and storyboards have no required fields for save.
 			pass
 		else:
 			# Fork (top-level or nested via recursion).
-			var err: String = JourneyData.validate_fork(it, "fork after round %d" % round_count)
+			var err: String = JourneyData.validate_fork(item, "fork after round %d" % round_count)
 			if err != "":
 				_show_status(err, true)
 				_save_btn.disabled = false
@@ -503,34 +503,34 @@ func _on_save_pressed() -> void:
 	var storyboards_json: Array = []
 	var rorder: int = 0
 	var last_rorder: int = 0
-	var total_main_rounds: int = _items.filter(func(it: Dictionary) -> bool: return it.get("type","round") == "round").size()
+	var total_main_rounds: int = _items.filter(func(item: Dictionary) -> bool: return item.get("type","round") == "round").size()
 
 	for i in _items.size():
-		var it: Dictionary = _items[i]
-		var it_type: String = it.get("type","round")
-		if it_type == "shop":
+		var item: Dictionary = _items[i]
+		var item_type: String = item.get("type","round")
+		if item_type == "shop":
 			shops_json.append({
 				"AfterOrder":      last_rorder,
-				"Title":           it.get("title",""),
-				"Mode":            it.get("mode", "pool"),
-				"Count":           it.get("count", 3),
-				"Items":           it.get("items", []),
-				"PriceMultiplier": it.get("price_multiplier", 1.0),
+				"Title":           item.get("title",""),
+				"Mode":            item.get("mode", "pool"),
+				"Count":           item.get("count", 3),
+				"Items":           item.get("items", []),
+				"PriceMultiplier": item.get("price_multiplier", 1.0),
 			})
 			continue
-		if it_type == "storyboard":
+		if item_type == "storyboard":
 			rorder += 1
 			last_rorder = rorder
 			var sb_slug: String = "storyboard_%d" % rorder
-			var sb_img_src: String = it.get("image", "")
+			var sb_img_src: String = item.get("image", "")
 			var sb_img_fname: String = ""
 			if sb_img_src != "":
 				var sb_ext: String = sb_img_src.get_extension().to_lower()
 				var sb_f: String = _copy_image_deduped(sb_img_src, abs_media_dir, sb_slug + "." + sb_ext, copied_images)
 				sb_img_fname = "media/" + sb_f if sb_f != "" else ""
 			var sb_lines_json: Array = []
-			for sb_li_idx in (it.get("lines", []) as Array).size():
-				var sb_li: Dictionary = it["lines"][sb_li_idx]
+			for sb_li_idx in (item.get("lines", []) as Array).size():
+				var sb_li: Dictionary = item["lines"][sb_li_idx]
 				var li_img_src: String = sb_li.get("image", "")
 				var li_img_fname: String = ""
 				if li_img_src != "":
@@ -544,20 +544,20 @@ func _on_save_pressed() -> void:
 				})
 			storyboards_json.append({
 				"Order":        rorder,
-				"CoinsAwarded": it.get("coins", 0) as int,
+				"CoinsAwarded": item.get("coins", 0) as int,
 				"Image":        sb_img_fname,
 				"Lines":        sb_lines_json,
 			})
 			continue
-		if it_type == "round":
+		if item_type == "round":
 			rorder += 1
 			last_rorder = rorder
 
-			var round_name: String = (it.get("name","") as String).strip_edges()
+			var round_name: String = (item.get("name","") as String).strip_edges()
 			var round_dir: String  = abs_dir + "/" + round_name
 			DirAccess.make_dir_recursive_absolute(round_dir)
 
-			var fs_src: String = it.get("funscript_path","")
+			var fs_src: String = item.get("funscript_path","")
 			var fs_dst_name: String = round_name + "." + fs_src.get_extension()
 			_copy_file(fs_src, round_dir + "/" + fs_dst_name)
 			# L0-only stale cleanup: skips secondary-axis scripts in this folder.
@@ -566,7 +566,7 @@ func _on_save_pressed() -> void:
 			var fs_stats: Dictionary = JourneyData.read_funscript_stats(round_dir + "/" + fs_dst_name)
 
 			# Copy secondary-axis scripts and collect relative paths for the JSON.
-			var axis_scripts_in: Dictionary = it.get("axis_scripts", {})
+			var axis_scripts_in: Dictionary = item.get("axis_scripts", {})
 			var axis_scripts_rel: Dictionary = {}
 			for axis: String in axis_scripts_in:
 				var ax_src: String = axis_scripts_in[axis]
@@ -578,7 +578,7 @@ func _on_save_pressed() -> void:
 				axis_scripts_rel[axis] = round_name + "/" + ax_dst_name
 
 			# Copy vibrator-channel scripts and collect relative paths for the JSON.
-			var vib_scripts_in: Dictionary = it.get("vib_scripts", {})
+			var vib_scripts_in: Dictionary = item.get("vib_scripts", {})
 			var vib_scripts_rel: Dictionary = {}
 			for ch_key: String in vib_scripts_in:
 				var vib_src: String = vib_scripts_in[ch_key]
@@ -590,16 +590,16 @@ func _on_save_pressed() -> void:
 				vib_scripts_rel[ch_key] = round_name + "/" + vib_dst_name
 
 			# Boss-round config — copy the optional intro image into the round folder.
-			var round_type: String = it.get("round_type", "normal")
+			var round_type: String = item.get("round_type", "normal")
 			var boss_image_rel: String = ""
 			if round_type == "boss":
-				var boss_src: String = it.get("boss_image", "")
+				var boss_src: String = item.get("boss_image", "")
 				if boss_src != "":
 					var boss_dst_name: String = round_name + "_boss." + boss_src.get_extension()
 					_copy_file(boss_src, round_dir + "/" + boss_dst_name)
 					boss_image_rel = round_name + "/" + boss_dst_name
 
-			var vid_src: String = it.get("video_path","")
+			var vid_src: String = item.get("video_path","")
 			if vid_src != "":
 				if i in transcode_plan:
 					var info: Dictionary = transcode_plan[i]
@@ -636,7 +636,7 @@ func _on_save_pressed() -> void:
 
 			# If this round was renamed, remove the old folder now that all files
 			# have been written to the new one.
-			var orig_folder: String = it.get("original_folder", "")
+			var orig_folder: String = item.get("original_folder", "")
 			if orig_folder != "":
 				var orig_abs: String = ProjectSettings.globalize_path(orig_folder)
 				if orig_abs != round_dir and DirAccess.dir_exists_absolute(orig_abs):
@@ -645,11 +645,11 @@ func _on_save_pressed() -> void:
 			rounds_json.append({
 				"Name":           round_name,
 				"Order":          rorder,
-				"CoinsAwarded":   it.get("coins",0) as int,
+				"CoinsAwarded":   item.get("coins",0) as int,
 				"RoundType":      "Boss" if round_type == "boss" else "Normal",
 				"BossImage":      boss_image_rel,
-				"BossTagline":    it.get("boss_tagline", ""),
-				"BossModifiers":  _boss_modifiers_json(it.get("boss_modifiers", [])),
+				"BossTagline":    item.get("boss_tagline", ""),
+				"BossModifiers":  _boss_modifiers_json(item.get("boss_modifiers", [])),
 				"FunscriptPath":  round_name + "/" + fs_dst_name,
 				"AxisScripts":    axis_scripts_rel,
 				"VibScripts":     vib_scripts_rel,
@@ -659,7 +659,7 @@ func _on_save_pressed() -> void:
 		else:
 			# Fork — recursively save the fork and all nested forks.
 			var slug_prefix: String = "fork%d" % forks_json.size()
-			forks_json.append(await _save_fork(it, abs_dir, abs_media_dir, last_rorder, slug_prefix, copied_images, modal))
+			forks_json.append(await _save_fork(item, abs_dir, abs_media_dir, last_rorder, slug_prefix, copied_images, modal))
 			# A cancelled video copy deep inside a fork path unwinds to here.
 			if _save_aborted:
 				if modal: modal.queue_free()
@@ -1014,21 +1014,21 @@ func _poll_progress(progress_path: String, duration: float, modal: Control) -> v
 		return
 	var text: String = f.get_as_text()
 	f.close()
-	var us: int = 0
+	var out_time_us: int = 0
 	var speed: String = ""
 	for raw_line: String in text.split("\n"):
 		var line: String = raw_line.strip_edges()
 		if line.begins_with("out_time_us="):
-			us = line.substr(12).to_int()
+			out_time_us = line.substr(12).to_int()
 		elif line.begins_with("out_time_ms="):
-			us = line.substr(12).to_int()
+			out_time_us = line.substr(12).to_int()
 		elif line.begins_with("speed="):
 			speed = line.substr(6)
-	var current_s: float = us / 1_000_000.0
+	var current_seconds: float = out_time_us / 1_000_000.0
 	var progress: float = 0.0
 	if duration > 0.0:
-		progress = clampf(current_s / duration, 0.0, 1.0)
-	_update_modal_progress(modal, progress, current_s, duration, speed)
+		progress = clampf(current_seconds / duration, 0.0, 1.0)
+	_update_modal_progress(modal, progress, current_seconds, duration, speed)
 
 
 # ---------------------------------------------------------------------------

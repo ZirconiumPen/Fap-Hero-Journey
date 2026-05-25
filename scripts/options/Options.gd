@@ -161,8 +161,8 @@ func _apply_layout() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection",
 	]:
-		var s: VBoxContainer = get_node(section_path)
-		s.add_theme_constant_override("separation", 12)
+		var section: VBoxContainer = get_node(section_path)
+		section.add_theme_constant_override("separation", 12)
 
 	for row_path in [
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/JourneysSection/JourneysRow",
@@ -179,8 +179,8 @@ func _apply_layout() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialAutoRow",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialConnRow",
 	]:
-		var r: HBoxContainer = get_node(row_path)
-		r.add_theme_constant_override("separation", 16)
+		var row: HBoxContainer = get_node(row_path)
+		row.add_theme_constant_override("separation", 16)
 
 	# Hide the fixed gap spacers — sections are now grouped into tabs, so the
 	# old single-scroll inter-section padding is no longer needed.
@@ -1148,13 +1148,13 @@ func _save_settings() -> void:
 		SettingsService.set_range_max(roundi(_range_slider.hi))
 
 	if _home_slider != null:
-		var hp: int = roundi(_home_slider.value)
-		var he: int = _home_ease_input.text.to_int()
-		if he <= 0:
-			he = 2000
-		SettingsService.set_home_position(hp)
-		SettingsService.set_home_ease_ms(he)
-		FunscriptPlayer.SetHomePosition(hp, he)
+		var home_position: int = roundi(_home_slider.value)
+		var home_ease_ms: int = _home_ease_input.text.to_int()
+		if home_ease_ms <= 0:
+			home_ease_ms = 2000
+		SettingsService.set_home_position(home_position)
+		SettingsService.set_home_ease_ms(home_ease_ms)
+		FunscriptPlayer.SetHomePosition(home_position, home_ease_ms)
 
 	if _latency_slider != null:
 		var lat: int = roundi(_latency_slider.value)
@@ -1167,9 +1167,9 @@ func _save_settings() -> void:
 		FunscriptPlayer.SetVibeIntensity(vib)
 
 	if _max_speed_slider != null:
-		var ms: int = roundi(_max_speed_slider.value)
-		SettingsService.set_max_stroke_speed(ms)
-		FunscriptPlayer.SetMaxStrokeSpeed(ms)
+		var max_speed: int = roundi(_max_speed_slider.value)
+		SettingsService.set_max_stroke_speed(max_speed)
+		FunscriptPlayer.SetMaxStrokeSpeed(max_speed)
 
 	if _hud_delay_slider != null:
 		SettingsService.set_hud_hide_delay(_hud_delay_slider.value)

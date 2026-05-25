@@ -24,8 +24,8 @@ class _SpinnerNode extends Control:
 	var _angle: float = 0.0
 
 	func _ready() -> void:
-		var d: float = (SPINNER_R + SPINNER_W) * 2.0
-		custom_minimum_size = Vector2(d, d)
+		var diameter: float = (SPINNER_R + SPINNER_W) * 2.0
+		custom_minimum_size = Vector2(diameter, diameter)
 		size = custom_minimum_size
 
 	func _process(delta: float) -> void:
@@ -33,11 +33,11 @@ class _SpinnerNode extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		var c: Vector2 = size * 0.5
-		var r: float = SPINNER_R
-		var w: float = SPINNER_W
-		draw_arc(c, r, _angle, _angle + TAU * 0.72, 48, COLOR_SPINNER,  w, true)
-		draw_arc(c, r, _angle + TAU * 0.72, _angle + TAU, 24, COLOR_SPINNER2, w, true)
+		var center: Vector2 = size * 0.5
+		var radius: float = SPINNER_R
+		var stroke_width: float = SPINNER_W
+		draw_arc(center, radius, _angle, _angle + TAU * 0.72, 48, COLOR_SPINNER, stroke_width, true)
+		draw_arc(center, radius, _angle + TAU * 0.72, _angle + TAU, 24, COLOR_SPINNER2, stroke_width, true)
 
 
 func _ready() -> void:
@@ -80,9 +80,9 @@ func change_scene(path: String) -> void:
 	_overlay.visible      = true
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var tw: Tween = create_tween()
-	tw.tween_property(_overlay, "color", COLOR_BLACK, FADE_DURATION)
-	await tw.finished
+	var tween: Tween = create_tween()
+	tween.tween_property(_overlay, "color", COLOR_BLACK, FADE_DURATION)
+	await tween.finished
 
 	_spinner.visible = true
 
@@ -92,9 +92,9 @@ func change_scene(path: String) -> void:
 
 	_spinner.visible = false
 
-	tw = create_tween()
-	tw.tween_property(_overlay, "color", COLOR_OVERLAY, FADE_DURATION)
-	await tw.finished
+	tween = create_tween()
+	tween.tween_property(_overlay, "color", COLOR_OVERLAY, FADE_DURATION)
+	await tween.finished
 
 	_overlay.visible      = false
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE

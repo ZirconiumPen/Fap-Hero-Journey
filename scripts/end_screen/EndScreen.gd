@@ -49,9 +49,9 @@ func _ready() -> void:
 
 
 func _populate() -> void:
-	var j: Dictionary = GameState.Journey
+	var journey: Dictionary = GameState.Journey
 	_title_lbl.text   = "JOURNEY COMPLETE"
-	_journey_lbl.text = (j.get("title", "Journey") as String).to_upper()
+	_journey_lbl.text = (journey.get("title", "Journey") as String).to_upper()
 
 	# Use the actual played rounds from the log (fork paths may differ from
 	# the catalogue's top-level round list).
@@ -138,7 +138,7 @@ func _populate_score() -> void:
 			"round":
 				var depth: int = entry.get("depth", 0) as int
 				round_num += 1
-				var r: Dictionary = breakdowns[bd_idx] if bd_idx < breakdowns.size() else {}
+				var breakdown: Dictionary = breakdowns[bd_idx] if bd_idx < breakdowns.size() else {}
 				bd_idx += 1
 
 				var row: HBoxContainer = HBoxContainer.new()
@@ -168,17 +168,17 @@ func _populate_score() -> void:
 				time_lbl.add_theme_font_size_override("font_size", 15)
 
 				var act_lbl: Label = Label.new()
-				act_lbl.text = "%d ACTIONS" % r.get("actions", 0)
+				act_lbl.text = "%d ACTIONS" % breakdown.get("actions", 0)
 				act_lbl.add_theme_color_override("font_color", UITheme.PURPLE_MID)
 				act_lbl.add_theme_font_size_override("font_size", 15)
 
 				var detail_lbl: Label = Label.new()
-				detail_lbl.text = "%dS %dM %dL" % [r.get("small", 0), r.get("medium", 0), r.get("large", 0)]
+				detail_lbl.text = "%dS %dM %dL" % [breakdown.get("small", 0), breakdown.get("medium", 0), breakdown.get("large", 0)]
 				detail_lbl.add_theme_color_override("font_color", UITheme.PURPLE_MID)
 				detail_lbl.add_theme_font_size_override("font_size", 15)
 
 				var pts_lbl: Label = Label.new()
-				pts_lbl.text = str(r.get("score", 0)) + " PTS"
+				pts_lbl.text = str(breakdown.get("score", 0)) + " PTS"
 				pts_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
 				pts_lbl.add_theme_font_size_override("font_size", 17)
 

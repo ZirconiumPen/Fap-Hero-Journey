@@ -81,27 +81,27 @@ func _animate_card_in(card: Control, delay: float) -> void:
 		return
 	card.pivot_offset = card.size / 2.0
 	card.scale = Vector2(0.92, 0.92)
-	var t: Tween = create_tween().set_parallel(true)
-	t.tween_property(card, "modulate:a", 1.0, 0.22).set_delay(delay)
-	t.tween_property(card, "scale", Vector2.ONE, 0.30) \
+	var tween: Tween = create_tween().set_parallel(true)
+	tween.tween_property(card, "modulate:a", 1.0, 0.22).set_delay(delay)
+	tween.tween_property(card, "scale", Vector2.ONE, 0.30) \
 		.set_delay(delay).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
 # Quick scale "pop" used as purchase feedback.
 func _pulse_card(card: Control) -> void:
 	card.pivot_offset = card.size / 2.0
-	var t: Tween = create_tween()
-	t.tween_property(card, "scale", Vector2(1.06, 1.06), 0.10).set_ease(Tween.EASE_OUT)
-	t.tween_property(card, "scale", Vector2.ONE, 0.16) \
+	var tween: Tween = create_tween()
+	tween.tween_property(card, "scale", Vector2(1.06, 1.06), 0.10).set_ease(Tween.EASE_OUT)
+	tween.tween_property(card, "scale", Vector2.ONE, 0.16) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
 # Brief scale tick on the coin badge whenever the balance changes.
 func _pulse_coin_badge() -> void:
 	_coin_badge.pivot_offset = _coin_badge.size / 2.0
-	var t: Tween = create_tween()
-	t.tween_property(_coin_badge, "scale", Vector2(1.12, 1.12), 0.09).set_ease(Tween.EASE_OUT)
-	t.tween_property(_coin_badge, "scale", Vector2.ONE, 0.14) \
+	var tween: Tween = create_tween()
+	tween.tween_property(_coin_badge, "scale", Vector2(1.12, 1.12), 0.09).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_coin_badge, "scale", Vector2.ONE, 0.14) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
 
 

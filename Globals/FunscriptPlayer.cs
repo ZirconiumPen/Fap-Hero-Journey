@@ -151,11 +151,11 @@ public partial class FunscriptPlayer : Node
         var rawActions = funscript.ContainsKey("actions") ? funscript["actions"].AsGodotArray() : new Godot.Collections.Array();
         foreach (var rawAction in rawActions)
         {
-            var a = rawAction.AsGodotDictionary();
+            var action = rawAction.AsGodotDictionary();
             _actions.Add(new Action
             {
-                AtMs = a.ContainsKey("at") ? a["at"].AsSingle() : 0f,
-                Pos = a.ContainsKey("pos") ? a["pos"].AsInt32() : 0,
+                AtMs = action.ContainsKey("at") ? action["at"].AsSingle() : 0f,
+                Pos = action.ContainsKey("pos") ? action["pos"].AsInt32() : 0,
             });
         }
 
@@ -262,11 +262,11 @@ public partial class FunscriptPlayer : Node
         var rawActions = funscript.ContainsKey("actions") ? funscript["actions"].AsGodotArray() : new Godot.Collections.Array();
         foreach (var rawAction in rawActions)
         {
-            var a = rawAction.AsGodotDictionary();
+            var action = rawAction.AsGodotDictionary();
             state.Actions.Add(new Action
             {
-                AtMs = a.ContainsKey("at") ? a["at"].AsSingle() : 0f,
-                Pos = a.ContainsKey("pos") ? a["pos"].AsInt32() : 0,
+                AtMs = action.ContainsKey("at") ? action["at"].AsSingle() : 0f,
+                Pos = action.ContainsKey("pos") ? action["pos"].AsInt32() : 0,
             });
         }
         _axes[axis] = state;
@@ -300,11 +300,11 @@ public partial class FunscriptPlayer : Node
         var rawActions = funscript.ContainsKey("actions") ? funscript["actions"].AsGodotArray() : new Godot.Collections.Array();
         foreach (var rawAction in rawActions)
         {
-            var a = rawAction.AsGodotDictionary();
+            var action = rawAction.AsGodotDictionary();
             state.Actions.Add(new Action
             {
-                AtMs = a.ContainsKey("at") ? a["at"].AsSingle() : 0f,
-                Pos  = a.ContainsKey("pos") ? a["pos"].AsInt32() : 0,
+                AtMs = action.ContainsKey("at") ? action["at"].AsSingle() : 0f,
+                Pos  = action.ContainsKey("pos") ? action["pos"].AsInt32() : 0,
             });
         }
         _vibScripts[channel] = state;
@@ -784,10 +784,10 @@ public partial class FunscriptPlayer : Node
 
     private static bool HasBlockEffect(Godot.Collections.Array effects)
     {
-        foreach (var e in effects)
+        foreach (var effectVariant in effects)
         {
-            var d = e.AsGodotDictionary();
-            if (d.ContainsKey("kind") && d["kind"].AsString() == "block")
+            var effect = effectVariant.AsGodotDictionary();
+            if (effect.ContainsKey("kind") && effect["kind"].AsString() == "block")
                 return true;
         }
         return false;
@@ -802,10 +802,10 @@ public partial class FunscriptPlayer : Node
         int reverseCount = 0;
         if (effects != null)
         {
-            foreach (var e in effects)
+            foreach (var effectVariant in effects)
             {
-                var d = e.AsGodotDictionary();
-                if (d.ContainsKey("kind") && d["kind"].AsString() == "reverse")
+                var effect = effectVariant.AsGodotDictionary();
+                if (effect.ContainsKey("kind") && effect["kind"].AsString() == "reverse")
                     reverseCount++;
             }
         }

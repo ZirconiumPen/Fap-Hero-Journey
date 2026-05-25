@@ -722,17 +722,17 @@ func _add_seq_to_list(
 				shop_row.add_child(shop_lbl)
 				list.add_child(_indent_wrap(shop_row, indent))
 			"storyboard":
-				var sb: Dictionary = item["data"]
+				var storyboard_data: Dictionary = item["data"]
 				var sb_row: HBoxContainer = HBoxContainer.new()
 				sb_row.add_theme_constant_override("separation", 8)
 				var sb_lbl: Label = Label.new()
-				var sb_line_count: int = (sb.get("lines", []) as Array).size()
+				var sb_line_count: int = (storyboard_data.get("lines", []) as Array).size()
 				sb_lbl.text = "  ◈  STORYBOARD  (%d LINE%s)" % [sb_line_count, "S" if sb_line_count != 1 else ""]
 				sb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				sb_lbl.add_theme_color_override("font_color", Color(0.10, 0.85, 0.90, 1.0))
 				sb_lbl.add_theme_font_size_override("font_size", 11)
 				sb_row.add_child(sb_lbl)
-				var sb_coins: int = sb.get("coins", 0)
+				var sb_coins: int = storyboard_data.get("coins", 0)
 				if sb_coins > 0:
 					var sb_coins_lbl: Label = Label.new()
 					sb_coins_lbl.text = "♦ %d" % sb_coins

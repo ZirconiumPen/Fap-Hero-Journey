@@ -244,15 +244,15 @@ public partial class ButtplugService : Node
 
 	private void OnDeviceAdded(object sender, DeviceAddedEventArgs e)
 	{
-		string name = e.Device.Name;
-		int idx = (int)e.Device.Index;
-		Callable.From(() => EmitSignal(SignalName.DeviceAdded, name, idx)).CallDeferred();
+		string deviceName = e.Device.Name;
+		int deviceIndex = (int)e.Device.Index;
+		Callable.From(() => EmitSignal(SignalName.DeviceAdded, deviceName, deviceIndex)).CallDeferred();
 	}
 
 	private void OnDeviceRemoved(object sender, DeviceRemovedEventArgs e)
 	{
-		int idx = (int)e.Device.Index;
-		Callable.From(() => EmitSignal(SignalName.DeviceRemoved, idx)).CallDeferred();
+		int deviceIndex = (int)e.Device.Index;
+		Callable.From(() => EmitSignal(SignalName.DeviceRemoved, deviceIndex)).CallDeferred();
 	}
 
 	private void OnScanFinished(object sender, EventArgs e)

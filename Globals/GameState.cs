@@ -37,55 +37,55 @@ public partial class GameState : Node
 		_playLog.Clear();
 	}
 
-	private static List<Dictionary> BuildSequence(Dictionary data)
+	private static List<Dictionary> BuildSequence(Dictionary journeyData)
 	{
 		var items = new List<(int SortKey, Dictionary Data)>();
 
-		var rounds = data.ContainsKey("rounds") ? data["rounds"].AsGodotArray() : new Array();
-		foreach (var r in rounds)
+		var rounds = journeyData.ContainsKey("rounds") ? journeyData["rounds"].AsGodotArray() : new Array();
+		foreach (var roundVariant in rounds)
 		{
-			var rd = r.AsGodotDictionary();
-			int order = rd.ContainsKey("order") ? rd["order"].AsInt32() : 0;
-			items.Add((order * 3, new Dictionary { ["type"] = "round", ["data"] = rd }));
+			var roundData = roundVariant.AsGodotDictionary();
+			int order = roundData.ContainsKey("order") ? roundData["order"].AsInt32() : 0;
+			items.Add((order * 3, new Dictionary { ["type"] = "round", ["data"] = roundData }));
 		}
 
-		var shops = data.ContainsKey("shops") ? data["shops"].AsGodotArray() : new Array();
-		foreach (var s in shops)
+		var shops = journeyData.ContainsKey("shops") ? journeyData["shops"].AsGodotArray() : new Array();
+		foreach (var shopVariant in shops)
 		{
-			Dictionary sd;
+			Dictionary shopData;
 			int afterOrder;
-			if (s.VariantType == Variant.Type.Dictionary)
+			if (shopVariant.VariantType == Variant.Type.Dictionary)
 			{
-				sd = s.AsGodotDictionary();
-				afterOrder = sd.ContainsKey("after_order") ? sd["after_order"].AsInt32() : 0;
+				shopData = shopVariant.AsGodotDictionary();
+				afterOrder = shopData.ContainsKey("after_order") ? shopData["after_order"].AsInt32() : 0;
 			}
 			else
 			{
 				// Legacy format: "shops": [orderNum, ...]
-				afterOrder = s.AsInt32();
-				sd = new Dictionary { ["after_order"] = afterOrder };
+				afterOrder = shopVariant.AsInt32();
+				shopData = new Dictionary { ["after_order"] = afterOrder };
 			}
-			items.Add((afterOrder * 3 + 1, new Dictionary { ["type"] = "shop", ["data"] = sd }));
+			items.Add((afterOrder * 3 + 1, new Dictionary { ["type"] = "shop", ["data"] = shopData }));
 		}
 
-		var storyboards = data.ContainsKey("storyboards") ? data["storyboards"].AsGodotArray() : new Array();
-		foreach (var sb in storyboards)
+		var storyboards = journeyData.ContainsKey("storyboards") ? journeyData["storyboards"].AsGodotArray() : new Array();
+		foreach (var storyboardVariant in storyboards)
 		{
-			var sbd = sb.AsGodotDictionary();
-			int order = sbd.ContainsKey("order") ? sbd["order"].AsInt32() : 0;
-			items.Add((order * 3, new Dictionary { ["type"] = "storyboard", ["data"] = sbd }));
+			var storyboardData = storyboardVariant.AsGodotDictionary();
+			int order = storyboardData.ContainsKey("order") ? storyboardData["order"].AsInt32() : 0;
+			items.Add((order * 3, new Dictionary { ["type"] = "storyboard", ["data"] = storyboardData }));
 		}
 
-		var forks = data.ContainsKey("forks") ? data["forks"].AsGodotArray() : new Array();
-		foreach (var f in forks)
+		var forks = journeyData.ContainsKey("forks") ? journeyData["forks"].AsGodotArray() : new Array();
+		foreach (var forkVariant in forks)
 		{
-			var fd = f.AsGodotDictionary();
-			int afterOrder = fd.ContainsKey("after_order") ? fd["after_order"].AsInt32() : 0;
-			items.Add((afterOrder * 3 + 2, new Dictionary { ["type"] = "fork", ["data"] = fd }));
+			var forkData = forkVariant.AsGodotDictionary();
+			int afterOrder = forkData.ContainsKey("after_order") ? forkData["after_order"].AsInt32() : 0;
+			items.Add((afterOrder * 3 + 2, new Dictionary { ["type"] = "fork", ["data"] = forkData }));
 		}
 
 		items.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
-		return items.Select(i => i.Data).ToList();
+		return items.Select(item => item.Data).ToList();
 	}
 
 	public Dictionary CurrentItem()
@@ -183,9 +183,9 @@ public partial class GameState : Node
 			int order = roundData.ContainsKey("order") ? roundData["order"].AsInt32() : 0;
 			subItems.Add((order * 3, new Dictionary { ["type"] = "round", ["data"] = roundData }));
 		}
-		foreach (var choseStoryboard in chosenStoryboards)
+		foreach (var chosenStoryboard in chosenStoryboards)
 		{
-			var storyboardData = choseStoryboard.AsGodotDictionary();
+			var storyboardData = chosenStoryboard.AsGodotDictionary();
 			int order = storyboardData.ContainsKey("order") ? storyboardData["order"].AsInt32() : 0;
 			subItems.Add((order * 3, new Dictionary { ["type"] = "storyboard", ["data"] = storyboardData }));
 		}

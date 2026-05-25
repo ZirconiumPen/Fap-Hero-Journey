@@ -137,77 +137,77 @@ func get_filler_hi() -> int:
 # ── Setters ─────────────────────────────────────────────────────────────────
 # Setters mutate the in-memory config only. Call save() to persist.
 
-func set_master_volume(v: float) -> void:
-	_config.set_value("audio", "master_volume", v)
+func set_master_volume(value: float) -> void:
+	_config.set_value("audio", "master_volume", value)
 
-func set_music_volume(v: float) -> void:
-	_config.set_value("audio", "music_volume", v)
+func set_music_volume(value: float) -> void:
+	_config.set_value("audio", "music_volume", value)
 
-func set_fullscreen(v: bool) -> void:
-	_config.set_value("display", "fullscreen", v)
+func set_fullscreen(value: bool) -> void:
+	_config.set_value("display", "fullscreen", value)
 
-func set_resolution_index(v: int) -> void:
-	_config.set_value("display", "resolution_index", v)
+func set_resolution_index(value: int) -> void:
+	_config.set_value("display", "resolution_index", value)
 
-func set_intiface_address(v: String) -> void:
-	_config.set_value("intiface", "address", v)
+func set_intiface_address(value: String) -> void:
+	_config.set_value("intiface", "address", value)
 
-func set_intiface_auto_connect(v: bool) -> void:
-	_config.set_value("intiface", "auto_connect", v)
+func set_intiface_auto_connect(value: bool) -> void:
+	_config.set_value("intiface", "auto_connect", value)
 
-func set_selected_device(v: String) -> void:
-	_config.set_value("intiface", "selected_device", v)
+func set_selected_device(value: String) -> void:
+	_config.set_value("intiface", "selected_device", value)
 
-func set_output_mode(v: String) -> void:
-	_config.set_value("output", "mode", v)
+func set_output_mode(value: String) -> void:
+	_config.set_value("output", "mode", value)
 
-func set_serial_port(v: String) -> void:
-	_config.set_value("serial", "port", v)
+func set_serial_port(value: String) -> void:
+	_config.set_value("serial", "port", value)
 
-func set_serial_baud(v: int) -> void:
-	_config.set_value("serial", "baud_rate", v)
+func set_serial_baud(value: int) -> void:
+	_config.set_value("serial", "baud_rate", value)
 
-func set_serial_auto_connect(v: bool) -> void:
-	_config.set_value("serial", "auto_connect", v)
+func set_serial_auto_connect(value: bool) -> void:
+	_config.set_value("serial", "auto_connect", value)
 
-func set_range_min(v: int) -> void:
-	_config.set_value("device", "range_min", v)
+func set_range_min(value: int) -> void:
+	_config.set_value("device", "range_min", value)
 
-func set_range_max(v: int) -> void:
-	_config.set_value("device", "range_max", v)
+func set_range_max(value: int) -> void:
+	_config.set_value("device", "range_max", value)
 
-func set_home_position(v: int) -> void:
-	_config.set_value("device", "home_position", v)
+func set_home_position(value: int) -> void:
+	_config.set_value("device", "home_position", value)
 
-func set_home_ease_ms(v: int) -> void:
-	_config.set_value("device", "home_ease_ms", v)
+func set_home_ease_ms(value: int) -> void:
+	_config.set_value("device", "home_ease_ms", value)
 
-func set_latency_offset_ms(v: int) -> void:
-	_config.set_value("device", "latency_offset_ms", v)
+func set_latency_offset_ms(value: int) -> void:
+	_config.set_value("device", "latency_offset_ms", value)
 
-func set_vibe_intensity(v: int) -> void:
-	_config.set_value("device", "vibe_intensity", v)
+func set_vibe_intensity(value: int) -> void:
+	_config.set_value("device", "vibe_intensity", value)
 
-func set_max_stroke_speed(v: int) -> void:
-	_config.set_value("device", "max_stroke_speed", v)
+func set_max_stroke_speed(value: int) -> void:
+	_config.set_value("device", "max_stroke_speed", value)
 
-func set_hud_hide_delay(v: float) -> void:
-	_config.set_value("display", "hud_hide_delay", v)
+func set_hud_hide_delay(value: float) -> void:
+	_config.set_value("display", "hud_hide_delay", value)
 
-func set_beat_bar_enabled(v: bool) -> void:
-	_config.set_value("display", "beat_bar_enabled", v)
+func set_beat_bar_enabled(value: bool) -> void:
+	_config.set_value("display", "beat_bar_enabled", value)
 
-func set_filler_enabled(v: bool) -> void:
-	_config.set_value("storyboard_filler", "enabled", v)
+func set_filler_enabled(value: bool) -> void:
+	_config.set_value("storyboard_filler", "enabled", value)
 
-func set_filler_half_cycle_ms(v: int) -> void:
-	_config.set_value("storyboard_filler", "half_cycle_ms", v)
+func set_filler_half_cycle_ms(value: int) -> void:
+	_config.set_value("storyboard_filler", "half_cycle_ms", value)
 
-func set_filler_lo(v: int) -> void:
-	_config.set_value("storyboard_filler", "lo", v)
+func set_filler_lo(value: int) -> void:
+	_config.set_value("storyboard_filler", "lo", value)
 
-func set_filler_hi(v: int) -> void:
-	_config.set_value("storyboard_filler", "hi", v)
+func set_filler_hi(value: int) -> void:
+	_config.set_value("storyboard_filler", "hi", value)
 
 
 # ── Persistence ─────────────────────────────────────────────────────────────

@@ -123,7 +123,7 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 		var round_name: String   = raw.get("Name", "Round")
 		var round_folder: String = path + "/" + round_name
 
-		var fs: Dictionary = _resolve_round_stats(raw, path, round_folder)
+		var funscript_stats: Dictionary = _resolve_round_stats(raw, path, round_folder)
 
 		# Axis scripts — {axis: relative_path} in JSON, resolved to absolute paths.
 		var raw_axis: Dictionary = raw.get("AxisScripts", raw.get("axis_scripts", {}))
@@ -155,7 +155,7 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 		var round_data: Dictionary = {
 			"name":           round_name,
 			"folder":         round_folder,
-			"funscript_path": fs["path"],
+			"funscript_path": funscript_stats["path"],
 			"axis_scripts":   axis_scripts,
 			"vib_scripts":    vib_scripts,
 			"round_type":     round_type,
@@ -164,11 +164,11 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 			"boss_modifiers": boss_modifiers,
 			"coins":          raw.get("CoinsAwarded", 0),
 			"order":          raw.get("Order", 0),
-			"action_count":   fs["count"],
-			"length_ms":      fs["length_ms"],
+			"action_count":   funscript_stats["count"],
+			"length_ms":      funscript_stats["length_ms"],
 		}
-		journey["total_actions"]   = (journey["total_actions"] as int) + (fs["count"] as int)
-		journey["total_length_ms"] = (journey["total_length_ms"] as int) + (fs["length_ms"] as int)
+		journey["total_actions"]   = (journey["total_actions"] as int) + (funscript_stats["count"] as int)
+		journey["total_length_ms"] = (journey["total_length_ms"] as int) + (funscript_stats["length_ms"] as int)
 		journey["rounds"].append(round_data)
 
 	journey["total_rounds"] = (journey["rounds"] as Array).size()
@@ -395,9 +395,9 @@ static func _resolve_round_stats(raw: Dictionary, base_path: String, scan_folder
 				"length_ms": int(raw["LengthMs"]),
 				"path":      full_path,
 			}
-		var st: Dictionary = JourneyData.read_funscript_stats(full_path)
-		st["path"] = full_path if st["count"] > 0 else ""
-		return st
+		var stats: Dictionary = JourneyData.read_funscript_stats(full_path)
+		stats["path"] = full_path if stats["count"] > 0 else ""
+		return stats
 	return _read_funscript_stats(scan_folder)
 
 
@@ -421,9 +421,9 @@ static func _read_funscript_stats(folder: String) -> Dictionary:
 			if not is_axis:
 				var full_path: String = folder + "/" + fname
 				dir.list_dir_end()
-				var st: Dictionary = JourneyData.read_funscript_stats(full_path)
-				st["path"] = full_path
-				return st
+				var stats: Dictionary = JourneyData.read_funscript_stats(full_path)
+				stats["path"] = full_path
+				return stats
 		fname = dir.get_next()
 	dir.list_dir_end()
 	return {"count": 0, "length_ms": 0, "path": ""}

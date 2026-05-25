@@ -110,60 +110,60 @@ func make_icon_btn(icon: String, disabled: bool, accent: Color) -> Button:
 
 
 # LineEdit styling: purple-dark fill, mid-purple border, bright caret/focus.
-func style_line_edit(le: LineEdit) -> void:
-	le.add_theme_color_override("font_color",             WHITE_SOFT)
-	le.add_theme_color_override("font_placeholder_color", PURPLE_MID)
-	le.add_theme_color_override("caret_color",            PURPLE_BRIGHT)
-	le.add_theme_font_size_override("font_size", 14)
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = PURPLE_DARK
-	s.border_color        = PURPLE_MID
-	s.border_width_left   = 2; s.border_width_right  = 2
-	s.border_width_top    = 2; s.border_width_bottom = 2
-	s.content_margin_left = 10; s.content_margin_right  = 10
-	s.content_margin_top  = 8;  s.content_margin_bottom = 8
-	le.add_theme_stylebox_override("normal", s)
-	var sf: StyleBoxFlat = s.duplicate()
-	sf.border_color = PURPLE_BRIGHT
-	le.add_theme_stylebox_override("focus", sf)
+func style_line_edit(line_edit: LineEdit) -> void:
+	line_edit.add_theme_color_override("font_color",             WHITE_SOFT)
+	line_edit.add_theme_color_override("font_placeholder_color", PURPLE_MID)
+	line_edit.add_theme_color_override("caret_color",            PURPLE_BRIGHT)
+	line_edit.add_theme_font_size_override("font_size", 14)
+	var normal_style: StyleBoxFlat = StyleBoxFlat.new()
+	normal_style.bg_color            = PURPLE_DARK
+	normal_style.border_color        = PURPLE_MID
+	normal_style.border_width_left   = 2; normal_style.border_width_right  = 2
+	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
+	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
+	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	line_edit.add_theme_stylebox_override("normal", normal_style)
+	var focus_style: StyleBoxFlat = normal_style.duplicate()
+	focus_style.border_color = PURPLE_BRIGHT
+	line_edit.add_theme_stylebox_override("focus", focus_style)
 
 
 # TextEdit styling (multi-line).
-func style_text_edit(te: TextEdit) -> void:
-	te.add_theme_color_override("font_color",  WHITE_SOFT)
-	te.add_theme_color_override("caret_color", PURPLE_BRIGHT)
-	te.add_theme_font_size_override("font_size", 13)
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = PURPLE_DARK
-	s.border_color        = PURPLE_MID
-	s.border_width_left   = 2; s.border_width_right  = 2
-	s.border_width_top    = 2; s.border_width_bottom = 2
-	s.content_margin_left = 10; s.content_margin_right  = 10
-	s.content_margin_top  = 8;  s.content_margin_bottom = 8
-	te.add_theme_stylebox_override("normal", s)
-	var sf: StyleBoxFlat = s.duplicate()
-	sf.border_color = PURPLE_BRIGHT
-	te.add_theme_stylebox_override("focus", sf)
+func style_text_edit(text_edit: TextEdit) -> void:
+	text_edit.add_theme_color_override("font_color",  WHITE_SOFT)
+	text_edit.add_theme_color_override("caret_color", PURPLE_BRIGHT)
+	text_edit.add_theme_font_size_override("font_size", 13)
+	var normal_style: StyleBoxFlat = StyleBoxFlat.new()
+	normal_style.bg_color            = PURPLE_DARK
+	normal_style.border_color        = PURPLE_MID
+	normal_style.border_width_left   = 2; normal_style.border_width_right  = 2
+	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
+	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
+	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	text_edit.add_theme_stylebox_override("normal", normal_style)
+	var focus_style: StyleBoxFlat = normal_style.duplicate()
+	focus_style.border_color = PURPLE_BRIGHT
+	text_edit.add_theme_stylebox_override("focus", focus_style)
 
 
 # OptionButton (dropdown) styling.
-func style_option_button(ob: OptionButton) -> void:
-	ob.add_theme_color_override("font_color",       WHITE_SOFT)
-	ob.add_theme_color_override("font_hover_color", PURPLE_BRIGHT)
-	ob.add_theme_font_size_override("font_size", 14)
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = PURPLE_DARK
-	s.border_color        = PURPLE_MID
-	s.border_width_left   = 2; s.border_width_right  = 2
-	s.border_width_top    = 2; s.border_width_bottom = 2
-	s.content_margin_left = 10; s.content_margin_right  = 10
-	s.content_margin_top  = 8;  s.content_margin_bottom = 8
-	ob.add_theme_stylebox_override("normal", s)
-	var sh: StyleBoxFlat = s.duplicate()
-	sh.border_color = PURPLE_BRIGHT
-	ob.add_theme_stylebox_override("hover",   sh)
-	ob.add_theme_stylebox_override("pressed", sh)
-	ob.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
+func style_option_button(option_button: OptionButton) -> void:
+	option_button.add_theme_color_override("font_color",       WHITE_SOFT)
+	option_button.add_theme_color_override("font_hover_color", PURPLE_BRIGHT)
+	option_button.add_theme_font_size_override("font_size", 14)
+	var normal_style: StyleBoxFlat = StyleBoxFlat.new()
+	normal_style.bg_color            = PURPLE_DARK
+	normal_style.border_color        = PURPLE_MID
+	normal_style.border_width_left   = 2; normal_style.border_width_right  = 2
+	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
+	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
+	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	option_button.add_theme_stylebox_override("normal", normal_style)
+	var hover_style: StyleBoxFlat = normal_style.duplicate()
+	hover_style.border_color = PURPLE_BRIGHT
+	option_button.add_theme_stylebox_override("hover",   hover_style)
+	option_button.add_theme_stylebox_override("pressed", hover_style)
+	option_button.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 
 
 # Read-only tag chip: a small rounded pill, `text` in `accent`, on a near-opaque

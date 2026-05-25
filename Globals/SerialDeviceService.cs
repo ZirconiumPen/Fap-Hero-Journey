@@ -89,35 +89,35 @@ public partial class SerialDeviceService : Node
 	// TCode expects 0-9999 pos.
 	public void SendLinear(uint durationMs, double position)
 	{
-		if (!SerialConnected) 
+		if (!SerialConnected)
 			return;
 
-		int posInt = Math.Clamp((int)Math.Round(position * 9999.0), 0, 9999);
+		int positionTicks = Math.Clamp((int)Math.Round(position * 9999.0), 0, 9999);
 
-		TryWrite($"L0{posInt:D4}I{durationMs}\n");
+		TryWrite($"L0{positionTicks:D4}I{durationMs}\n");
 	}
 
     // Send a command to any named T-code axis (e.g. "L1", "L2", "R0", "R1", "R2").
     // Uses the same interpolated-linear format as SendLinear.
     // position: 0.0–1.0, durationMs: travel time in ms.
     // TCode expects 0-9999 pos.
-    public void SendAxis(string tcode, uint durationMs, double position)
+    public void SendAxis(string tcodeAxis, uint durationMs, double position)
 	{
 		if (!SerialConnected)
 			return;
 
-		int posInt = Math.Clamp((int)Math.Round(position * 9999.0), 0, 9999);
-		TryWrite($"{tcode}{posInt:D4}I{durationMs}\n");
+		int positionTicks = Math.Clamp((int)Math.Round(position * 9999.0), 0, 9999);
+		TryWrite($"{tcodeAxis}{positionTicks:D4}I{durationMs}\n");
 	}
 
 	// Vibration channel V0 (T-code v0.3). intensity: 0.0-1.0.
 	public void SendVibrate(double intensity)
 	{
-		if (!SerialConnected) 
+		if (!SerialConnected)
 			return;
 
-		int level = Math.Clamp((int)Math.Round(intensity * 9999.0), 0, 9999);
-		TryWrite($"V0{level:D4}\n");
+		int intensityTicks = Math.Clamp((int)Math.Round(intensity * 9999.0), 0, 9999);
+		TryWrite($"V0{intensityTicks:D4}\n");
 	}
 
 	// Immediately stop all axes.
