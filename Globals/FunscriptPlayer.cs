@@ -125,7 +125,15 @@ public partial class FunscriptPlayer : Node
         _actionIndex = 0;
         _positionMs = 0.0;
         _playing = false;
+        // Fully invalidate the resolve cache — a new round must re-pick the
+        // device. Resetting only _isLinearDevice would leave _outputResolved
+        // true if Options had been opened between rounds (Pause → EaseToNeutral
+        // → ResolveOutput re-sets it), so Play() would skip re-resolution and
+        // _isLinearDevice would stay null. SendCommand then falls through to
+        // the vibrator branch even for linear devices like the Handy.
         _isLinearDevice = null;
+        _deviceIndex = -1;
+        _outputResolved = false;
 
         foreach (var kv in _axes)
             kv.Value.Index = 0;
@@ -362,6 +370,12 @@ public partial class FunscriptPlayer : Node
     public void Resume()
     {
         _playing = true;
+        // Re-resolve in case the user changed the output mode or selected
+        // device through the Options overlay while paused. Without this, a
+        // device swap mid-round (or mid-transition) keeps sending to the
+        // previous device or the wrong capability branch.
+        _outputResolved = false;
+        ResolveOutput();
         _StartEaseIn();
     }
 
