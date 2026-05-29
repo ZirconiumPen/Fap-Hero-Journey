@@ -90,6 +90,12 @@ var _save_abort_error: Dictionary = {}
 # the new "FolderName" field and is what the catalogue reads on load.
 var _round_folder_counter: int = 0
 
+# Save-wide map of non-H.264 video source paths → {codec, duration}. Built
+# once at the start of _on_save_pressed by walking the whole journey tree,
+# then consulted in both the top-level round save AND the recursive
+# _save_path so that videos inside fork paths get transcoded too.
+var _transcode_plan: Dictionary = {}
+
 # Streaming-copy tuning. Chunks are read/written 1 MB at a time; the main thread
 # yields one frame only after COPY_FRAME_BUDGET_MS of accumulated work — frequent
 # enough that the window stays responsive, rare enough that the frame-wait tax
@@ -456,29 +462,42 @@ func _on_save_pressed() -> void:
 	var any_video: bool = JourneyData.items_have_any_video(_items)
 	var ffmpeg_ok: bool = _ffmpeg_available() if any_video else false
 
-	# Transcode plan only for main rounds (fork path rounds are copied as-is)
-	var transcode_plan: Dictionary = {}
-	var main_round_idx: int = 0
-	if ffmpeg_ok:
-		for i in _items.size():
-			if _items[i].get("type","round") != "round":
-				continue
-			var vid: String = _items[i].get("video_path", "")
-			if vid != "":
-				var codec: String = _get_video_codec(vid)
-				if codec != "" and not (codec in H264_NAMES):
-					transcode_plan[i] = {"codec": codec, "duration": _video_duration_seconds(vid)}
-			main_round_idx += 1
+	# Transcode plan covers every round in the tree — top-level AND every fork
+	# path at every depth. Keyed by source path so the same video can be looked
+	# up from both the top-level save loop and the recursive _save_path. Same
+	# source dragged into two rounds is probed/transcoded once and the result
+	# is reused (transcode is identity-by-source).
+	_transcode_plan = {}
+	var all_video_sources: Array = []
+	_collect_video_sources(_items, all_video_sources)
 
-	if not transcode_plan.is_empty() and not ffmpeg_ok:
-		_show_save_error_single(
-			"CANNOT SAVE JOURNEY",
-			"ffmpeg_missing",
-			"Journey",
-			"%d video(s) use a codec other than H.264 and need transcoding, but ffmpeg is not available." % transcode_plan.size(),
-			"Install ffmpeg into the project's bin/ folder (or onto your system PATH) and restart the editor. Alternatively, swap the offending video(s) for H.264 .mp4 files.")
-		_save_btn.disabled = false
-		return
+	if ffmpeg_ok:
+		for src: String in all_video_sources:
+			if _transcode_plan.has(src):
+				continue
+			var codec: String = _get_video_codec(src)
+			if codec != "" and not (codec in H264_NAMES):
+				_transcode_plan[src] = {"codec": codec, "duration": _video_duration_seconds(src)}
+	else:
+		# Without ffprobe we can't verify codecs. Be conservative: any non-.mp4
+		# extension is treated as "needs transcoding" — refuse the save and ask
+		# the user to install ffmpeg or pre-transcode externally. .mp4 files are
+		# trusted to be H.264 (the common case); if a .mp4 turns out to use a
+		# different codec, playback will fail at runtime but we have no way to
+		# detect that here.
+		var non_mp4_sources: Array = []
+		for src: String in all_video_sources:
+			if src.get_extension().to_lower() != "mp4" and not (src in non_mp4_sources):
+				non_mp4_sources.append(src)
+		if not non_mp4_sources.is_empty():
+			_show_save_error_single(
+				"CANNOT SAVE JOURNEY",
+				"ffmpeg_missing",
+				"Journey",
+				"%d video(s) use a non-.mp4 container that likely needs transcoding to H.264, but ffmpeg is not available." % non_mp4_sources.size(),
+				"Install ffmpeg into the project's bin/ folder (or onto your system PATH) and restart the editor. Alternatively, transcode the offending video(s) to H.264 .mp4 outside the editor and re-drag them.")
+			_save_btn.disabled = false
+			return
 
 	var journeys_root: String     = SettingsService.get_journeys_dir()
 	var folder_name: String       = JourneyData.sanitize_folder_name(journey_name)
@@ -626,8 +645,8 @@ func _on_save_pressed() -> void:
 
 			var vid_src: String = item.get("video_path","")
 			if vid_src != "":
-				if i in transcode_plan:
-					var info: Dictionary = transcode_plan[i]
+				if _transcode_plan.has(vid_src):
+					var info: Dictionary = _transcode_plan[vid_src]
 					# Fixed short name regardless of the source — transcoded videos
 					# are always h264 .mp4, and the original filename is irrelevant
 					# (the round is addressed by folder slug).
@@ -888,26 +907,43 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 					pr_fs_stats = JourneyData.read_funscript_stats(pr_dir + "/" + pr_fs_dst_name)
 				var pr_vid: String = pi_item.get("video_path","")
 				if pr_vid != "":
-					var pr_vid_dst_name: String = "video." + pr_vid.get_extension()
-					var pr_vid_dst_path: String = pr_dir + "/" + pr_vid_dst_name
-					# Same src==dst guard as the top-level round copy: skip when the
-					# video is already at its destination to avoid a 0 KB truncation.
-					var pr_vid_src_abs: String = ProjectSettings.globalize_path(pr_vid)
-					if pr_vid_src_abs != pr_vid_dst_path:
-						_update_modal_label(modal, "Fork round — %s  (copying video)" % pr_name)
-						var pr_copy_result: Dictionary = await _copy_file_chunked(
-							pr_vid, pr_vid_dst_path,
-							func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
-						if not pr_copy_result["ok"]:
-							# Cancelled / failed — unwind the recursive save and stash
-							# the detailed failure so the top-level handler can show
-							# a specific error instead of a generic message.
+					# Fork-path videos go through the same transcode-or-copy fork as
+					# top-level rounds. The plan (_transcode_plan) is built from a
+					# tree-wide walk in _on_save_pressed and keyed by source path so
+					# this lookup works the same regardless of nesting depth.
+					if _transcode_plan.has(pr_vid):
+						var pr_info: Dictionary = _transcode_plan[pr_vid]
+						var pr_vid_dst_path: String = pr_dir + "/video.mp4"
+						_update_modal_label(modal, "Fork round — %s  (transcoding %s → h264)" % [pr_name, pr_info["codec"]])
+						var pr_transcode_ok: bool = await _transcode_video(pr_vid, pr_vid_dst_path, pr_info["duration"], modal)
+						if not pr_transcode_ok:
 							_save_aborted = true
 							_save_abort_error = {
-								"result": pr_copy_result,
+								"result": {"ok": false, "reason": ("cancelled" if _transcode_cancel else "transcode_failed"), "detail": pr_vid},
 								"item":   "%s → Round \"%s\"" % [slug_prefix, pr_name],
 							}
 							return path_entry
+					else:
+						var pr_vid_dst_name: String = "video." + pr_vid.get_extension()
+						var pr_vid_dst_path: String = pr_dir + "/" + pr_vid_dst_name
+						# Same src==dst guard as the top-level round copy: skip when the
+						# video is already at its destination to avoid a 0 KB truncation.
+						var pr_vid_src_abs: String = ProjectSettings.globalize_path(pr_vid)
+						if pr_vid_src_abs != pr_vid_dst_path:
+							_update_modal_label(modal, "Fork round — %s  (copying video)" % pr_name)
+							var pr_copy_result: Dictionary = await _copy_file_chunked(
+								pr_vid, pr_vid_dst_path,
+								func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
+							if not pr_copy_result["ok"]:
+								# Cancelled / failed — unwind the recursive save and stash
+								# the detailed failure so the top-level handler can show
+								# a specific error instead of a generic message.
+								_save_aborted = true
+								_save_abort_error = {
+								"result": pr_copy_result,
+								"item":   "%s → Round \"%s\"" % [slug_prefix, pr_name],
+								}
+								return path_entry
 				var pr_axis_in: Dictionary = pi_item.get("axis_scripts", {})
 				var pr_axis_rel: Dictionary = {}
 				for axis: String in pr_axis_in:
@@ -959,6 +995,24 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 # ---------------------------------------------------------------------------
 # Transcoding
 # ---------------------------------------------------------------------------
+
+# Recursively walks the journey items tree and appends every non-empty
+# video_path it finds (top-level rounds + every round in every fork path at
+# every depth) into `sources`. Duplicates may appear if the same source video
+# is used in multiple rounds; callers dedupe by checking has() on the plan
+# dictionary before probing the codec a second time.
+func _collect_video_sources(items: Array, sources: Array) -> void:
+	for item: Dictionary in items:
+		var item_type: String = item.get("type", "round")
+		match item_type:
+			"round":
+				var vid: String = item.get("video_path", "")
+				if vid != "":
+					sources.append(vid)
+			"fork":
+				for p: Dictionary in item.get("paths", []):
+					_collect_video_sources(p.get("items", []) as Array, sources)
+
 
 func _ffmpeg_binary(name: String) -> String:
 	var exe: String = name + ".exe" if OS.get_name() == "Windows" else name
