@@ -89,6 +89,8 @@ var _max_speed_slider:    HSlider = null
 var _max_speed_value_lbl: Label   = null
 var _hud_delay_slider:    HSlider = null
 var _hud_delay_value_lbl: Label   = null
+var _ui_scale_slider:     HSlider = null
+var _ui_scale_value_lbl:  Label   = null
 var _beat_bar_toggle:     Button  = null
 
 var _filler_toggle:     Button      = null
@@ -271,6 +273,50 @@ func _apply_layout() -> void:
 		_hud_delay_value_lbl.text = "%.1fs" % v
 		_save_settings()
 	)
+
+	# ── UI Scale row (code-generated, appended to DisplaySection) ────────────
+	# Scales all GUI via Window.content_scale_factor — for high-DPI / 4K displays
+	# where the native 1080p layout looks small. Applied live as the slider moves.
+	var ui_scale_row: HBoxContainer = HBoxContainer.new()
+	ui_scale_row.add_theme_constant_override("separation", 16)
+	display_section.add_child(ui_scale_row)
+
+	var ui_scale_lbl: Label = Label.new()
+	ui_scale_lbl.text = "UI SCALE"
+	ui_scale_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
+	_style_label(ui_scale_lbl, UITheme.WHITE_SOFT, 14, false)
+	ui_scale_row.add_child(ui_scale_lbl)
+
+	_ui_scale_slider = HSlider.new()
+	_ui_scale_slider.min_value = 0.75
+	_ui_scale_slider.max_value = 2.5
+	_ui_scale_slider.step = 0.05
+	_ui_scale_slider.value = 1.0
+	_ui_scale_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ui_scale_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, 0)
+	_style_slider(_ui_scale_slider)
+	ui_scale_row.add_child(_ui_scale_slider)
+
+	_ui_scale_value_lbl = Label.new()
+	_ui_scale_value_lbl.text = "100%"
+	_ui_scale_value_lbl.custom_minimum_size = Vector2(VALUE_LABEL_W, 0)
+	_style_label(_ui_scale_value_lbl, UITheme.PURPLE_BRIGHT, 14, false)
+	ui_scale_row.add_child(_ui_scale_value_lbl)
+
+	_ui_scale_slider.value_changed.connect(func(v: float) -> void:
+		_ui_scale_value_lbl.text = "%d%%" % roundi(v * 100.0)
+		# Apply live so the author sees the change immediately.
+		var w: Window = get_window()
+		if w != null:
+			w.content_scale_factor = v
+		_save_settings()
+	)
+
+	var ui_scale_hint: Label = Label.new()
+	ui_scale_hint.text = "Scales the entire interface. Raise it if menus look small on a high-resolution or 4K display."
+	ui_scale_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_label(ui_scale_hint, UITheme.SEPARATOR, 11, false)
+	display_section.add_child(ui_scale_hint)
 
 	# ── Beat Bar row (code-generated, appended to DisplaySection) ────────────
 	var beat_row: HBoxContainer = HBoxContainer.new()
@@ -1110,6 +1156,11 @@ func _load_settings() -> void:
 		_hud_delay_slider.value = hud_delay
 		_hud_delay_value_lbl.text = "%.1fs" % hud_delay
 
+	var ui_scale: float = SettingsService.get_ui_scale()
+	if _ui_scale_slider != null:
+		_ui_scale_slider.set_value_no_signal(ui_scale)
+		_ui_scale_value_lbl.text = "%d%%" % roundi(ui_scale * 100.0)
+
 	if _beat_bar_toggle != null:
 		var beat_on: bool = SettingsService.get_beat_bar_enabled()
 		_beat_bar_toggle.button_pressed = beat_on
@@ -1190,6 +1241,9 @@ func _save_settings() -> void:
 
 	if _hud_delay_slider != null:
 		SettingsService.set_hud_hide_delay(_hud_delay_slider.value)
+
+	if _ui_scale_slider != null:
+		SettingsService.set_ui_scale(_ui_scale_slider.value)
 
 	if _beat_bar_toggle != null:
 		SettingsService.set_beat_bar_enabled(_beat_bar_toggle.button_pressed)

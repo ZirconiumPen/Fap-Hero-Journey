@@ -87,6 +87,29 @@ func show_insert_popup(overlay: Control, graph: Control, arr: Array, insert_idx:
 	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hdr)
 
+	# Paste row — only when something has been copied. Drops fresh deep
+	# duplicates of the clipboard item(s) into this exact slot, so modules copied
+	# anywhere (even a whole fork subtree, or several at once) can land in any
+	# branch.
+	if not _owner._clipboard_items.is_empty():
+		var paste_btn: Button = Button.new()
+		paste_btn.text = "📋 PASTE %s" % _owner._clipboard_label().to_upper()
+		paste_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		paste_btn.custom_minimum_size = Vector2(180, 0)
+		UITheme.style_button(paste_btn, UITheme.AMBER)
+		paste_btn.pressed.connect(func() -> void:
+			_owner._push_undo()
+			for i in _owner._clipboard_items.size():
+				arr.insert(insert_idx + i, _owner._clipboard_items[i].duplicate(true))
+			popup.queue_free()
+			graph.call_deferred("set_items", _owner._items)
+			graph.call_deferred("select_item", arr, insert_idx)
+		)
+		vbox.add_child(paste_btn)
+
+		var sep: HSeparator = HSeparator.new()
+		vbox.add_child(sep)
+
 	var specs: Array = [
 		{"label": "▶ ROUND",      "color": UITheme.PURPLE_MID,    "item": {"type": "round", "name": "", "funscript_path": "", "video_path": "", "coins": 0, "axis_scripts": {}}},
 		{"label": "◆ SHOP",       "color": UITheme.PURPLE_BRIGHT, "item": {"type": "shop", "title": ""}},
@@ -107,6 +130,7 @@ func show_insert_popup(overlay: Control, graph: Control, arr: Array, insert_idx:
 		UITheme.style_button(btn, spec["color"])
 		var item_template: Dictionary = spec["item"]
 		btn.pressed.connect(func() -> void:
+			_owner._push_undo()
 			arr.insert(insert_idx, item_template.duplicate(true))
 			popup.queue_free()
 			graph.call_deferred("set_items", _owner._items)
@@ -233,6 +257,18 @@ func show_journey_info_panel() -> void:
 
 	side_vbox.add_child(_side_section_separator())
 
+	# Bulk-import discoverability hint.
+	var bulk_hint: Label = Label.new()
+	bulk_hint.text = "TIP: DROP VIDEOS + FUNSCRIPTS — OR A WHOLE FOLDER — ON THE GRAPH TO AUTO-CREATE ROUNDS (MATCHED BY FILE NAME)."
+	bulk_hint.add_theme_color_override("font_color", Color(UITheme.PURPLE_MID.r, UITheme.PURPLE_MID.g, UITheme.PURPLE_MID.b, 0.75))
+	bulk_hint.add_theme_font_size_override("font_size", 10)
+	bulk_hint.uppercase = true
+	bulk_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bulk_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(bulk_hint)
+
+	side_vbox.add_child(_side_section_separator())
+
 	# Quick-add buttons to top level
 	var add_lbl: Label = Label.new()
 	add_lbl.text = "ADD TO TOP LEVEL"
@@ -260,10 +296,27 @@ func show_journey_info_panel() -> void:
 		UITheme.style_button(btn, spec["color"])
 		var item_template: Dictionary = spec["item"]
 		btn.pressed.connect(func() -> void:
+			_owner._push_undo()
 			_owner._items.append(item_template.duplicate(true))
 			_owner._refresh_graph()
 		)
 		side_vbox.add_child(btn)
+
+	# Paste-to-top-level — appends fresh deep duplicates of the clipboard item(s)
+	# to the end of the top-level sequence. Only shown when something's copied.
+	if not _owner._clipboard_items.is_empty():
+		var paste_btn: Button = Button.new()
+		paste_btn.text = "📋 PASTE %s" % _owner._clipboard_label().to_upper()
+		paste_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_button(paste_btn, UITheme.AMBER)
+		paste_btn.pressed.connect(func() -> void:
+			_owner._push_undo()
+			for clip: Dictionary in _owner._clipboard_items:
+				_owner._items.append(clip.duplicate(true))
+			_owner._refresh_graph()
+			_owner._graph.call_deferred("select_item", _owner._items, _owner._items.size() - 1)
+		)
+		side_vbox.add_child(paste_btn)
 
 
 # Toggle chip for one journey tag. Filled with the tag's colour when on,
@@ -319,6 +372,105 @@ func show_node_editor(item: Dictionary, arr: Array, idx: int) -> void:
 	for c in side_vbox.get_children():
 		c.queue_free()
 	_build_side_panel_editor(side_vbox, item, arr, idx, _owner._graph)
+
+
+# Group-action panel shown when 2+ nodes are selected. Lists the selection and
+# offers Copy / Cut / Delete and block Move Up / Down — all routed to the owner's
+# set-based operations. No per-field editing while multiple are selected.
+func show_multi_select_panel(items: Array, _arr: Array) -> void:
+	var side_vbox: VBoxContainer = _owner._side_vbox
+	for c in side_vbox.get_children():
+		c.queue_free()
+
+	var hdr: Label = Label.new()
+	hdr.text = "// %d MODULES SELECTED //" % items.size()
+	hdr.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
+	hdr.add_theme_font_size_override("font_size", 14)
+	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(hdr)
+
+	var hint: Label = Label.new()
+	hint.text = "CTRL+CLICK A NODE TO ADD/REMOVE.  DRAG A BOX ON THE GRAPH TO SELECT.  ACTIONS APPLY TO ALL SELECTED."
+	hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	hint.add_theme_font_size_override("font_size", 10)
+	hint.uppercase = true
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(hint)
+
+	side_vbox.add_child(_side_section_separator())
+
+	# Listing of the selected modules, in sequence order.
+	for it: Dictionary in _owner._selected_items_in_order():
+		var row_lbl: Label = Label.new()
+		row_lbl.text = "%s  %s" % [_type_glyph(it), _brief_item_name(it)]
+		row_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
+		row_lbl.add_theme_font_size_override("font_size", 12)
+		row_lbl.clip_text = true
+		side_vbox.add_child(row_lbl)
+
+	side_vbox.add_child(_side_section_separator())
+
+	# Clipboard row: Copy + Cut.
+	var clip_row: HBoxContainer = HBoxContainer.new()
+	clip_row.add_theme_constant_override("separation", 6)
+	var copy_btn: Button = UITheme.make_icon_btn("⧉ COPY", false, UITheme.PURPLE_BRIGHT)
+	copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy_btn.pressed.connect(func() -> void: _owner._copy_selection())
+	clip_row.add_child(copy_btn)
+	var cut_btn: Button = UITheme.make_icon_btn("✂ CUT", false, UITheme.MAGENTA)
+	cut_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cut_btn.pressed.connect(func() -> void: _owner._cut_selection())
+	clip_row.add_child(cut_btn)
+	side_vbox.add_child(clip_row)
+
+	# Move row: block up / down.
+	var move_row: HBoxContainer = HBoxContainer.new()
+	move_row.add_theme_constant_override("separation", 6)
+	var up_btn: Button = UITheme.make_icon_btn("↑ MOVE UP", false, UITheme.PURPLE_MID)
+	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	up_btn.pressed.connect(func() -> void: _owner._move_selection(-1))
+	move_row.add_child(up_btn)
+	var dn_btn: Button = UITheme.make_icon_btn("↓ MOVE DOWN", false, UITheme.PURPLE_MID)
+	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dn_btn.pressed.connect(func() -> void: _owner._move_selection(1))
+	move_row.add_child(dn_btn)
+	side_vbox.add_child(move_row)
+
+	# Delete.
+	var del_btn: Button = UITheme.make_icon_btn("✕ DELETE ALL", false, UITheme.MAGENTA)
+	del_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	del_btn.pressed.connect(func() -> void: _owner._delete_selection())
+	side_vbox.add_child(del_btn)
+
+
+# Small type glyph for the multi-select listing (matches the graph node icons).
+func _type_glyph(item: Dictionary) -> String:
+	match item.get("type", "round"):
+		"round":      return "▶"
+		"shop":       return "◆"
+		"storyboard": return "◈"
+		"fork":       return "⑂"
+	return "•"
+
+
+# One-line human name for an item in the multi-select listing.
+func _brief_item_name(item: Dictionary) -> String:
+	match item.get("type", "round"):
+		"round":
+			var n: String = (item.get("name", "") as String).strip_edges()
+			return n if n != "" else "Round"
+		"shop":
+			var t: String = (item.get("title", "") as String).strip_edges()
+			return t if t != "" else "Shop"
+		"storyboard":
+			var lc: int = (item.get("lines", []) as Array).size()
+			return "Storyboard (%d line%s)" % [lc, "s" if lc != 1 else ""]
+		"fork":
+			var ft: String = (item.get("title", "") as String).strip_edges()
+			var pc: int = (item.get("paths", []) as Array).size()
+			return "%s (%d paths)" % [ft if ft != "" else "Fork", pc]
+	return "Item"
 
 
 # ── Internal: per-type editors ──────────────────────────────────────────────
@@ -380,8 +532,66 @@ func _side_section_separator() -> Control:
 	return spacer
 
 
-# Bottom row of move/delete buttons used by every side-panel editor.
-func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) -> HBoxContainer:
+# Short uppercase label for an item type. Used in clipboard status messages and
+# paste-button captions so the author knows what they copied / are pasting.
+func _item_type_label(item: Dictionary) -> String:
+	match item.get("type", "round"):
+		"round":      return "ROUND"
+		"shop":       return "SHOP"
+		"storyboard": return "STORYBOARD"
+		"fork":       return "FORK"
+	return "ITEM"
+
+
+# Bottom action block used by every side-panel editor: a clipboard row
+# (Copy / Duplicate) stacked above the move/delete row. Returns a VBox so all
+# four item editors get the same controls from one place.
+func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
+	var block: VBoxContainer = VBoxContainer.new()
+	block.add_theme_constant_override("separation", 6)
+	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# ── Clipboard row: Copy + Duplicate ──────────────────────────────────────
+	var clip_row: HBoxContainer = HBoxContainer.new()
+	clip_row.add_theme_constant_override("separation", 6)
+
+	var copy_btn: Button = UITheme.make_icon_btn("⧉ COPY", false, UITheme.PURPLE_BRIGHT)
+	copy_btn.custom_minimum_size = Vector2(0, 0)
+	copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy_btn.pressed.connect(func() -> void:
+		# Deep duplicate so later edits to the live item don't mutate the copy.
+		_owner._clipboard_items = [(arr[idx] as Dictionary).duplicate(true)]
+		_owner._show_status("Copied %s — press Ctrl+V, or click any + then Paste." % _item_type_label(arr[idx]), false)
+	)
+	clip_row.add_child(copy_btn)
+
+	# Cut = copy to clipboard + remove (one undo step). Mirrors Ctrl+X.
+	var cut_btn: Button = UITheme.make_icon_btn("✂ CUT", false, UITheme.MAGENTA)
+	cut_btn.custom_minimum_size = Vector2(0, 0)
+	cut_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cut_btn.pressed.connect(func() -> void:
+		var label: String = _item_type_label(arr[idx])
+		_owner._clipboard_items = [(arr[idx] as Dictionary).duplicate(true)]
+		_owner._push_undo()
+		arr.remove_at(idx)
+		reselect.call(-1)
+		_owner._show_status("Cut %s — press Ctrl+V to paste it elsewhere (Ctrl+Z to undo)." % label, false)
+	)
+	clip_row.add_child(cut_btn)
+
+	# Duplicate = copy + drop a clone directly after this item, then select it.
+	var dup_btn: Button = UITheme.make_icon_btn("⎘ DUPLICATE", false, UITheme.PURPLE_MID)
+	dup_btn.custom_minimum_size = Vector2(0, 0)
+	dup_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_btn.pressed.connect(func() -> void:
+		_owner._push_undo()
+		arr.insert(idx + 1, (arr[idx] as Dictionary).duplicate(true))
+		reselect.call(idx + 1)
+	)
+	clip_row.add_child(dup_btn)
+	block.add_child(clip_row)
+
+	# ── Move / delete row ─────────────────────────────────────────────────────
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 
@@ -390,6 +600,7 @@ func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) 
 	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	up_btn.pressed.connect(func() -> void:
 		if idx <= 0: return
+		_owner._push_undo()
 		var tmp: Dictionary = arr[idx]
 		arr[idx]     = arr[idx - 1]
 		arr[idx - 1] = tmp
@@ -402,6 +613,7 @@ func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) 
 	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dn_btn.pressed.connect(func() -> void:
 		if idx >= arr.size() - 1: return
+		_owner._push_undo()
 		var tmp: Dictionary = arr[idx]
 		arr[idx]     = arr[idx + 1]
 		arr[idx + 1] = tmp
@@ -413,12 +625,14 @@ func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) 
 	rm_btn.custom_minimum_size = Vector2(0, 0)
 	rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rm_btn.pressed.connect(func() -> void:
+		_owner._push_undo()
 		arr.remove_at(idx)
 		reselect.call(-1)
 	)
 	row.add_child(rm_btn)
 
-	return row
+	block.add_child(row)
+	return block
 
 
 # ── Internal: round / shop / storyboard / fork inline editors ──────────────
@@ -461,9 +675,15 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 	video_zone.file_dropped.connect(func(p: String) -> void:
 		arr[idx]["video_path"] = p
 		if (arr[idx].get("name","") as String).strip_edges() == "":
-			var auto: String = p.get_file().get_basename()
-			arr[idx]["name"] = auto
-			name_edit.text = auto
+			arr[idx]["name"] = p.get_file().get_basename()
+		# Auto-fill the funscript + any secondary axis / vib scripts from same-
+		# named siblings on disk, then rebuild so the DropZones show them.
+		if _owner._autofill_round_siblings(arr[idx], p):
+			_owner._show_status("Auto-filled matching scripts from file names.", false)
+			reselect.call(idx)
+			return
+		name_edit.text = arr[idx].get("name","")
+		_owner._refresh_graph()  # update the node's validation badge live
 	)
 
 	col.add_child(_side_section_separator())
@@ -479,9 +699,15 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 	fs_zone.file_dropped.connect(func(p: String) -> void:
 		arr[idx]["funscript_path"] = p
 		if (arr[idx].get("name","") as String).strip_edges() == "":
-			var auto: String = p.get_file().get_basename()
-			arr[idx]["name"] = auto
-			name_edit.text = auto
+			arr[idx]["name"] = p.get_file().get_basename()
+		# Auto-fill the video + any secondary axis / vib scripts from same-named
+		# siblings on disk, then rebuild so the DropZones show them.
+		if _owner._autofill_round_siblings(arr[idx], p):
+			_owner._show_status("Auto-filled matching scripts from file names.", false)
+			reselect.call(idx)
+			return
+		name_edit.text = arr[idx].get("name","")
+		_owner._refresh_graph()  # update the node's validation badge live
 	)
 
 	col.add_child(_side_section_separator())
@@ -779,6 +1005,8 @@ func _show_paste_lines_popup(lines_arr: Array, refresh_storyboard: Callable) -> 
 	UITheme.style_button(apply_btn, UITheme.STORYBOARD)
 	apply_btn.pressed.connect(func() -> void:
 		var parsed: Array = _parse_pasted_lines(text_edit.text)
+		if not parsed.is_empty():
+			_owner._push_undo()
 		for line: Dictionary in parsed:
 			lines_arr.append(line)
 		popup.queue_free()
@@ -907,6 +1135,7 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	up_btn.pressed.connect(func() -> void:
 		if line_idx <= 0: return
+		_owner._push_undo()
 		var tmp: Dictionary = lines_arr[line_idx]
 		lines_arr[line_idx]     = lines_arr[line_idx - 1]
 		lines_arr[line_idx - 1] = tmp
@@ -917,6 +1146,7 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dn_btn.pressed.connect(func() -> void:
 		if line_idx >= lines_arr.size() - 1: return
+		_owner._push_undo()
 		var tmp: Dictionary = lines_arr[line_idx]
 		lines_arr[line_idx]     = lines_arr[line_idx + 1]
 		lines_arr[line_idx + 1] = tmp
@@ -926,6 +1156,7 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	var rm_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
 	rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rm_btn.pressed.connect(func() -> void:
+		_owner._push_undo()
 		lines_arr.remove_at(line_idx)
 		refresh_storyboard.call()
 	)
@@ -971,6 +1202,7 @@ func _make_insert_line_btn(lines_arr: Array, insert_at: int, refresh: Callable) 
 	btn.add_theme_color_override("font_pressed_color", c)
 
 	btn.pressed.connect(func() -> void:
+		_owner._push_undo()
 		lines_arr.insert(insert_at, {"speaker": "", "text": "", "image": ""})
 		refresh.call()
 	)
@@ -1035,6 +1267,7 @@ func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: C
 		add_path_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		UITheme.style_button(add_path_btn, UITheme.PURPLE_MID)
 		add_path_btn.pressed.connect(func() -> void:
+			_owner._push_undo()
 			paths_arr.append({
 				"name": "Path %s" % char(65 + paths_arr.size()),
 				"description": "",
@@ -1083,6 +1316,7 @@ func _make_path_editor_block(paths_arr: Array, pi: int, graph: Control, reselect
 	if paths_arr.size() > 2:
 		var rm_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
 		rm_btn.pressed.connect(func() -> void:
+			_owner._push_undo()
 			paths_arr.remove_at(pi)
 			graph.call_deferred("refresh")
 		)

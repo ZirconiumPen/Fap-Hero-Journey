@@ -78,9 +78,38 @@ var _cover_texture: ImageTexture = null  # cached so the journey-info view can r
 var _items:      Array  = []  # Array[Dictionary] — {type:"round"|"fork"|"shop"|"storyboard", ...}
 
 var _graph: Control = null  # GraphView instance, host inside _graph_host
-var _selected_item: Dictionary = {}  # Mirror of GraphView's current selection.
-var _selected_arr:  Array      = []  # The array the selected item lives in.
-var _selected_idx:  int        = -1  # Index within that array.
+# Single-selection mirror of GraphView (valid only when exactly one node is
+# selected). Drives the per-node side-panel editor. When 0 or 2+ nodes are
+# selected, _selected_item is {} and _selected_idx is -1.
+var _selected_item: Dictionary = {}  # The lone selected item, or {}.
+var _selected_arr:  Array      = []  # The array the selection lives in (any size).
+var _selected_idx:  int        = -1  # Index of the lone selected item, or -1.
+
+# Full selection set mirror (1+ items, all in _selected_arr). Group operations
+# (copy / cut / delete / move) act on this.
+var _selected_items: Array = []
+
+# Module-level copy/paste clipboard. Holds deep duplicates of the copied item(s)
+# (round / shop / storyboard / fork-with-subtree, or several at once). Paste
+# inserts fresh deep duplicates so the same entry can be pasted repeatedly
+# without the pastes sharing references. Image/script paths inside the copies
+# resolve to the same source files, so a paste + save re-copies the media into
+# the new spot — this is what lets a fully-built storyboard (speaker images and
+# all) move to another branch, which plain text paste could never do. Empty ==
+# nothing copied.
+var _clipboard_items: Array = []
+
+# ── Undo / redo ─────────────────────────────────────────────────────────────
+# Snapshot-based undo of the journey STRUCTURE only. Each stack entry is a deep
+# copy of the whole _items tree taken just before a structural mutation (add /
+# delete / move / duplicate / paste of modules, fork paths, storyboard lines).
+# In-field text edits are deliberately NOT snapshotted — they keep their own
+# native LineEdit/TextEdit undo, and snapshotting per keystroke would be noise.
+# Undo never touches disk, so it can't (and never needs to) resurrect deleted
+# image files; that's why image/field removals stay out of scope.
+var _undo_stack: Array = []  # Array[Array] — past states, most recent last.
+var _redo_stack: Array = []  # Array[Array] — undone states available to redo.
+const UNDO_LIMIT: int = 50
 
 # Side panel renderer — owns no state of its own; reads/mutates this controller.
 var _side_renderer: BuilderSidePanel = null
@@ -134,6 +163,7 @@ func _ready() -> void:
 	_side_renderer = BuilderSidePanel.new(self)
 	_apply_layout()
 	_apply_theme()
+	_setup_toolbar_buttons()
 	_connect_signals()
 	_setup_graph_view()
 	if not edit_journey.is_empty():
@@ -155,20 +185,41 @@ func _setup_graph_view() -> void:
 	_graph.anchor_right  = 1.0
 	_graph.anchor_bottom = 1.0
 	_graph_host.add_child(_graph)
-	_graph.node_selected.connect(_on_graph_node_selected)
+	_graph.selection_changed.connect(_on_graph_selection_changed)
 	_graph.insert_requested.connect(_on_graph_insert_requested)
+	# Live per-node validation badges (evaluated at layout time).
+	_graph.validity_fn = _item_issue_summary
 	# Initial state: render current _items (empty for a new journey).
 	_graph.call_deferred("set_items", _items)
 
 
-func _on_graph_node_selected(item: Dictionary, arr: Array, idx: int) -> void:
-	_selected_item = item
-	_selected_arr  = arr
-	_selected_idx  = idx
-	if item.is_empty():
-		_side_renderer.show_journey_info_panel()
+# Reacts to a selection change from the graph. Keeps both the single-selection
+# mirror (for the per-node editor) and the full set mirror (for group ops) in
+# sync, then renders the matching side panel: journey info (0), node editor (1),
+# or the multi-select panel (2+).
+func _on_graph_selection_changed(items: Array, arr: Array) -> void:
+	_selected_items = items
+	_selected_arr   = arr
+	if items.size() == 1:
+		_selected_item = items[0]
+		_selected_idx  = _index_in_arr(arr, items[0])
+		_side_renderer.show_node_editor(_selected_item, arr, _selected_idx)
 	else:
-		_side_renderer.show_node_editor(item, arr, idx)
+		_selected_item = {}
+		_selected_idx  = -1
+		if items.is_empty():
+			_side_renderer.show_journey_info_panel()
+		else:
+			_side_renderer.show_multi_select_panel(items, arr)
+
+
+# Index of `item` within `arr` by reference identity (Dictionary == is deep
+# equality, which is unreliable for look-alike items). Returns -1 if absent.
+func _index_in_arr(arr: Array, item: Dictionary) -> int:
+	for i in arr.size():
+		if is_same(arr[i], item):
+			return i
+	return -1
 
 
 func _on_graph_insert_requested(arr: Array, idx: int, screen_pos: Vector2) -> void:
@@ -261,6 +312,114 @@ func _apply_theme() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Toolbar (top bar) — Fit + Shortcuts buttons inserted before Save
+# ---------------------------------------------------------------------------
+
+# Adds the "Fit" (frame the whole graph) and "Shortcuts" (keybinding reference)
+# buttons to the top bar, just left of Save. Created in code so the .tscn stays
+# untouched.
+func _setup_toolbar_buttons() -> void:
+	var fit_btn: Button = Button.new()
+	fit_btn.text = "⊡ FIT"
+	fit_btn.focus_mode = Control.FOCUS_NONE
+	fit_btn.tooltip_text = "Frame the whole journey in view"
+	UITheme.style_button(fit_btn, UITheme.PURPLE_MID)
+	fit_btn.pressed.connect(func() -> void:
+		if _graph:
+			_graph.fit_to_view()
+	)
+	_top_bar.add_child(fit_btn)
+	_top_bar.move_child(fit_btn, _save_btn.get_index())
+
+	var keys_btn: Button = Button.new()
+	keys_btn.text = "⌨ SHORTCUTS"
+	keys_btn.focus_mode = Control.FOCUS_NONE
+	keys_btn.tooltip_text = "Show keyboard & mouse shortcuts"
+	UITheme.style_button(keys_btn, UITheme.PURPLE_MID)
+	keys_btn.pressed.connect(_show_shortcuts_overlay)
+	_top_bar.add_child(keys_btn)
+	_top_bar.move_child(keys_btn, _save_btn.get_index())
+
+
+# Centered modal listing every builder keyboard / mouse shortcut. Closeable via
+# the Close button or the backdrop.
+func _show_shortcuts_overlay() -> void:
+	var parts: Dictionary = UITheme.build_centered_modal("⌨  SHORTCUTS", UITheme.PURPLE_BRIGHT, Vector2i(580, 640))
+	var modal: Control = parts["modal"]
+	var vbox: VBoxContainer = parts["vbox"]
+	vbox.add_theme_constant_override("separation", 5)
+	add_child(modal)
+
+	var groups: Array = [
+		["EDITING", [
+			["Ctrl + C", "Copy selected module(s)"],
+			["Ctrl + X", "Cut selected module(s)"],
+			["Ctrl + V", "Paste after selection"],
+			["Ctrl + Z", "Undo"],
+			["Ctrl + Y  /  Ctrl + Shift + Z", "Redo"],
+			["Backspace  /  Delete", "Delete selected module(s)"],
+			["Ctrl + S", "Save journey"],
+		]],
+		["SELECTION", [
+			["Click", "Select a node"],
+			["Ctrl + Click", "Add / remove a node from selection"],
+			["Drag on empty canvas", "Marquee-select (same branch)"],
+		]],
+		["NAVIGATION", [
+			["Middle-drag", "Pan the graph"],
+			["Mouse wheel", "Zoom in / out"],
+			["⊡ Fit button", "Frame the whole journey"],
+		]],
+		["IMPORT", [
+			["Drop files on the graph", "Auto-create rounds (paired by name)"],
+			["Drop a folder on the graph", "Recursively import every scene"],
+		]],
+	]
+
+	for group: Array in groups:
+		var section_lbl: Label = Label.new()
+		section_lbl.text = group[0]
+		section_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
+		section_lbl.add_theme_font_size_override("font_size", 11)
+		section_lbl.uppercase = true
+		vbox.add_child(section_lbl)
+		for row_spec: Array in group[1]:
+			var row: HBoxContainer = HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			var key_lbl: Label = Label.new()
+			key_lbl.text = row_spec[0]
+			key_lbl.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
+			key_lbl.add_theme_font_size_override("font_size", 12)
+			key_lbl.custom_minimum_size = Vector2(240, 0)
+			row.add_child(key_lbl)
+			var desc_lbl: Label = Label.new()
+			desc_lbl.text = row_spec[1]
+			desc_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
+			desc_lbl.add_theme_font_size_override("font_size", 12)
+			desc_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(desc_lbl)
+			vbox.add_child(row)
+		var spacer: Control = Control.new()
+		spacer.custom_minimum_size = Vector2(0, 6)
+		vbox.add_child(spacer)
+
+	var close_btn: Button = Button.new()
+	close_btn.text = "CLOSE"
+	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(close_btn, UITheme.PURPLE_BRIGHT)
+	close_btn.pressed.connect(func() -> void: modal.queue_free())
+	vbox.add_child(close_btn)
+
+	# Backdrop click also dismisses (the backdrop is the modal's first child).
+	var backdrop: Control = modal.get_child(0) as Control
+	if backdrop:
+		backdrop.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+				modal.queue_free()
+		)
+
+
+# ---------------------------------------------------------------------------
 # Style helpers
 # ---------------------------------------------------------------------------
 
@@ -278,23 +437,318 @@ func _connect_signals() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		var k := event as InputEventKey
-		if k.pressed and not k.echo and k.ctrl_pressed and k.keycode == KEY_S:
-			if not _save_btn.disabled:
-				_on_save_pressed()
+	if not (event is InputEventKey):
+		return
+	var k := event as InputEventKey
+	# Only fresh key-down events; ignore key-up and auto-repeat (echo). The echo
+	# guard also stops a held Backspace/Delete from chain-deleting nodes.
+	if not k.pressed or k.echo:
+		return
+
+	if k.ctrl_pressed:
+		# ── Ctrl-modified shortcuts ──────────────────────────────────────────
+		match k.keycode:
+			KEY_S:
+				if not _save_btn.disabled:
+					_on_save_pressed()
+				get_viewport().set_input_as_handled()
+			KEY_C:
+				# Defer to native text copy when a text field is focused — do NOT
+				# consume the event in that case, or the LineEdit/TextEdit never
+				# sees it.
+				if _focus_is_text_field():
+					return
+				_copy_selection()
+				get_viewport().set_input_as_handled()
+			KEY_X:
+				if _focus_is_text_field():
+					return
+				_cut_selection()
+				get_viewport().set_input_as_handled()
+			KEY_V:
+				if _focus_is_text_field():
+					return
+				_paste_clipboard_after_selection()
+				get_viewport().set_input_as_handled()
+			KEY_Z:
+				# Ctrl+Shift+Z is the common redo alias; plain Ctrl+Z undoes.
+				if _focus_is_text_field():
+					return
+				if k.shift_pressed:
+					_redo()
+				else:
+					_undo()
+				get_viewport().set_input_as_handled()
+			KEY_Y:
+				if _focus_is_text_field():
+					return
+				_redo()
+				get_viewport().set_input_as_handled()
+		return
+
+	# ── Unmodified shortcuts ─────────────────────────────────────────────────
+	match k.keycode:
+		KEY_BACKSPACE, KEY_DELETE:
+			# Must yield to text editing — Backspace/Delete still edit characters
+			# inside a focused LineEdit/TextEdit.
+			if _focus_is_text_field():
+				return
+			_delete_selection()
 			get_viewport().set_input_as_handled()
+
+
+# True when the keyboard focus is inside a text-entry control, so module
+# copy/paste shortcuts should stand down and let normal text editing happen.
+func _focus_is_text_field() -> bool:
+	var f: Control = get_viewport().gui_get_focus_owner()
+	return f is LineEdit or f is TextEdit
+
+
+# Indices of the current selection within _selected_arr, ascending. Identity-
+# based (look-alike dicts would confuse ==).
+func _selected_indices_sorted() -> Array:
+	var idxs: Array = []
+	for it: Dictionary in _selected_items:
+		var i: int = _index_in_arr(_selected_arr, it)
+		if i >= 0:
+			idxs.append(i)
+	idxs.sort()
+	return idxs
+
+
+# Selected items ordered by their position in the sequence (so copy/paste keeps
+# authoring order regardless of click order).
+func _selected_items_in_order() -> Array:
+	var out: Array = []
+	for i: int in _selected_indices_sorted():
+		out.append(_selected_arr[i])
+	return out
+
+
+# Removes every selected item from _selected_arr (descending index so earlier
+# removals don't shift later ones).
+func _remove_selected_from_arr() -> void:
+	var idxs: Array = _selected_indices_sorted()
+	idxs.reverse()
+	for i: int in idxs:
+		_selected_arr.remove_at(i)
+
+
+# Label for the clipboard contents: the type when one item, else a count.
+func _clipboard_label() -> String:
+	if _clipboard_items.size() == 1:
+		return _item_type_label(_clipboard_items[0])
+	return "%d modules" % _clipboard_items.size()
+
+
+# Ctrl+C — copies the whole selection (deep; a fork brings its subtree) into the
+# shared clipboard, in sequence order. No-op with a hint when nothing's selected.
+func _copy_selection() -> void:
+	if _selected_items.is_empty():
+		_show_status("Nothing selected to copy. Click a module first.", true)
+		return
+	_clipboard_items = []
+	for it: Dictionary in _selected_items_in_order():
+		_clipboard_items.append(it.duplicate(true))
+	_show_status("Copied %s — press Ctrl+V to paste." % _clipboard_label(), false)
+
+
+# Ctrl+X — copies the selection to the clipboard, then removes it (one undo
+# step). The classic "move" gesture: cut here, then paste elsewhere.
+func _cut_selection() -> void:
+	if _selected_items.is_empty():
+		_show_status("Nothing selected to cut. Click a module first.", true)
+		return
+	_clipboard_items = []
+	for it: Dictionary in _selected_items_in_order():
+		_clipboard_items.append(it.duplicate(true))
+	var label: String = _clipboard_label()
+	_push_undo()
+	_remove_selected_from_arr()
+	_refresh_graph()
+	if _graph:
+		_graph.clear_selection()
+	_show_status("Cut %s — press Ctrl+V to paste elsewhere (Ctrl+Z to undo)." % label, false)
+
+
+# Backspace / Delete — removes the whole selection after snapshotting for undo.
+func _delete_selection() -> void:
+	if _selected_items.is_empty():
+		_show_status("Nothing selected to delete. Click a module first.", true)
+		return
+	var label: String = ("%d modules" % _selected_items.size()) if _selected_items.size() > 1 else _item_type_label(_selected_items[0])
+	_push_undo()
+	_remove_selected_from_arr()
+	_refresh_graph()
+	if _graph:
+		_graph.clear_selection()
+	_show_status("Deleted %s. Press Ctrl+Z to undo." % label, false)
+
+
+# Shifts the selected block by one position within its branch (delta -1 up / +1
+# down). Blocked when the block already touches that end. Selection is preserved.
+func _move_selection(delta: int) -> void:
+	if _selected_items.is_empty():
+		return
+	var idxs: Array = _selected_indices_sorted()
+	if delta < 0 and idxs[0] <= 0:
+		return
+	if delta > 0 and idxs[-1] >= _selected_arr.size() - 1:
+		return
+	_push_undo()
+	if delta < 0:
+		for i: int in idxs:  # ascending — each swaps up into the freed slot
+			var tmp: Variant = _selected_arr[i]
+			_selected_arr[i]     = _selected_arr[i - 1]
+			_selected_arr[i - 1] = tmp
+	else:
+		idxs.reverse()       # descending — swap down without clobbering
+		for i: int in idxs:
+			var tmp: Variant = _selected_arr[i]
+			_selected_arr[i]     = _selected_arr[i + 1]
+			_selected_arr[i + 1] = tmp
+	_refresh_graph()
+	# Same item references, new positions — re-highlight them.
+	_graph.set_selection(_selected_items, _selected_arr)
+
+
+# Ctrl+V — pastes fresh deep duplicates of the clipboard after the current
+# selection (same branch), or appends to the top level when nothing's selected.
+# The pasted block becomes the new selection so a wrong drop is easy to fix.
+func _paste_clipboard_after_selection() -> void:
+	if _clipboard_items.is_empty():
+		_show_status("Clipboard is empty. Copy a module first (Ctrl+C).", true)
+		return
+	_push_undo()
+	var arr: Array = _items
+	var base: int  = _items.size()
+	if not _selected_items.is_empty():
+		arr  = _selected_arr
+		base = _selected_indices_sorted()[-1] + 1
+	for i in _clipboard_items.size():
+		arr.insert(base + i, _clipboard_items[i].duplicate(true))
+	_refresh_graph()
+	var pasted: Array = []
+	for i in _clipboard_items.size():
+		pasted.append(arr[base + i])
+	_graph.call_deferred("set_selection", pasted, arr)
+
+
+# Records the current journey structure so the next mutation can be undone.
+# MUST be called *before* a structural change is applied (and only when the
+# change will actually happen — e.g. after a move's bounds guard). Clears the
+# redo stack, since a fresh edit forks history away from any undone states.
+func _push_undo() -> void:
+	_undo_stack.append(_items.duplicate(true))
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+
+
+# Ctrl+Z — reverts to the structure captured by the last _push_undo().
+func _undo() -> void:
+	if _undo_stack.is_empty():
+		_show_status("Nothing to undo.", false)
+		return
+	_redo_stack.append(_items.duplicate(true))
+	_restore_snapshot(_undo_stack.pop_back())
+	_show_status("Undid last change.", false)
+
+
+# Ctrl+Y (or Ctrl+Shift+Z) — re-applies the most recently undone structure.
+func _redo() -> void:
+	if _redo_stack.is_empty():
+		_show_status("Nothing to redo.", false)
+		return
+	_undo_stack.append(_items.duplicate(true))
+	_restore_snapshot(_redo_stack.pop_back())
+	_show_status("Redid change.", false)
+
+
+# Swaps the live _items tree for a snapshot. Mutates in place rather than
+# reassigning, because GraphView and the open side-panel editors close over the
+# _items array reference (and its sub-arrays); replacing the reference would
+# leave them pointing at the stale tree. Selection is cleared afterwards since
+# the old selection's array/index may no longer be valid in the restored tree.
+func _restore_snapshot(snapshot: Array) -> void:
+	_items.clear()
+	for it in snapshot:
+		_items.append(it)
+	if _graph:
+		_graph.set_items(_items)
+		_graph.clear_selection()
+
+
+# Short uppercase label for an item's type, for status messages.
+func _item_type_label(item: Dictionary) -> String:
+	match item.get("type", "round"):
+		"round":      return "ROUND"
+		"shop":       return "SHOP"
+		"storyboard": return "STORYBOARD"
+		"fork":       return "FORK"
+	return "ITEM"
 
 
 func _on_back_pressed() -> void:
 	Transition.change_scene("res://scenes/main/Main.tscn")
 
 
+# Funscript filename suffixes that mark a secondary axis or a vibrator channel.
+# Kept in sync with _detect_funscript_axis / _detect_vib_channel — used to strip
+# the suffix so "scene1", "scene1_L1", "scene1.vib1" all share a round key during
+# bulk import.
+const SCRIPT_SUFFIXES: Array[String] = [
+	"_l1", ".l1", "_l2", ".l2", "_r0", ".r0", "_r1", ".r1", "_r2", ".r2",
+	"_surge", ".surge", "_sway", ".sway", "_twist", ".twist", "_roll", ".roll", "_pitch", ".pitch",
+	".vib1", "_vib1", ".vibe1", "_vibe1", ".vib2", "_vib2", ".vibe2", "_vibe2",
+]
+
+
 func _on_viewport_files_dropped(files: PackedStringArray) -> void:
-	# Multi-axis bulk drop: when a round is selected and multiple funscript files
-	# are dropped at once, auto-route each one by its filename suffix rather than
-	# requiring the user to drop them onto individual DropZones.
-	# Single-file drops still fall through to the DropZone controls as before.
+	# Two drop surfaces with distinct intents:
+	#   • Side panel  → "edit the selected node": multi-axis routing into the
+	#     selected round, or a cover image when nothing is selected. (Single-file
+	#     drops are handled by the DropZone controls themselves, which listen to
+	#     the same viewport signal and only act when the mouse is over them.)
+	#   • Graph canvas → "create rounds": bulk-import a round per video/funscript
+	#     group, matched by filename.
+	# Folder drop: a dropped directory can't target a single DropZone or be a
+	# cover, so always treat it as a bulk import — expand it (recursively) into
+	# its videos/funscripts and route straight to the importer.
+	var has_folder: bool = false
+	for f: String in files:
+		if DirAccess.dir_exists_absolute(f):
+			has_folder = true
+			break
+	if has_folder:
+		var expanded: PackedStringArray = _expand_dropped_paths(files)
+		if _bulk_import_rounds(expanded):
+			return
+		# Import created nothing. If the folder held no media at all, say so; if it
+		# held only funscripts, _bulk_import_rounds already showed that message.
+		if expanded.is_empty():
+			_show_status("No videos or funscripts found in the dropped folder(s).", true)
+		return
+
+	var mouse: Vector2 = get_viewport().get_mouse_position()
+	if _side_panel.get_global_rect().has_point(mouse):
+		_handle_side_panel_drop(files)
+		return
+
+	# Canvas drop. Try a bulk round import first; if there was nothing round-like
+	# in the drop, fall back to accepting an image as the journey cover.
+	if not _bulk_import_rounds(files):
+		for f: String in files:
+			if f.get_extension().to_lower() in JourneyData.IMAGE_EXTENSIONS:
+				_cover_path = f
+				_update_cover_preview()
+				return
+
+
+# Side-panel drop behavior (unchanged from the original handler): auto-route
+# multiple funscripts into the selected round's axis/vib slots, else accept a
+# dropped image as the cover when nothing is selected.
+func _handle_side_panel_drop(files: PackedStringArray) -> void:
 	if _selected_item.get("type", "") == "round" and _selected_idx >= 0:
 		var fs_files: Array = []
 		for f: String in files:
@@ -322,8 +776,6 @@ func _on_viewport_files_dropped(files: PackedStringArray) -> void:
 			_graph.call_deferred("select_item", _selected_arr, _selected_idx)
 			return
 
-	# No round selected (or single-file drop) — fall through to cover-image handling.
-	# DropZone controls on the side panel handle single-file drops themselves.
 	if not _selected_item.is_empty():
 		return
 	for f: String in files:
@@ -331,6 +783,256 @@ func _on_viewport_files_dropped(files: PackedStringArray) -> void:
 			_cover_path = f
 			_update_cover_preview()
 			return
+
+
+# Bulk-import handler. Groups the dropped files by folder + base name and builds
+# one round per group — main funscript + video + any secondary axis / vib
+# scripts, matched by suffix. A group MUST end up with a video to become a round:
+# funscript-only groups (with no matching video on disk) are skipped, while a
+# video with no funscript still becomes a round. New rounds land after the
+# current selection (or at the end of the top level when nothing is selected).
+# Returns true if it created at least one round, false otherwise (so the caller
+# can fall back to cover-image handling). The whole import is one undo step.
+func _bulk_import_rounds(files: PackedStringArray) -> bool:
+	var groups: Dictionary = {}  # round_key -> {video, funscript, axis:{}, vib:{}, name}
+	var order:  Array      = []  # round_keys in first-seen order
+
+	for f: String in files:
+		var ext: String = f.get_extension().to_lower()
+		var key: String = _round_group_key(f)
+		if ext in JourneyData.VIDEO_EXTENSIONS:
+			_ensure_import_group(groups, order, key)
+			groups[key]["video"] = f
+			if groups[key]["name"] == "":
+				groups[key]["name"] = f.get_file().get_basename()
+		elif ext in JourneyData.FUNSCRIPT_EXTENSIONS:
+			_ensure_import_group(groups, order, key)
+			var vib_ch: String = _detect_vib_channel(f)
+			if vib_ch != "":
+				groups[key]["vib"][vib_ch] = f
+			else:
+				var axis: String = _detect_funscript_axis(f)
+				if axis == "L0":
+					groups[key]["funscript"] = f
+					if groups[key]["name"] == "":
+						groups[key]["name"] = f.get_file().get_basename()
+				else:
+					groups[key]["axis"][axis] = f
+		# Non-round files (images, etc.) are ignored here.
+
+	if order.is_empty():
+		return false
+
+	var new_rounds: Array = []
+	var skipped_no_video: int = 0
+	for key: String in order:
+		var g: Dictionary = groups[key]
+		var rname: String = g["name"] if g["name"] != "" else key
+		var rd: Dictionary = {
+			"type":           "round",
+			"name":           rname,
+			"funscript_path": g["funscript"],
+			"video_path":     g["video"],
+			"coins":          0,
+			"axis_scripts":   g["axis"],
+			"vib_scripts":    g["vib"],
+		}
+		# Fill any slots the drop didn't include (e.g. axes left on disk) from
+		# same-named siblings next to whichever file the group does have.
+		var anchor: String = _group_anchor_path(g)
+		if anchor != "":
+			_autofill_round_siblings(rd, anchor)
+		# A round must have a video. Funscript-only groups (no matching video on
+		# disk either) are skipped entirely — a script with no video isn't a
+		# playable round. A video with no funscript still becomes a round.
+		if (rd["video_path"] as String) == "":
+			skipped_no_video += 1
+			continue
+		new_rounds.append(rd)
+
+	if new_rounds.is_empty():
+		if skipped_no_video > 0:
+			_show_status("No rounds created — found %d funscript%s with no matching video." % [
+				skipped_no_video, "s" if skipped_no_video != 1 else ""], true)
+		return false
+
+	_push_undo()
+
+	# Placement: after the selected node (into its branch), else top-level append.
+	var target_arr: Array = _items
+	var insert_base: int  = _items.size()
+	if _selected_idx >= 0 and _selected_idx < _selected_arr.size():
+		target_arr  = _selected_arr
+		insert_base = _selected_idx + 1
+
+	for i in new_rounds.size():
+		target_arr.insert(insert_base + i, new_rounds[i])
+
+	_refresh_graph()
+	# Select the last imported round so the user lands on the newest content.
+	_graph.call_deferred("select_item", target_arr, insert_base + new_rounds.size() - 1)
+	var msg: String = "Imported %d round%s." % [new_rounds.size(), "s" if new_rounds.size() != 1 else ""]
+	if skipped_no_video > 0:
+		msg += " Skipped %d funscript%s with no video." % [skipped_no_video, "s" if skipped_no_video != 1 else ""]
+	msg += " Press Ctrl+Z to undo."
+	_show_status(msg, false)
+	return true
+
+
+# Expands a dropped path list: directories are walked recursively and replaced
+# by the video/funscript files inside them; plain files pass through unchanged.
+# The result is sorted so rounds come out in a stable, predictable order.
+func _expand_dropped_paths(files: PackedStringArray) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for f: String in files:
+		if DirAccess.dir_exists_absolute(f):
+			_collect_files_recursive(f, out)
+		else:
+			out.append(f)
+	out.sort()
+	return out
+
+
+# Recursively appends every video/funscript file under `dir` (and its
+# subdirectories) into `out`. Other file types are skipped.
+func _collect_files_recursive(dir: String, out: PackedStringArray) -> void:
+	var d: DirAccess = DirAccess.open(dir)
+	if d == null:
+		return
+	d.list_dir_begin()
+	var fname: String = d.get_next()
+	while fname != "":
+		if fname != "." and fname != "..":
+			var full: String = "%s/%s" % [dir, fname]
+			if d.current_is_dir():
+				_collect_files_recursive(full, out)
+			else:
+				var ext: String = fname.get_extension().to_lower()
+				if ext in JourneyData.VIDEO_EXTENSIONS or ext in JourneyData.FUNSCRIPT_EXTENSIONS:
+					out.append(full)
+		fname = d.get_next()
+	d.list_dir_end()
+
+
+# Round grouping key for bulk import: directory + base name (suffix stripped),
+# lowercased. Including the directory keeps same-name files in different folders
+# as separate rounds while still pairing a video with its scripts in one folder.
+func _round_group_key(f: String) -> String:
+	return ("%s/%s" % [f.get_base_dir(), _strip_script_suffix(f)]).to_lower()
+
+
+# Returns any one real file path from an import group (video preferred, then
+# main funscript, then a secondary axis, then a vib script), or "" if the group
+# somehow holds none. Used to anchor the disk scan for sibling autofill.
+func _group_anchor_path(g: Dictionary) -> String:
+	if g["video"] != "":
+		return g["video"]
+	if g["funscript"] != "":
+		return g["funscript"]
+	for a: String in (g["axis"] as Dictionary).values():
+		return a
+	for v: String in (g["vib"] as Dictionary).values():
+		return v
+	return ""
+
+
+# Creates an empty import group for `key` (preserving first-seen order) if it
+# doesn't exist yet.
+func _ensure_import_group(groups: Dictionary, order: Array, key: String) -> void:
+	if not groups.has(key):
+		groups[key] = {"video": "", "funscript": "", "axis": {}, "vib": {}, "name": ""}
+		order.append(key)
+
+
+# Returns the file's basename with any recognised axis/vib suffix removed, so a
+# secondary-axis or vib script groups with its main round during bulk import.
+func _strip_script_suffix(path: String) -> String:
+	var stem: String = path.get_file().get_basename()
+	var low:  String = stem.to_lower()
+	for s: String in SCRIPT_SUFFIXES:
+		if low.ends_with(s):
+			return stem.substr(0, stem.length() - s.length())
+	return stem
+
+
+# Scans `dir` for every funscript whose base name (suffix stripped) matches
+# `base`, classifying each into the main stroke script, a secondary axis, or a
+# vib channel — reusing the same suffix detection as drag-routing. Returns
+# {"funscript": String, "axis": Dictionary, "vib": Dictionary}; first match wins
+# per slot. Used to auto-fill all of a round's scripts from a single anchor file.
+func _find_sibling_scripts(dir: String, base: String) -> Dictionary:
+	var result: Dictionary = {"funscript": "", "axis": {}, "vib": {}}
+	var base_low: String = base.to_lower()
+	var d: DirAccess = DirAccess.open(dir)
+	if d == null:
+		return result
+	d.list_dir_begin()
+	var fname: String = d.get_next()
+	while fname != "":
+		if not d.current_is_dir() and fname.get_extension().to_lower() in JourneyData.FUNSCRIPT_EXTENSIONS:
+			var full: String = "%s/%s" % [dir, fname]
+			if _strip_script_suffix(full).to_lower() == base_low:
+				var vib_ch: String = _detect_vib_channel(full)
+				if vib_ch != "":
+					if not result["vib"].has(vib_ch):
+						result["vib"][vib_ch] = full
+				else:
+					var axis: String = _detect_funscript_axis(full)
+					if axis == "L0":
+						if result["funscript"] == "":
+							result["funscript"] = full
+					elif not result["axis"].has(axis):
+						result["axis"][axis] = full
+		fname = d.get_next()
+	d.list_dir_end()
+	return result
+
+
+# Finds a video next to a funscript/round by base name. Returns its path, or ""
+# if none exists.
+func _find_sibling_video(dir: String, base: String) -> String:
+	for ext: String in JourneyData.VIDEO_EXTENSIONS:
+		var cand: String = "%s/%s.%s" % [dir, base, ext]
+		if FileAccess.file_exists(cand):
+			return cand
+	return ""
+
+
+# Fills any EMPTY slots of `round` (main funscript, video, secondary axes, vib
+# channels) from same-named files sitting next to `anchor_path` on disk. Never
+# overwrites a slot the author already set. Returns true if anything was filled.
+# Used by both the single-round drop autofill and the bulk importer.
+func _autofill_round_siblings(round_data: Dictionary, anchor_path: String) -> bool:
+	var dir:  String = anchor_path.get_base_dir()
+	var base: String = _strip_script_suffix(anchor_path)
+	var changed: bool = false
+
+	var scan: Dictionary = _find_sibling_scripts(dir, base)
+
+	if (round_data.get("funscript_path", "") as String) == "" and scan["funscript"] != "":
+		round_data["funscript_path"] = scan["funscript"]
+		changed = true
+	if (round_data.get("video_path", "") as String) == "":
+		var sv: String = _find_sibling_video(dir, base)
+		if sv != "":
+			round_data["video_path"] = sv
+			changed = true
+
+	if not round_data.has("axis_scripts"):
+		round_data["axis_scripts"] = {}
+	for axis: String in scan["axis"]:
+		if not (round_data["axis_scripts"] as Dictionary).has(axis):
+			round_data["axis_scripts"][axis] = scan["axis"][axis]
+			changed = true
+
+	if not round_data.has("vib_scripts"):
+		round_data["vib_scripts"] = {}
+	for ch: String in scan["vib"]:
+		if not (round_data["vib_scripts"] as Dictionary).has(ch):
+			round_data["vib_scripts"][ch] = scan["vib"][ch]
+			changed = true
+
+	return changed
 
 
 # Infers the T-code axis from a funscript filename. Checks T-code axis-code
@@ -1665,6 +2367,60 @@ func _save_source_exists(path: String) -> bool:
 	if path == "":
 		return false
 	return FileAccess.file_exists(ProjectSettings.globalize_path(path))
+
+
+# Returns a short, node-local problem summary for an item ("" when it's fine).
+# Mirrors the save-time validation rules but only for THIS node (children get
+# their own badges), so the graph can flag issues live instead of at save. Used
+# as GraphView.validity_fn.
+func _item_issue_summary(item: Dictionary) -> String:
+	match item.get("type", "round"):
+		"round":
+			if (item.get("name", "") as String).strip_edges() == "":
+				return "This round has no name."
+			var fs: String = item.get("funscript_path", "")
+			if fs == "":
+				return "No funscript selected — required for a playable round."
+			if not _save_source_exists(fs):
+				return "Funscript file is missing (moved or deleted)."
+			var vid: String = item.get("video_path", "")
+			if vid != "" and not _save_source_exists(vid):
+				return "Video file is missing (moved or deleted)."
+			for axis: String in item.get("axis_scripts", {}):
+				if not _save_source_exists(item["axis_scripts"][axis]):
+					return "An axis funscript (%s) is missing." % axis
+			for ch: String in item.get("vib_scripts", {}):
+				if not _save_source_exists(item["vib_scripts"][ch]):
+					return "A vibrator funscript (%s) is missing." % ch
+			var boss_img: String = item.get("boss_image", "")
+			if boss_img != "" and not _save_source_exists(boss_img):
+				return "Boss intro image is missing."
+			return ""
+		"storyboard":
+			if (item.get("lines", []) as Array).is_empty():
+				return "Storyboard has no dialogue lines."
+			var def_img: String = item.get("image", "")
+			if def_img != "" and not _save_source_exists(def_img):
+				return "Default image is missing."
+			for line: Dictionary in item.get("lines", []):
+				var li_img: String = line.get("image", "")
+				if li_img != "" and not _save_source_exists(li_img):
+					return "A line's speaker image is missing."
+			return ""
+		"fork":
+			var paths: Array = item.get("paths", [])
+			if paths.size() < 2:
+				return "Fork needs at least 2 paths."
+			for p: Dictionary in paths:
+				if (p.get("name", "") as String).strip_edges() == "":
+					return "A fork path has no name."
+				if (p.get("items", []) as Array).is_empty():
+					return "A fork path is empty."
+				var pimg: String = p.get("image_path", "")
+				if pimg != "" and not _save_source_exists(pimg):
+					return "A fork path's card image is missing."
+			return ""
+	return ""
 
 
 # Recursively walks an items[] tree (top-level + every fork path at every

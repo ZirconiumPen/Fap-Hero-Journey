@@ -87,16 +87,33 @@ func _ready() -> void:
 	_build_boss_frame()
 	_build_beat_bar()
 	_connect_signals()
-	ScoreService.Reset()
-	CoinService.Reset()
-	InventoryService.Reset()
-	# Pure-GDScript round-name log, read by EndScreen. Stored as meta on
-	# GameState so it survives the scene change. Cleared here so a new
-	# journey starts fresh.
-	GameState.set_meta("_round_names", PackedStringArray())
+	# Resume vs fresh start: when the player picked Resume from the catalogue,
+	# JourneySelect already populated the run-state autoloads (coins, score,
+	# inventory) from the save record and stashed _round_names on GameState.
+	# Wiping them here would defeat the resume. The "_resuming" meta is the
+	# handshake — JourneySelect sets it before the scene change, we honour
+	# it once, then clear it so a subsequent play of the same journey from
+	# this session doesn't pick it up by accident.
+	var is_resuming: bool = bool(GameState.get_meta("_resuming", false))
+	if is_resuming:
+		GameState.remove_meta("_resuming")
+	else:
+		ScoreService.Reset()
+		CoinService.Reset()
+		InventoryService.Reset()
+		# Pure-GDScript round-name log, read by EndScreen. Stored as meta on
+		# GameState so it survives the scene change. Cleared here so a new
+		# journey starts fresh.
+		GameState.set_meta("_round_names", PackedStringArray())
 	_refresh_coin_label()
 	_load_current_item()
 	_show_hud()
+
+	# Re-fit the video whenever the logical viewport changes. This fires on
+	# window resize, fullscreen toggle, resolution change, AND UI-scale
+	# (content_scale_factor) change — so the video tracks all of them, including
+	# while paused.
+	get_viewport().size_changed.connect(_fit_video_cover)
 
 
 func _process(_delta: float) -> void:
@@ -106,8 +123,9 @@ func _process(_delta: float) -> void:
 			_progress.value = _video.stream_position / len
 		# Keep funscript in sync with video clock
 		FunscriptPlayer.SyncTo(_video.stream_position)
-		if not _cover_applied:
-			_fit_video_cover()
+		# Re-fit every frame: cheap, and keeps the video covering the screen even
+		# if the viewport or UI scale changes mid-playback.
+		_fit_video_cover()
 	_update_chip_countdowns()
 	if _is_boss_round:
 		_update_boss_frame()
@@ -756,6 +774,8 @@ func _write_journey_save() -> bool:
 		return false
 
 	# Stitch together one payload from each service that owns part of the run.
+	# Inventory carries through; active effects do NOT (clean modifier slate
+	# on resume — see InventoryService.LoadFromSave for the rationale).
 	var game_state_data: Dictionary = GameState.CaptureSaveData()
 	var score_data: Dictionary       = ScoreService.CaptureSaveData()
 	var payload: Dictionary = {
@@ -765,6 +785,7 @@ func _write_journey_save() -> bool:
 		"coins":          CoinService.Balance,
 		"score":          score_data.get("score", 0),
 		"total_actions":  score_data.get("strokes", 0),
+		"inventory":      InventoryService.CaptureSaveData(),
 		"round_names":    (GameState.get_meta("_round_names", PackedStringArray()) as PackedStringArray),
 	}
 	return JourneySaveService.write_save(folder_name, payload)

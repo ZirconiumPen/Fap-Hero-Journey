@@ -299,10 +299,44 @@ public partial class InventoryService : Node
 	public void AddItem(string id)
 	{
 		var data = GetItemData(id);
-		if (data.Count == 0) 
+		if (data.Count == 0)
 			return;
 
 		_items.Add(data);
+		EmitSignal(SignalName.InventoryChanged);
+	}
+
+	// ─── Save / Resume ────────────────────────────────────────────────────
+	//
+	// Inventory portion of the journey save record. Only owned (unactivated)
+	// items are persisted — active effects are deliberately NOT carried
+	// across saves so the player gets a clean modifier slate on resume.
+
+	// Captures the current owned-inventory list for inclusion in the save
+	// payload. Same shape GetItems() exposes; we keep a dedicated method so
+	// the save callsite is explicit about intent.
+	public Array CaptureSaveData() => GetItems();
+
+	// Restores an inventory list from a save record. Each entry is looked up
+	// fresh in _registry by ID so registry edits made since the save (item
+	// removed, price changed, description rewritten) take effect on resume.
+	// Saved IDs that no longer exist in the registry are silently dropped.
+	public void LoadFromSave(Array savedItems)
+	{
+		_items.Clear();
+		foreach (var entry in savedItems)
+		{
+			if (entry.VariantType != Variant.Type.Dictionary)
+				continue;
+			var saved = entry.AsGodotDictionary();
+			string id = saved.ContainsKey("id") ? saved["id"].AsString() : "";
+			if (id == "")
+				continue;
+			if (_registry.ContainsKey(id))
+				_items.Add(_registry[id].AsGodotDictionary());
+			// else: item id no longer in registry — silently drop. Common
+			// after a content update that removes or renames an item.
+		}
 		EmitSignal(SignalName.InventoryChanged);
 	}
 

@@ -758,6 +758,10 @@ func _on_resume_pressed() -> void:
 		"score":   save_data.get("score", 0),
 		"strokes": save_data.get("total_actions", 0),
 	})
+	# Inventory restoration — owned items only. Active effects are not
+	# carried (deliberate; see InventoryService.LoadFromSave). Old saves
+	# missing the field load as empty, which is the right pre-feature default.
+	InventoryService.LoadFromSave(save_data.get("inventory", []) as Array)
 	# Restore the round-names log so the end-screen breakdown is complete.
 	var names: PackedStringArray = PackedStringArray()
 	for n in (save_data.get("round_names", []) as Array):
@@ -769,6 +773,10 @@ func _on_resume_pressed() -> void:
 	# back to fresh-start state in the catalogue.
 	JourneySaveService.delete_save(folder_name)
 
+	# Handshake with GameLoop._ready — without this, GameLoop would treat
+	# the scene change as a fresh start and Reset() each service, wiping
+	# all the state we just restored from the save record.
+	GameState.set_meta("_resuming", true)
 	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
 
 

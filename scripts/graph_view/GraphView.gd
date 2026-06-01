@@ -11,10 +11,10 @@ extends Control
 #   set_items(items: Array)        — sets the model and rebuilds the graph
 #   refresh()                      — rebuilds from the current model
 # Signals:
-#   node_selected(item, arr, idx)  — emitted when a node is clicked
+#   selection_changed(items, parent_arr) — emitted when the selection changes
 # ---------------------------------------------------------------------------
 
-signal node_selected(item: Dictionary, parent_arr: Array, idx: int)
+signal selection_changed(items: Array, parent_arr: Array)
 signal insert_requested(parent_arr: Array, idx: int, screen_pos: Vector2)
 
 const NODE_WIDTH:  float = 200.0
@@ -23,12 +23,22 @@ const V_GAP:       float = 40.0
 const H_GAP:       float = 36.0
 const PATH_LABEL_HEIGHT: float = 32.0
 const INSERT_BTN_SIZE: float = 22.0
-const ZOOM_MIN:    float = 0.4
-const ZOOM_MAX:    float = 2.0
+const ZOOM_MIN:    float = 0.15
+const ZOOM_MAX:    float = 4.0
 const ZOOM_STEP:   float = 0.1
 
 var _items:           Array      = []
-var _selected_data:   Dictionary = {}
+# Multi-selection: the selected item dicts (by reference) plus the single parent
+# array they all belong to (same-branch constraint). Empty = nothing selected;
+# size 1 = single selection (drives the per-node editor).
+var _selected_items:  Array      = []
+var _selected_arr:    Array      = []
+
+# Optional callback (set by the builder) that, given an item dict, returns a
+# short problem summary String ("" when the item is fine). Drives the warning
+# badge drawn on each node. Evaluated at layout time so badges always reflect
+# the current model.
+var validity_fn: Callable = Callable()
 # Items that end the run (no items follow them anywhere in the flow).
 # Rebuilt on every refresh() so the set is always current.
 var _terminal_items:  Array      = []
@@ -39,6 +49,13 @@ var _zoom:       float   = 1.0
 var _panning:    bool    = false
 var _last_mouse: Vector2 = Vector2.ZERO
 var _has_initial_center: bool = false
+
+# Marquee (drag-select) state. Coordinates are in GraphView-local (screen) space.
+var _marquee_active:   bool    = false
+var _marquee_additive: bool    = false   # Ctrl held at drag start → add to selection
+var _marquee_start:    Vector2 = Vector2.ZERO
+var _marquee_end:      Vector2 = Vector2.ZERO
+const MARQUEE_DRAG_THRESHOLD: float = 6.0
 
 # Auto-layout artefacts (rebuilt on refresh).
 # Edges: list of {from: Vector2, to: Vector2, color: Color}
@@ -305,7 +322,7 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 # ---------------------------------------------------------------------------
 
 # is_terminal: true when this node ends the run (no path leads beyond it).
-func _make_node(item: Dictionary, arr: Array, idx: int, is_terminal: bool = false) -> Control:
+func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = false) -> Control:
 	var item_type: String = item.get("type", "round")
 	var is_boss: bool = item_type == "round" and item.get("round_type", "normal") == "boss"
 	# Terminal nodes use AMBER; boss rounds use DANGER red; else the type colour.
@@ -324,8 +341,21 @@ func _make_node(item: Dictionary, arr: Array, idx: int, is_terminal: bool = fals
 	# Use is_same() (reference identity) — Dictionary's == does deep equality,
 	# so two newly-created nodes with identical default fields would compare
 	# equal and both light up as "selected".
-	var is_selected: bool = is_same(item, _selected_data)
+	var is_selected: bool = _is_selected(item)
 	panel.add_theme_stylebox_override("panel", _node_stylebox(accent, is_selected, is_terminal))
+
+	# Stash the model link so marquee hit-testing can map a node back to its
+	# (item, parent array) without re-walking the tree.
+	panel.set_meta("graph_item", item)
+	panel.set_meta("graph_arr",  arr)
+
+	# Live validation: a non-empty summary means this node has a problem the
+	# author would otherwise only discover at save time.
+	var issue: String = ""
+	if validity_fn.is_valid():
+		issue = validity_fn.call(item)
+	if issue != "":
+		panel.tooltip_text = issue
 
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left",   10)
@@ -373,12 +403,27 @@ func _make_node(item: Dictionary, arr: Array, idx: int, is_terminal: bool = fals
 	secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(secondary_lbl)
 
-	# Click selection
+	# Warning badge — sits at the right edge (the labels column expands to push
+	# it there). Hovering the node shows the issue via panel.tooltip_text.
+	if issue != "":
+		var warn_lbl: Label = Label.new()
+		warn_lbl.text = "⚠"
+		warn_lbl.add_theme_color_override("font_color", UITheme.ERROR_SOFT)
+		warn_lbl.add_theme_font_size_override("font_size", 18)
+		warn_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		warn_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(warn_lbl)
+
+	# Click selection. Ctrl+click toggles membership in the multi-selection;
+	# a plain click selects just this node.
 	panel.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton:
 			var mb := event as InputEventMouseButton
 			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-				_select(item, arr, idx)
+				if mb.ctrl_pressed:
+					_toggle_selection(item, arr)
+				else:
+					_select_single(item, arr)
 				accept_event()
 	)
 
@@ -530,10 +575,54 @@ func _node_bottom(node: Control) -> Vector2:
 # Selection
 # ---------------------------------------------------------------------------
 
-func _select(item: Dictionary, arr: Array, idx: int) -> void:
-	_selected_data = item
-	emit_signal("node_selected", item, arr, idx)
-	# Re-render so the selected node gets the highlighted border.
+func _is_selected(item: Dictionary) -> bool:
+	for s: Dictionary in _selected_items:
+		if is_same(item, s):
+			return true
+	return false
+
+
+func _emit_selection() -> void:
+	emit_signal("selection_changed", _selected_items, _selected_arr)
+
+
+# Replaces the selection with a single node (plain click / programmatic select).
+func _select_single(item: Dictionary, arr: Array) -> void:
+	_selected_items = [item]
+	_selected_arr   = arr
+	_emit_selection()
+	refresh()
+
+
+# Ctrl+click: toggle a node in/out of the selection. Selecting in a different
+# branch than the current selection starts a fresh selection there (same-branch
+# constraint keeps group ops unambiguous).
+func _toggle_selection(item: Dictionary, arr: Array) -> void:
+	if not _selected_items.is_empty() and not is_same(arr, _selected_arr):
+		_select_single(item, arr)
+		return
+	var found: int = -1
+	for i in _selected_items.size():
+		if is_same(_selected_items[i], item):
+			found = i
+			break
+	if found >= 0:
+		_selected_items.remove_at(found)
+		if _selected_items.is_empty():
+			_selected_arr = []
+	else:
+		_selected_items.append(item)
+		_selected_arr = arr
+	_emit_selection()
+	refresh()
+
+
+# Sets the selection to an explicit set of items (all expected to live in `arr`).
+# Used by the builder after group move/paste to re-highlight the same items.
+func set_selection(items: Array, arr: Array) -> void:
+	_selected_items = items.duplicate()
+	_selected_arr   = arr if not items.is_empty() else []
+	_emit_selection()
 	refresh()
 
 
@@ -543,16 +632,17 @@ func select_item(arr: Array, idx: int) -> void:
 	if idx < 0 or idx >= arr.size():
 		clear_selection()
 		return
-	_select(arr[idx], arr, idx)
+	_select_single(arr[idx], arr)
 
 
 func clear_selection() -> void:
-	if _selected_data.is_empty():
+	if _selected_items.is_empty():
 		# Force the signal so consumers can update on a forced clear.
-		emit_signal("node_selected", {}, [], -1)
+		_emit_selection()
 		return
-	_selected_data = {}
-	emit_signal("node_selected", {}, [], -1)
+	_selected_items = []
+	_selected_arr   = []
+	_emit_selection()
 	refresh()
 
 
@@ -573,15 +663,89 @@ func _gui_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			_zoom_at(mb.position, _zoom - ZOOM_STEP)
 			accept_event()
-		elif mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
-			# Release on empty canvas (no node consumed it) clears selection.
-			_select_empty()
-	elif event is InputEventMouseMotion and _panning:
+		elif mb.button_index == MOUSE_BUTTON_LEFT:
+			# Left press reaching GraphView (not a node) starts a marquee drag.
+			# A press+release without movement collapses to "clear selection".
+			if mb.pressed:
+				_marquee_active   = true
+				_marquee_additive = mb.ctrl_pressed
+				_marquee_start    = mb.position
+				_marquee_end      = mb.position
+				accept_event()
+			elif _marquee_active:
+				_finish_marquee()
+				accept_event()
+	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
-		var delta: Vector2 = mm.position - _last_mouse
-		_last_mouse = mm.position
-		_pan_offset += delta
-		_apply_transform()
+		if _panning:
+			var delta: Vector2 = mm.position - _last_mouse
+			_last_mouse = mm.position
+			_pan_offset += delta
+			_apply_transform()
+		elif _marquee_active:
+			_marquee_end = mm.position
+			queue_redraw()
+			accept_event()
+
+
+# Draws the marquee selection rectangle (screen space, on top of the graph).
+func _draw() -> void:
+	if not _marquee_active:
+		return
+	var rect: Rect2 = Rect2(_marquee_start, Vector2.ZERO).expand(_marquee_end)
+	var accent: Color = UITheme.PURPLE_BRIGHT
+	draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.12), true)
+	draw_rect(rect, accent, false, 1.5)
+
+
+# Finalizes a marquee drag: selects every node whose on-screen rect intersects
+# the marquee box, constrained to a single branch (the first hit's parent array).
+# A drag too small to count is treated as a plain click → clear selection.
+func _finish_marquee() -> void:
+	_marquee_active = false
+	var rect: Rect2 = Rect2(_marquee_start, Vector2.ZERO).expand(_marquee_end)
+	queue_redraw()
+
+	if rect.size.length() < MARQUEE_DRAG_THRESHOLD:
+		if not _marquee_additive:
+			clear_selection()
+		return
+
+	var hit_items: Array = []
+	var hit_arrs:  Array = []
+	for c: Node in _canvas.get_children():
+		if not (c is Control) or not c.has_meta("graph_item"):
+			continue
+		var node: Control = c as Control
+		var screen_rect: Rect2 = Rect2(_canvas.position + node.position * _zoom, node.size * _zoom)
+		if rect.intersects(screen_rect):
+			hit_items.append(node.get_meta("graph_item"))
+			hit_arrs.append(node.get_meta("graph_arr"))
+
+	if hit_items.is_empty():
+		if not _marquee_additive:
+			clear_selection()
+		return
+
+	# Same-branch: keep only hits sharing the first hit's parent array.
+	var target_arr: Array = hit_arrs[0]
+	var items: Array = []
+	if _marquee_additive and not _selected_items.is_empty() and is_same(_selected_arr, target_arr):
+		items = _selected_items.duplicate()
+	for i in hit_items.size():
+		if is_same(hit_arrs[i], target_arr):
+			var already: bool = false
+			for s: Dictionary in items:
+				if is_same(s, hit_items[i]):
+					already = true
+					break
+			if not already:
+				items.append(hit_items[i])
+
+	_selected_items = items
+	_selected_arr   = target_arr
+	_emit_selection()
+	refresh()
 
 
 func _zoom_at(focus: Vector2, new_zoom: float) -> void:
@@ -603,9 +767,45 @@ func _apply_transform() -> void:
 	_canvas.queue_redraw()
 
 
-func _select_empty() -> void:
-	if _selected_data.is_empty():
+# Frames the whole graph: zooms/pans so every node fits in the viewport with a
+# margin. Falls back to the default view when there's nothing to frame.
+func fit_to_view() -> void:
+	var min_p: Vector2 = Vector2(INF, INF)
+	var max_p: Vector2 = Vector2(-INF, -INF)
+	var found: bool = false
+	for c: Node in _canvas.get_children():
+		if not (c is Control) or not c.has_meta("graph_item"):
+			continue
+		found = true
+		var node: Control = c as Control
+		min_p.x = min(min_p.x, node.position.x)
+		min_p.y = min(min_p.y, node.position.y)
+		max_p.x = max(max_p.x, node.position.x + node.size.x)
+		max_p.y = max(max_p.y, node.position.y + node.size.y)
+
+	if not found:
+		reset_view()
 		return
-	_selected_data = {}
-	emit_signal("node_selected", {}, [], -1)
-	refresh()
+
+	var content: Vector2 = max_p - min_p
+	if content.x <= 0.0 or content.y <= 0.0:
+		reset_view()
+		return
+
+	var pad: float = 60.0
+	var avail: Vector2 = size - Vector2(pad * 2.0, pad * 2.0)
+	var z: float = clamp(min(avail.x / content.x, avail.y / content.y), ZOOM_MIN, ZOOM_MAX)
+	_zoom = z
+	# Map the content's center to the viewport center.
+	var content_center: Vector2 = (min_p + max_p) * 0.5
+	_pan_offset = size * 0.5 - content_center * _zoom
+	_apply_transform()
+
+
+# Restores the default zoom + top-center framing.
+func reset_view() -> void:
+	_zoom = 1.0
+	_pan_offset = Vector2(size.x * 0.5, 40.0)
+	_apply_transform()
+
+

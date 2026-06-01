@@ -39,6 +39,7 @@ const DEFAULT_LATENCY_OFFSET_MS: int    = 0
 const DEFAULT_VIBE_INTENSITY:    int    = 100
 const DEFAULT_MAX_STROKE_SPEED:  int    = 0     # 0 = unlimited (units/sec)
 const DEFAULT_HUD_HIDE_DELAY:    float  = 3.0   # seconds
+const DEFAULT_UI_SCALE:          float  = 1.0   # Window.content_scale_factor multiplier
 const DEFAULT_BEAT_BAR_ENABLED:  bool   = false
 const DEFAULT_FILLER_ENABLED:    bool   = false
 const DEFAULT_FILLER_HALF_CYCLE: int    = 2000
@@ -58,6 +59,8 @@ func _ready() -> void:
 	var mode: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN \
 		if get_fullscreen() else DisplayServer.WINDOW_MODE_WINDOWED
 	DisplayServer.window_set_mode(mode)
+
+	apply_ui_scale()
 
 
 # ── Getters ─────────────────────────────────────────────────────────────────
@@ -118,6 +121,9 @@ func get_max_stroke_speed() -> int:
 
 func get_hud_hide_delay() -> float:
 	return float(_config.get_value("display", "hud_hide_delay", DEFAULT_HUD_HIDE_DELAY))
+
+func get_ui_scale() -> float:
+	return float(_config.get_value("display", "ui_scale", DEFAULT_UI_SCALE))
 
 func get_beat_bar_enabled() -> bool:
 	return bool(_config.get_value("display", "beat_bar_enabled", DEFAULT_BEAT_BAR_ENABLED))
@@ -201,6 +207,19 @@ func set_max_stroke_speed(value: int) -> void:
 
 func set_hud_hide_delay(value: float) -> void:
 	_config.set_value("display", "hud_hide_delay", value)
+
+func set_ui_scale(value: float) -> void:
+	_config.set_value("display", "ui_scale", value)
+
+
+# Applies the stored UI scale to the root window. content_scale_factor multiplies
+# all GUI content, so a higher value makes the whole interface bigger — useful on
+# high-DPI / 4K displays where the native 1080p layout looks small. Safe to call
+# any time (boot or live from Options).
+func apply_ui_scale() -> void:
+	var w: Window = get_window()
+	if w != null:
+		w.content_scale_factor = get_ui_scale()
 
 func set_beat_bar_enabled(value: bool) -> void:
 	_config.set_value("display", "beat_bar_enabled", value)
