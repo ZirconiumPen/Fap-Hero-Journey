@@ -157,7 +157,7 @@ Each entry requires `id` (lowercase, URL-safe), `label` (display text), and `col
 
 Secondary axes (L1, L2, R0, R1, R2) and vibrator channels (vib1, vib2) are supported for serial T-code devices. To use them:
 
-1. **Easiest:** name the files with the axis/channel suffix (`scene_L1.funscript`, `scene.vib1.funscript`, …) and drop them alongside the main video/funscript — the builder routes each to the right slot automatically (on bulk import, single-round drops, or via auto-fill)
+1. **Easiest:** name the files with the axis/channel suffix (`scene.pitch.funscript`, `scene.vib1.funscript`, …) and drop them alongside the main video/funscript — the builder routes each to the right slot automatically (on bulk import, single-round drops, or via auto-fill)
 2. **Manual:** expand the Extra Axes / Vibrator Scripts sections under a round and drop a `.funscript` onto each slot directly
 3. On single-axis devices, secondary axis commands are silently ignored per the T-code spec
 
