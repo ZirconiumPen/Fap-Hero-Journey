@@ -27,7 +27,8 @@ A Godot 4.6 application for creating and playing structured, interactive fap-her
 - **Ease-in / ease-out** — smooth ramp from neutral at round start and on pause/stop (linear devices only; vibrators respond immediately)
 - **Position clamp** — hard min/max range applied to all output, adjustable in Options
 - **Storyboard filler** — keeps the device active during cutscenes with a configurable alternating stroke
-
+  
+### Builder
 - **Graph-based editor** — pan/zoom node graph for authoring the full round sequence, with a **Fit-to-view** button and a built-in **shortcuts reference**
 - **Bulk import** — drop a batch of files (or a whole folder, scanned recursively) and the builder creates one round per video, pairing each with its matching funscript by file name
 - **Auto-fill & auto-route** — set a video and the matching funscript + secondary axis/vib scripts (`name_L1.funscript`, `name.vib1.funscript`, …) are pulled in automatically
