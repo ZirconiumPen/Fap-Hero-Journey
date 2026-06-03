@@ -15,9 +15,14 @@ jobs:
           RELEASE_URL: ${{ github.event.release.html_url }}
           RELEASE_BODY: ${{ github.event.release.body }}
         run: |
+          TRUNCATED_BODY="${RELEASE_BODY:0:3900}"
+          if [ ${#RELEASE_BODY} -gt 3900 ]; then
+            TRUNCATED_BODY="$TRUNCATED_BODY"$'\n\n_...continued on GitHub_'
+          fi
+
           PAYLOAD=$(jq -n \
             --arg title "$RELEASE_NAME" \
-            --arg description "$RELEASE_BODY" \
+            --arg description "$TRUNCATED_BODY" \
             --arg url "$RELEASE_URL" \
             '{
               embeds: [{
