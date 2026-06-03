@@ -1,0 +1,27 @@
+name: Post release to Discord
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release notes to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          BODY=$(echo '${{ toJson(github.event.release.body) }}' | sed 's/\\n/\n/g' | head -c 3900)
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d "{
+            \"embeds\": [{
+              \"title\": \"${{ github.event.release.name }}\",
+              \"description\": ${{ toJson(github.event.release.body) }},
+              \"color\": 5793266,
+              \"url\": \"${{ github.event.release.html_url }}\",
+              \"footer\": { \"text\": \"Fap Hero: Journey\" }
+            }]
+          }" \
+          $DISCORD_WEBHOOK
