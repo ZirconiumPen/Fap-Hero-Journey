@@ -107,8 +107,6 @@ Notes for Linux users:
 - **Serial T-code devices** require your user to be in the `dialout` group to access `/dev/ttyUSB*` / `/dev/ttyACM*`: `sudo usermod -aG dialout $USER`, then log out and back in. (Buttplug/Intiface devices need no special permissions.)
 - **Intiface Central** is available for Linux and connects exactly as on Windows.
 
-See [`LINUX_TESTING.md`](LINUX_TESTING.md) for a tester checklist.
-
 ---
 
 ## Journey File Format
