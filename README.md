@@ -50,7 +50,7 @@ A Godot 4.6 application for creating and playing structured, interactive fap-her
 |---|---|
 | **Godot 4.6 (.NET)** | Required to open or build the project |
 | **EIRTeam.FFmpeg** | Required for MP4/MKV/WebM playback. [Releases →](https://github.com/EIRTeam/EIRTeam.FFmpeg/releases) |
-| **ffmpeg + ffprobe** | Used by the builder to transcode non-H.264 video. Bundled in `bin/`; a custom path can be set in Options, or auto-transcode can be turned off entirely (see [Transcoding](#transcoding)) |
+| **ffmpeg + ffprobe** | Used by the builder to transcode non-H.264 video. Bundled in `bin/` on Windows; on Linux, install system ffmpeg (or set a custom path / turn auto-transcode off) — see [Transcoding](#transcoding) |
 | **Intiface Central** | Required for Buttplug device support. [Download →](https://intiface.com/central/) |
 
 ---
@@ -91,6 +91,23 @@ Transcodes use `libx264 -preset fast -crf 22 -pix_fmt yuv420p` with AAC audio.
 6. Click **Export Project**
 
 Testers receive a single folder containing the `.exe`, `.pck`, and a `bin/` subfolder with ffmpeg. No additional runtime installs are needed.
+
+### Linux (native)
+
+A native Linux build can be exported **from the same Windows editor** (cross-export works for .NET):
+
+1. **Project → Export → Add… → Linux**
+2. Set the application name; uncheck **Debug** for a release build
+3. **Export Project** — produces the executable, `.pck`, and the EIRTeam.FFmpeg `.so` libraries (already bundled in `addons/ffmpeg/linux64/`)
+
+Notes for Linux users:
+
+- **Video playback** works out of the box (the FFmpeg decoder ships per-platform).
+- **Transcoding (builder)** uses the system `ffmpeg`/`ffprobe` — the Linux build does **not** bundle them. Install via your package manager (`sudo apt install ffmpeg`, `sudo dnf install ffmpeg`, …), or set a custom path in **Options → Transcoding**, or turn **Auto-Transcode off** and supply your own H.264 videos. If auto-transcode is on and ffmpeg is missing, the builder explains it at save rather than producing an unplayable round.
+- **Serial T-code devices** require your user to be in the `dialout` group to access `/dev/ttyUSB*` / `/dev/ttyACM*`: `sudo usermod -aG dialout $USER`, then log out and back in. (Buttplug/Intiface devices need no special permissions.)
+- **Intiface Central** is available for Linux and connects exactly as on Windows.
+
+See [`LINUX_TESTING.md`](LINUX_TESTING.md) for a tester checklist.
 
 ---
 
