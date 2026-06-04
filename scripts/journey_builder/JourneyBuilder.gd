@@ -814,6 +814,35 @@ func _on_back_pressed() -> void:
 	Transition.change_scene("res://scenes/main/Main.tscn")
 
 
+# Absolute path of this journey's folder on disk, or "" if it hasn't been saved
+# yet. Prefers the folder for the current (possibly renamed) name; falls back to
+# the folder it was loaded from.
+func _saved_journey_folder_abs() -> String:
+	var name: String = _journey_name.strip_edges()
+	if name != "":
+		var folder: String = SettingsService.get_journeys_dir() + "/" + JourneyData.sanitize_folder_name(name)
+		var abs: String = ProjectSettings.globalize_path(folder)
+		if DirAccess.dir_exists_absolute(abs):
+			return abs
+	if _original_journey_folder != "":
+		var orig_abs: String = ProjectSettings.globalize_path(_original_journey_folder)
+		if DirAccess.dir_exists_absolute(orig_abs):
+			return orig_abs
+	return ""
+
+
+# Opens this journey's media/ folder in the OS file browser. Requires a prior
+# save so the folder exists; otherwise nudges the user to save first. Falls back
+# to the journey root on the off chance media/ isn't there.
+func _open_journey_folder() -> void:
+	var abs: String = _saved_journey_folder_abs()
+	if abs == "":
+		_show_status("Save the journey first — its folder doesn't exist yet.", true)
+		return
+	var media_abs: String = abs + "/media"
+	OS.shell_open(media_abs if DirAccess.dir_exists_absolute(media_abs) else abs)
+
+
 # Funscript filename suffixes that mark a secondary axis or a vibrator channel.
 # Kept in sync with _detect_funscript_axis / _detect_vib_channel — used to strip
 # the suffix so "scene1", "scene1_L1", "scene1.vib1" all share a round key during

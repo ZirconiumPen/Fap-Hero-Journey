@@ -146,6 +146,15 @@ func show_journey_info_panel() -> void:
 	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	side_vbox.add_child(hdr)
 
+	# Open-folder shortcut — jumps to this journey's media/ folder on disk (only
+	# once it has been saved, since the folder won't exist before then).
+	var open_folder_btn: Button = Button.new()
+	open_folder_btn.text = "📁 OPEN MEDIA FOLDER"
+	open_folder_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(open_folder_btn, UITheme.PURPLE_MID)
+	open_folder_btn.pressed.connect(_owner._open_journey_folder)
+	side_vbox.add_child(open_folder_btn)
+
 	# Cover preview + button
 	side_vbox.add_child(_side_field_label("COVER IMAGE"))
 	var cover_border: PanelContainer = PanelContainer.new()
