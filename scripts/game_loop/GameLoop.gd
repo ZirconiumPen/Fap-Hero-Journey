@@ -82,6 +82,18 @@ var _boss_frame:    Panel = null
 # Optional beat-bar visualiser — created only when the setting is enabled.
 var _beat_bar: Control = null
 
+# Test-play mode: the journey was launched from the builder ("Save & Test from
+# here") to preview a node in the real runtime. While true, the loop returns to
+# the builder (not the menu/end screen) on exit, and real player saves are
+# suppressed so a preview never writes or deletes a journey's run-save. The
+# return journey is the catalogue-model dict the builder reloads on the way back.
+var _test_mode: bool = false
+var _test_return_journey: Dictionary = {}
+# Seeds applied before the first node loads in a test play, so Conditional /
+# Sacrifice forks can be exercised from a chosen starting point.
+var _test_seed_score: int = 0
+var _test_seed_coins: int = 0
+
 
 func _ready() -> void:
 	MusicService.stop()
@@ -97,6 +109,19 @@ func _ready() -> void:
 	# handshake — JourneySelect sets it before the scene change, we honour
 	# it once, then clear it so a subsequent play of the same journey from
 	# this session doesn't pick it up by accident.
+	# Test-play handshake — the builder sets these metas before the scene change.
+	# Read once and clear so a later normal run of the same journey can't inherit
+	# test mode by accident (same pattern as the "_resuming" handshake below).
+	_test_mode = bool(GameState.get_meta("_test_mode", false))
+	if _test_mode:
+		_test_return_journey = GameState.get_meta("_test_return_journey", {})
+		_test_seed_score = int(GameState.get_meta("_test_seed_score", 0))
+		_test_seed_coins = int(GameState.get_meta("_test_seed_coins", 0))
+		GameState.remove_meta("_test_mode")
+		GameState.remove_meta("_test_return_journey")
+		GameState.remove_meta("_test_seed_score")
+		GameState.remove_meta("_test_seed_coins")
+
 	var is_resuming: bool = bool(GameState.get_meta("_resuming", false))
 	if is_resuming:
 		GameState.remove_meta("_resuming")
@@ -108,9 +133,18 @@ func _ready() -> void:
 		# GameState so it survives the scene change. Cleared here so a new
 		# journey starts fresh.
 		GameState.set_meta("_round_names", PackedStringArray())
+	# Apply test-play seeds after the run-state reset above (so they survive it),
+	# before any node loads — a Conditional fork at the start node then sees them.
+	if _test_mode:
+		if _test_seed_coins > 0:
+			CoinService.SetBalance(_test_seed_coins)
+		if _test_seed_score > 0:
+			ScoreService.SeedLastRoundScore(_test_seed_score)
 	_refresh_coin_label()
 	_load_current_item()
 	_show_hud()
+	if _test_mode:
+		_show_test_banner()
 
 	# Re-fit the video whenever the logical viewport changes. This fires on
 	# window resize, fullscreen toggle, resolution change, AND UI-scale
@@ -856,6 +890,11 @@ func _free_current_overlay() -> void:
 func _go_to_menu() -> void:
 	_video.stop()
 	FunscriptPlayer.Stop()
+	# In a test play, "back to menu" (button or Esc) returns to the builder the
+	# preview was launched from, not the main menu.
+	if _test_mode:
+		_exit_test_to_builder()
+		return
 	Transition.change_scene("res://scenes/main/Main.tscn")
 
 
@@ -863,8 +902,43 @@ func _go_to_menu() -> void:
 # next time the player opens the journey it offers a fresh start instead of
 # a stale Resume button pointing at a completed run.
 func _transition_to_end_screen() -> void:
+	# A test play has no results screen — reaching the end just returns to the
+	# builder. Crucially, skip the save delete: a preview must never touch a
+	# real player's run-save for this journey.
+	if _test_mode:
+		_exit_test_to_builder()
+		return
 	JourneySaveService.delete_save(GameState.Journey.get("folder_name", ""))
 	Transition.change_scene("res://scenes/end_screen/EndScreen.tscn")
+
+
+# Returns from a test play to the builder, reloading the same journey so the
+# author lands back on the graph they launched from. The journey was saved
+# before the test started, so the on-disk state the builder reloads is exactly
+# what was being edited — no in-memory state needs to be carried across.
+func _exit_test_to_builder() -> void:
+	_video.stop()
+	FunscriptPlayer.Stop()
+	JourneyBuilder.edit_journey = _test_return_journey
+	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
+
+
+# Top-center "TEST MODE" indicator shown for the duration of a test play, so the
+# author always knows this is a preview and how to leave it.
+func _show_test_banner() -> void:
+	var text: String = "▶  TEST MODE  —  ESC TO EXIT"
+	if _test_seed_score > 0 or _test_seed_coins > 0:
+		text += "    (SEED  %d PTS / ♦ %d)" % [_test_seed_score, _test_seed_coins]
+	var banner: Label = Label.new()
+	banner.text = text
+	banner.add_theme_color_override("font_color", UITheme.AMBER)
+	banner.add_theme_font_size_override("font_size", 16)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_left  = 0.0
+	banner.anchor_right = 1.0
+	banner.offset_top   = 12
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(banner)
 
 
 # ---------------------------------------------------------------------------
@@ -880,6 +954,10 @@ func _transition_to_end_screen() -> void:
 # the current round from action 0 on resume. This keeps the save model
 # simple and predictable (you replay the round you were doing).
 func _write_journey_save() -> bool:
+	# Real saves are disabled during a test play — a preview must never write a
+	# run-save (the Safe Word item and checkpoint Save & Quit both route here).
+	if _test_mode:
+		return false
 	var journey: Dictionary = GameState.Journey
 	var folder_name: String = journey.get("folder_name", "")
 	if folder_name == "":
@@ -908,6 +986,10 @@ func _write_journey_save() -> bool:
 # save_now item — both flow through here). Writes the save, then returns to
 # the catalogue with the same cleanup as a regular Back-to-Menu.
 func _on_save_and_quit() -> void:
+	# In test mode there's no real save to write; just leave (back to the builder).
+	if _test_mode:
+		_go_to_menu()
+		return
 	var ok: bool = _write_journey_save()
 	if not ok:
 		push_warning("GameLoop: save failed — returning to menu without saving")
@@ -920,6 +1002,9 @@ func _on_save_and_quit() -> void:
 # panel which disables item use during bosses, so we don't need to check
 # round type here.
 func _on_save_item_used() -> void:
+	if _test_mode:
+		_show_save_toast("✕  SAVING DISABLED IN TEST")
+		return
 	var ok: bool = _write_journey_save()
 	if ok:
 		_show_save_toast("✓  PROGRESS SAVED")

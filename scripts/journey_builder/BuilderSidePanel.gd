@@ -360,7 +360,52 @@ func show_node_editor(item: Dictionary, arr: Array, idx: int) -> void:
 	var side_vbox: VBoxContainer = _owner._side_vbox
 	for c in side_vbox.get_children():
 		c.queue_free()
+	# Any node can be previewed in the real runtime via "Test From Here" (saves
+	# the journey, then launches GameLoop at this node). Nodes inside a fork path
+	# are reached by force-resolving their parent fork(s) along the way.
+	side_vbox.add_child(_make_test_controls(item, arr))
+	side_vbox.add_child(_side_section_separator())
 	_build_side_panel_editor(side_vbox, item, arr, idx, _owner._graph)
+
+
+# Test-play controls block: the "Test From Here" button plus the seed inputs.
+# `item`/`arr` identify which node to launch from (arr is its containing array —
+# _items for a top-level node, or a fork path's `items` for a nested one).
+func _make_test_controls(item: Dictionary, arr: Array) -> Control:
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+
+	var btn: Button = UITheme.make_icon_btn("▶  TEST FROM HERE", false, UITheme.SUCCESS)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.tooltip_text = "Save the journey and play it in the real runtime starting at this node."
+	btn.pressed.connect(func() -> void: _owner._save_and_test_from(item, arr))
+	box.add_child(btn)
+
+	# Starting score / coins for the preview. Mainly for Conditional / Sacrifice
+	# forks, which read last-round score and coin balance to resolve. Persist on
+	# the owner so they survive selection changes.
+	box.add_child(_side_field_label("TEST SEEDS  (SCORE / COINS)"))
+	var seed_row: HBoxContainer = HBoxContainer.new()
+	seed_row.add_theme_constant_override("separation", 6)
+	seed_row.add_child(_make_seed_spin(
+		_owner._test_seed_score, func(v: int) -> void: _owner._test_seed_score = v))
+	seed_row.add_child(_make_seed_spin(
+		_owner._test_seed_coins, func(v: int) -> void: _owner._test_seed_coins = v))
+	box.add_child(seed_row)
+	return box
+
+
+# One expanding integer SpinBox for the test-seed row, writing through `setter`.
+func _make_seed_spin(value: int, setter: Callable) -> SpinBox:
+	var spin: SpinBox = SpinBox.new()
+	spin.min_value = 0
+	spin.max_value = 9999999
+	spin.step = 1
+	spin.value = value
+	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_spin_box(spin)
+	spin.value_changed.connect(func(v: float) -> void: setter.call(int(v)))
+	return spin
 
 
 # Group-action panel shown when 2+ nodes are selected. Lists the selection and

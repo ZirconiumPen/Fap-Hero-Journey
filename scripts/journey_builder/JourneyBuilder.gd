@@ -155,6 +155,23 @@ var _transcode_plan: Dictionary = {}
 # catalogue. Reset in _reset_save_state.
 var _invalidated_save_count: int = 0
 
+# Location of the node to test-play from after this save, or {} for a normal
+# save (which returns to the catalogue instead of launching a preview). Shape:
+#   {"chain": Array[[fork_local_idx, path_idx]], "final": int}
+# An empty chain means a top-level node ("final" is its _items index); each chain
+# entry descends into a fork path, so nodes nested inside forks are reachable.
+# Set by _save_and_test_from, consulted at the tail of _do_save, reset in
+# _reset_save_state. See _seek_to_location for how it drives GameState.
+var _pending_test_location: Dictionary = {}
+
+# Starting score / coin balance for a test play, applied by GameLoop before the
+# first node loads. Lets the author exercise Conditional / Sacrifice forks (which
+# read last-round score and coin balance) from a chosen node. Persist across
+# selections so they aren't re-entered every time; edited via the test controls
+# in the node editor side panel.
+var _test_seed_score: int = 0
+var _test_seed_coins: int = 0
+
 # Streaming-copy tuning. Chunks are read/written 1 MB at a time; the main thread
 # yields one frame only after COPY_FRAME_BUDGET_MS of accumulated work — frequent
 # enough that the window stays responsive, rare enough that the frame-wait tax
@@ -1321,6 +1338,144 @@ func _on_save_pressed() -> void:
 		_save_btn.disabled = false
 
 
+# "Save & Test from here" entry point. Runs the exact same save pipeline as a
+# normal save (so the preview plays the real, transcoded on-disk journey), then
+# — instead of returning to the catalogue — launches GameLoop in test mode at
+# the selected node. `item`/`arr` identify the node (arr is its containing array:
+# _items for a top-level node, or a fork path's `items` for a nested one).
+# _reset_save_state clears the pending location, so it's set *after* the reset.
+func _save_and_test_from(item: Dictionary, arr: Array) -> void:
+	var location: Dictionary = _locate_node_for_test(arr, item)
+	if location.is_empty():
+		_show_status("Test play: couldn't locate that node in the journey.", true)
+		return
+	_save_btn.disabled = true
+	_reset_save_state()
+	_pending_test_location = location
+	if not await _do_save():
+		_save_btn.disabled = false
+		_pending_test_location = {}
+
+
+# Resolves a selected node to a test-play location: a chain of fork decisions
+# from the top level down to the node's containing array, plus the node's
+# position within that array. Returns {} if the node can't be found. Positions
+# are runtime-sequence positions (see _seq_pos_in_level), not raw array indices.
+func _locate_node_for_test(target_arr: Array, target_item: Dictionary) -> Dictionary:
+	var raw_final: int = _index_in_arr(target_arr, target_item)
+	if raw_final < 0:
+		return {}
+	var final_pos: int = _seq_pos_in_level(target_arr, raw_final)
+	if is_same(target_arr, _items):
+		return {"chain": [], "final": final_pos}
+	var chain: Array = []
+	if _find_arr_chain(_items, target_arr, chain):
+		return {"chain": chain, "final": final_pos}
+	return {}
+
+
+# Depth-first search for `target_arr` among the fork paths reachable from
+# `level_items`. On success, `chain` is filled (outermost first) with
+# [fork_seq_pos, path_idx] entries describing the descent and returns true.
+# fork_seq_pos is the fork's position in its level's runtime sequence.
+func _find_arr_chain(level_items: Array, target_arr: Array, chain: Array) -> bool:
+	for li in level_items.size():
+		var it: Dictionary = level_items[li]
+		if it.get("type", "") != "fork":
+			continue
+		var paths: Array = it.get("paths", [])
+		for p in paths.size():
+			var path_items: Array = (paths[p] as Dictionary).get("items", [])
+			if is_same(path_items, target_arr) or _find_arr_chain(path_items, target_arr, chain):
+				chain.push_front([_seq_pos_in_level(level_items, li), p])
+				return true
+	return false
+
+
+# Position of items[raw_idx] within its level's runtime sequence. The runtime
+# orders a level by sort key — round/storyboard = order*3, shop = after*3+1,
+# fork = after*3+2 (see GameState.BuildSequence / ResolveFork and the _save_path
+# scheme) — which can differ from authoring order (e.g. a shop authored right
+# after a fork sorts ahead of it). Replicating that here keeps the seek correct
+# regardless of how the level was authored. Ties break by authoring order.
+func _seq_pos_in_level(items: Array, raw_idx: int) -> int:
+	var keyed: Array = []  # [[sort_key, raw_i], …]
+	var order: int = 0
+	var last_order: int = 0
+	for i in items.size():
+		var t: String = (items[i] as Dictionary).get("type", "round")
+		var key: int
+		match t:
+			"shop":
+				key = last_order * 3 + 1
+			"fork":
+				key = last_order * 3 + 2
+			_:  # round or storyboard — both advance the order counter
+				order += 1
+				last_order = order
+				key = order * 3
+		keyed.append([key, i])
+	keyed.sort_custom(func(a: Array, b: Array) -> bool:
+		return a[0] < b[0] if a[0] != b[0] else a[1] < b[1])
+	for pos in keyed.size():
+		if int(keyed[pos][1]) == raw_idx:
+			return pos
+	return raw_idx
+
+
+# Parses the just-saved journey back into the runtime model (same path the
+# catalogue uses), starts it in GameState, seeks to the chosen node, and hands
+# off to GameLoop in test mode. Called from _do_save after the staging swap, so
+# the on-disk journey is final and complete.
+func _launch_test_play(paths: Dictionary) -> void:
+	var location: Dictionary = _pending_test_location
+	_pending_test_location = {}
+
+	var folder_name: String   = (paths["final_abs_dir"] as String).get_file()
+	var journey_path: String  = SettingsService.get_journeys_dir() + "/" + folder_name
+	var journey: Dictionary   = JourneyScanner.parse_journey(journey_path, folder_name)
+	if journey.is_empty():
+		_show_status("Test play failed: could not read the saved journey.", true)
+		_save_btn.disabled = false
+		return
+
+	GameState.StartJourney(journey)
+	_seek_to_location(location)
+
+	# Handshake metas read (and cleared) by GameLoop._ready. The return journey
+	# is the catalogue-model dict the builder reloads when the test exits.
+	GameState.set_meta("_test_mode", true)
+	GameState.set_meta("_test_return_journey", journey)
+	GameState.set_meta("_test_seed_score", _test_seed_score)
+	GameState.set_meta("_test_seed_coins", _test_seed_coins)
+	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
+
+
+# Drives GameState from a fresh StartJourney to the located node. For each fork
+# decision in the chain we advance to that fork and resolve it down the chosen
+# path (which splices the path's items into the sequence in authoring order),
+# then advance to the next level's fork — finally stepping to the target's index
+# within the deepest level. Positions map 1:1 because each authored item yields
+# exactly one sequence entry, and we never advance past a path's tail sentinel
+# (we only ever move forward to a fork or the target, both inside the path).
+func _seek_to_location(location: Dictionary) -> void:
+	var chain: Array = location.get("chain", [])
+	var final_idx: int = int(location.get("final", 0))
+	var level_start: int = 0
+	for decision: Array in chain:
+		var fork_seq: int = level_start + int(decision[0])
+		while GameState.RoundIndex < fork_seq:
+			GameState.Advance()
+		if GameState.CurrentItemType() != "fork":
+			push_warning("Test play: expected a fork at sequence index %d; starting from the journey beginning." % fork_seq)
+			return
+		GameState.ResolveFork(int(decision[1]))
+		level_start = GameState.RoundIndex  # first item of the spliced path
+	var target: int = level_start + final_idx
+	while GameState.RoundIndex < target:
+		GameState.Advance()
+
+
 # Returns true on a fully successful save (which transitions the user away
 # from the editor), false on any failure or cancellation. Each helper that
 # returns false has already shown the user a specific error modal. Staging-
@@ -1352,7 +1507,10 @@ func _do_save() -> bool:
 
 	_swap_staging_into_place(paths)
 	_invalidate_existing_run_saves(paths)
-	_finalize_save_success()
+	if not _pending_test_location.is_empty():
+		_launch_test_play(paths)
+	else:
+		_finalize_save_success()
 	return true
 
 
@@ -1366,6 +1524,7 @@ func _reset_save_state() -> void:
 	_save_abort_error          = {}
 	_round_folder_counter      = 0
 	_invalidated_save_count    = 0
+	_pending_test_location     = {}
 
 
 # Runs the whole-tree presave validation pass. Returns false (and shows the
