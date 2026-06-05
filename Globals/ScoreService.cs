@@ -81,6 +81,15 @@ public partial class ScoreService : Node
 
 	public void SetMultiplier(double multiplier) => _multiplier = multiplier;
 
+	// Test-play helper: injects a synthetic completed round with the given score
+	// so score-based Conditional forks can be exercised from a chosen starting
+	// point (LastRoundScore then returns this value). Not used in normal play.
+	public void SeedLastRoundScore(int score)
+	{
+		_rounds.Add(new RoundData { Score = score });
+		EmitSignal(SignalName.ScoreChanged, TotalScore);
+	}
+
 	// Save/resume bridge. Captures totals at the moment of save so the end
 	// screen can display the same cumulative numbers after a resumed run.
 	// Counts are persisted as a single synthetic "round" rather than the
