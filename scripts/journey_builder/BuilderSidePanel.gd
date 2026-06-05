@@ -1320,6 +1320,69 @@ func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: C
 	)
 	col.add_child(desc_edit)
 
+	var paths_arr: Array = item.get("paths", [])
+	if not item.has("paths"):
+		arr[idx]["paths"] = paths_arr
+
+	# ── Resolution: how the journey chooses a path ───────────────────────────
+	col.add_child(_side_field_label("RESOLUTION"))
+	var res_values: Array = ["choice", "random", "conditional", "sacrifice"]
+	var res_dd: OptionButton = OptionButton.new()
+	res_dd.add_item("Player Choice")
+	res_dd.add_item("Random")
+	res_dd.add_item("Conditional")
+	res_dd.add_item("Sacrifice")
+	res_dd.selected = max(0, res_values.find(item.get("resolution", "choice")))
+	res_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_option_button(res_dd)
+	res_dd.item_selected.connect(func(i: int) -> void:
+		arr[idx]["resolution"] = res_values[i]
+		reselect.call(idx)   # rebuild so per-path fields match the new type
+	)
+	col.add_child(res_dd)
+
+	var resolution: String = item.get("resolution", "choice")
+
+	# Conditional sub-config: which metric + the fallback path.
+	if resolution == "conditional":
+		col.add_child(_side_field_label("CONDITION"))
+		var metric_values: Array = ["score", "coins", "item"]
+		var metric_dd: OptionButton = OptionButton.new()
+		metric_dd.add_item("Last Round Score")
+		metric_dd.add_item("Coin Balance")
+		metric_dd.add_item("Item Owned")
+		metric_dd.selected = max(0, metric_values.find(item.get("cond_metric", "score")))
+		metric_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_option_button(metric_dd)
+		metric_dd.item_selected.connect(func(i: int) -> void:
+			arr[idx]["cond_metric"] = metric_values[i]
+			reselect.call(idx)
+		)
+		col.add_child(metric_dd)
+
+		col.add_child(_side_field_label("DEFAULT PATH (NO MATCH)"))
+		var def_dd: OptionButton = OptionButton.new()
+		for pj in paths_arr.size():
+			var pn: String = (paths_arr[pj].get("name", "") as String).strip_edges()
+			def_dd.add_item("Path %d%s" % [pj + 1, ("  " + pn) if pn != "" else ""])
+		def_dd.selected = clampi(int(item.get("default_path", 0)), 0, max(0, paths_arr.size() - 1))
+		def_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_option_button(def_dd)
+		def_dd.item_selected.connect(func(i: int) -> void:
+			arr[idx]["default_path"] = i
+		)
+		col.add_child(def_dd)
+
+	var res_hint: Label = Label.new()
+	res_hint.text = _fork_resolution_hint(resolution, item.get("cond_metric", "score"))
+	res_hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	res_hint.add_theme_font_size_override("font_size", 10)
+	res_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(res_hint)
+
+	col.add_child(_side_section_separator())
+
+	# ── Paths ────────────────────────────────────────────────────────────────
 	var paths_lbl: Label = Label.new()
 	paths_lbl.text = "PATHS"
 	paths_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
@@ -1327,12 +1390,8 @@ func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: C
 	paths_lbl.uppercase = true
 	col.add_child(paths_lbl)
 
-	var paths_arr: Array = item.get("paths", [])
-	if not item.has("paths"):
-		arr[idx]["paths"] = paths_arr
-
 	for pi in paths_arr.size():
-		col.add_child(_make_path_editor_block(paths_arr, pi, graph, reselect))
+		col.add_child(_make_path_editor_block(item, paths_arr, pi, graph, reselect))
 
 	if paths_arr.size() < 4:
 		var add_path_btn: Button = Button.new()
@@ -1343,9 +1402,8 @@ func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: C
 			_owner._push_undo()
 			paths_arr.append({
 				"name": "Path %s" % char(65 + paths_arr.size()),
-				"description": "",
-				"image_path": "",
-				"items": [],
+				"description": "", "image_path": "", "items": [],
+				"weight": 1, "threshold": 0, "required_item": "", "cost": 0,
 			})
 			reselect.call(idx)
 		)
@@ -1357,7 +1415,7 @@ func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: C
 
 
 # Per-path editor card inside the fork compact editor.
-func _make_path_editor_block(paths_arr: Array, pi: int, graph: Control, reselect: Callable) -> Control:
+func _make_path_editor_block(fork: Dictionary, paths_arr: Array, pi: int, graph: Control, reselect: Callable) -> Control:
 	var path: Dictionary = paths_arr[pi]
 
 	var panel: PanelContainer = PanelContainer.new()
@@ -1441,7 +1499,83 @@ func _make_path_editor_block(paths_arr: Array, pi: int, graph: Control, reselect
 	)
 	sub.add_child(path_rm_btn)
 
+	# Per-path field(s) for the fork's resolution type.
+	var resolution: String = fork.get("resolution", "choice")
+	var metric: String = fork.get("cond_metric", "score")
+	if resolution == "random":
+		sub.add_child(_side_field_label("WEIGHT (RELATIVE ODDS)"))
+		var w_spin: SpinBox = SpinBox.new()
+		w_spin.min_value = 0; w_spin.max_value = 1000; w_spin.step = 1
+		w_spin.value = int(path.get("weight", 1))
+		w_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_spin_box(w_spin)
+		w_spin.value_changed.connect(func(v: float) -> void: paths_arr[pi]["weight"] = int(v))
+		sub.add_child(w_spin)
+	elif resolution == "sacrifice":
+		# A path can demand coins and/or an item; both spent on pick. 0 + None = free.
+		sub.add_child(_side_field_label("COIN COST"))
+		var c_spin: SpinBox = SpinBox.new()
+		c_spin.min_value = 0; c_spin.max_value = 999999; c_spin.step = 1
+		c_spin.value = int(path.get("cost", 0))
+		c_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_spin_box(c_spin)
+		c_spin.value_changed.connect(func(v: float) -> void: paths_arr[pi]["cost"] = int(v))
+		sub.add_child(c_spin)
+		_add_required_item_field(sub, paths_arr, pi, path, "REQUIRED ITEM (CONSUMED)")
+	elif resolution == "conditional" and metric == "item":
+		# Pure ownership check — not consumed.
+		_add_required_item_field(sub, paths_arr, pi, path, "REQUIRED ITEM")
+	elif resolution == "conditional":
+		# score / coins → numeric tier threshold
+		sub.add_child(_side_field_label("ACTIVATES AT ≥  (%s)" % ("SCORE" if metric == "score" else "COINS")))
+		var t_spin: SpinBox = SpinBox.new()
+		t_spin.min_value = 0; t_spin.max_value = 999999; t_spin.step = 1
+		t_spin.value = int(path.get("threshold", 0))
+		t_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_spin_box(t_spin)
+		t_spin.value_changed.connect(func(v: float) -> void: paths_arr[pi]["threshold"] = int(v))
+		sub.add_child(t_spin)
+
 	return panel
+
+
+# Adds a "required item" label + dropdown (with a None/free option) to `container`,
+# writing the chosen item id (or "" for none) to paths_arr[pi].required_item.
+# Shared by Sacrifice (consumed) and item-Conditional (checked).
+func _add_required_item_field(container: VBoxContainer, paths_arr: Array, pi: int, path: Dictionary, label: String) -> void:
+	container.add_child(_side_field_label(label))
+	var values: Array = [""]
+	var item_ids: Array = InventoryService.GetAllItemIds()
+	var dd: OptionButton = OptionButton.new()
+	dd.add_item("None (free)")
+	for k: String in item_ids:
+		values.append(k)
+		dd.add_item(str(InventoryService.GetItemData(k).get("name", k)))
+	dd.selected = max(0, values.find(str(path.get("required_item", ""))))
+	dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_option_button(dd)
+	dd.item_selected.connect(func(i: int) -> void: paths_arr[pi]["required_item"] = values[i])
+	container.add_child(dd)
+
+
+# Short human description of a fork resolution type for the editor.
+func _fork_resolution_hint(resolution: String, metric: String) -> String:
+	match resolution:
+		"choice":
+			return "The player picks a path."
+		"random":
+			return "The game picks a path at random, weighted by each path's weight (reveal shown)."
+		"conditional":
+			match metric:
+				"score":
+					return "Auto-picks the highest path whose score threshold the last round met, else the default path."
+				"coins":
+					return "Auto-picks the highest path whose coin threshold the player's balance meets, else the default path. Coins are NOT spent."
+				"item":
+					return "Auto-picks the first path whose required item the player owns (a pure check — the item is NOT consumed), else the default path."
+		"sacrifice":
+			return "The player picks a path and spends its cost — coins and/or an item (e.g. a Key), both consumed. Paths they can't afford are disabled, so include at least one free (0 coins, item None) path."
+	return ""
 
 
 # ── Extra axes expander ──────────────────────────────────────────────────────

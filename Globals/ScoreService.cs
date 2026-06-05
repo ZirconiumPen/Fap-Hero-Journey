@@ -54,6 +54,9 @@ public partial class ScoreService : Node
 	}
 
 	public int TotalScore   => _rounds.Sum(r => r.Score) + _current.Score;
+	// Score of the most recently completed round (0 before any round ends). Used
+	// by score-based Conditional forks.
+	public int LastRoundScore => _rounds.Count > 0 ? _rounds[^1].Score : 0;
 	public int TotalStrokes => _rounds.Sum(r => r.SmallStrokes + r.MediumStrokes + r.LargeStrokes)
 	                         + _current.SmallStrokes + _current.MediumStrokes + _current.LargeStrokes;
 

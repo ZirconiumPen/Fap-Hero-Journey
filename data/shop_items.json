@@ -116,5 +116,14 @@
 		"price":        120,
 		"duration_ms":  0,
 		"kind":         "save_now"
+	},
+	{
+		"id":           "key",
+		"name":         "Key",
+		"description":  "Opens a locked fork path. Consumed when the path is taken.",
+		"category":     "utility",
+		"price":        50,
+		"duration_ms":  0,
+		"kind":         "key"
 	}
 ]

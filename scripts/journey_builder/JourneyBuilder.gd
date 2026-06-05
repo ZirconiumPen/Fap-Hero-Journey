@@ -1821,6 +1821,9 @@ func _save_fork(fork_item: Dictionary, abs_dir: String, abs_media_dir: String, a
 		"AfterOrder":  after_order,
 		"Title":       fork_item.get("title",""),
 		"Description": fork_item.get("description",""),
+		"Resolution":  fork_item.get("resolution", "choice"),
+		"CondMetric":  fork_item.get("cond_metric", "score"),
+		"DefaultPath": int(fork_item.get("default_path", 0)),
 		"Paths":       [],
 	}
 	for pi in (fork_item.get("paths", []) as Array).size():
@@ -1848,13 +1851,17 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 		img_fname = "media/" + img_f if img_f != "" else ""
 
 	var path_entry: Dictionary = {
-		"Name":        path_data.get("name", ""),
-		"Description": path_data.get("description", ""),
-		"Image":       img_fname,
-		"Rounds":      [],
-		"Shops":       [],
-		"Storyboards": [],
-		"Forks":       [],
+		"Name":         path_data.get("name", ""),
+		"Description":  path_data.get("description", ""),
+		"Image":        img_fname,
+		"Weight":       int(path_data.get("weight", 1)),
+		"Threshold":    int(path_data.get("threshold", 0)),
+		"RequiredItem": path_data.get("required_item", ""),
+		"Cost":         int(path_data.get("cost", 0)),
+		"Rounds":       [],
+		"Shops":        [],
+		"Storyboards":  [],
+		"Forks":        [],
 	}
 
 	var pr_order: int = 0
@@ -2810,6 +2817,23 @@ func _save_check_fork(fork_data: Dictionary, ctx: String, issues: Array) -> void
 			"detail": "Fork has only %d path(s); needs at least 2." % paths.size(),
 			"hint":   "Add a second path in the fork editor.",
 		})
+
+	# A Sacrifice fork must offer at least one free path (no coin cost and no
+	# required item), so the player always has an option even when broke / out of
+	# items.
+	if fork_data.get("resolution", "choice") == "sacrifice" and not paths.is_empty():
+		var has_free: bool = false
+		for p: Dictionary in paths:
+			if int(p.get("cost", 0)) <= 0 and str(p.get("required_item", "")).strip_edges() == "":
+				has_free = true
+				break
+		if not has_free:
+			issues.append({
+				"cause":  CAUSE_FORK_UNDERFILLED,
+				"item":   ctx,
+				"detail": "This Sacrifice fork has no free path — the player could be stuck with no affordable option.",
+				"hint":   "Make at least one path free: Coin Cost 0 and Required Item None.",
+			})
 	for pi in paths.size():
 		var p: Dictionary = paths[pi]
 		var pname: String = (p.get("name", "") as String).strip_edges()

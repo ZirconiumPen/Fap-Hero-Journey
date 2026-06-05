@@ -8,6 +8,14 @@ signal path_chosen(index: int)
 @onready var _fork_sub:   Label        = $CenterBox/ForkSubtitle
 @onready var _cards_row:  HBoxContainer = $CenterBox/CardsRow
 
+# Tracked for the auto-resolve reveal animation (random / conditional forks).
+var _cards:          Array = []  # Array[Control] — one per path, in order
+var _choose_buttons: Array = []  # Array[Button]  — the "> CHOOSE" buttons
+var _paths:          Array = []  # the fork's path data dicts
+var _resolution:     String = "choice"  # how this fork resolves
+var _cond_metric:    String = "score"   # conditional metric (score/coins/item)
+var _default_path:   int    = 0          # conditional fallback path index
+
 
 func _ready() -> void:
 	_apply_layout()
@@ -23,10 +31,14 @@ func setup(fork_data: Dictionary) -> void:
 	_fork_sub.text    = desc if desc != "" else "Choose your path"
 	_fork_sub.visible = true
 
-	var paths: Array = fork_data.get("paths", [])
-	for i in paths.size():
-		var path_data: Dictionary = paths[i]
+	_resolution = fork_data.get("resolution", "choice")
+	_cond_metric = fork_data.get("cond_metric", "score")
+	_default_path = int(fork_data.get("default_path", 0))
+	_paths = fork_data.get("paths", [])
+	for i in _paths.size():
+		var path_data: Dictionary = _paths[i]
 		var card: Control = _make_card(i, path_data)
+		_cards.append(card)
 		_cards_row.add_child(card)
 
 
@@ -129,11 +141,45 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	rounds_lbl.add_theme_font_size_override("font_size", 13)
 	col.add_child(rounds_lbl)
 
+	# Conditional: show each path's requirement so an auto-pick reads as earned,
+	# not random.
+	if _resolution == "conditional":
+		var req_text: String = _conditional_req_text(index, path_data)
+		if req_text != "":
+			var req_lbl: Label = Label.new()
+			req_lbl.text = req_text
+			req_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			req_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			req_lbl.add_theme_font_size_override("font_size", 14)
+			req_lbl.add_theme_color_override("font_color", UITheme.CYAN)
+			col.add_child(req_lbl)
+
+	# Sacrifice: show the path's cost and gate it by affordability.
+	var sac_cost: int = int(path_data.get("cost", 0))
+	var sac_req: String = str(path_data.get("required_item", ""))
+	var sac_affordable: bool = (_resolution != "sacrifice") or _can_afford(sac_cost, sac_req)
+	if _resolution == "sacrifice":
+		var cost_lbl: Label = Label.new()
+		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cost_lbl.add_theme_font_size_override("font_size", 14)
+		if sac_cost <= 0 and sac_req == "":
+			cost_lbl.text = "FREE"
+			cost_lbl.add_theme_color_override("font_color", UITheme.SUCCESS)
+		else:
+			cost_lbl.text = _cost_text(sac_cost, sac_req)
+			cost_lbl.add_theme_color_override("font_color", UITheme.AMBER if sac_affordable else UITheme.ERROR_SOFT)
+		col.add_child(cost_lbl)
+
 	var btn: Button = Button.new()
-	btn.text = "> CHOOSE"
+	if _resolution == "sacrifice" and not sac_affordable:
+		btn.text = "✕ CAN'T AFFORD"
+		btn.disabled = true
+	else:
+		btn.text = "> CHOOSE"
 	_style_button(btn, UITheme.PURPLE_BRIGHT)
 	btn.pressed.connect(_on_path_chosen.bind(index))
 	col.add_child(btn)
+	_choose_buttons.append(btn)
 
 	return card
 
@@ -180,8 +226,125 @@ static func _load_image(path: String) -> Image:
 
 
 func _on_path_chosen(index: int) -> void:
+	# Sacrifice: spend the path's cost (coins and/or item) before proceeding.
+	# Affordability was already gated, so these should succeed.
+	if _resolution == "sacrifice" and index >= 0 and index < _paths.size():
+		var p: Dictionary = _paths[index]
+		var cost: int = int(p.get("cost", 0))
+		var req: String = str(p.get("required_item", ""))
+		if cost > 0:
+			CoinService.SpendCoins(cost)
+		if req != "":
+			InventoryService.ConsumeItem(req)
 	emit_signal("path_chosen", index)
 	queue_free()
+
+
+# True if the player can pay this path's coin cost and owns its required item.
+func _can_afford(cost: int, required_item: String) -> bool:
+	if cost > 0 and not CoinService.CanAfford(cost):
+		return false
+	if required_item != "" and not InventoryService.OwnsItem(required_item):
+		return false
+	return true
+
+
+# Requirement text for a conditional path's card, e.g. "SCORE ≥ 100" or
+# "REQUIRES KEY", with a "DEFAULT" tag on the fallback path.
+func _conditional_req_text(index: int, path_data: Dictionary) -> String:
+	var parts: Array = []
+	match _cond_metric:
+		"score":
+			var ts: int = int(path_data.get("threshold", 0))
+			parts.append("SCORE ≥ %d" % ts if ts > 0 else "ANY SCORE")
+		"coins":
+			var tc: int = int(path_data.get("threshold", 0))
+			parts.append("COINS ≥ %d" % tc if tc > 0 else "ANY BALANCE")
+		"item":
+			var req: String = str(path_data.get("required_item", ""))
+			if req != "":
+				parts.append("REQUIRES %s" % str(InventoryService.GetItemData(req).get("name", req)).to_upper())
+	if index == _default_path:
+		parts.append("DEFAULT")
+	return "   ·   ".join(parts)
+
+
+# Human-readable cost, e.g. "♦ 50  +  Key".
+func _cost_text(cost: int, required_item: String) -> String:
+	var parts: Array = []
+	if cost > 0:
+		parts.append("♦ %d" % cost)
+	if required_item != "":
+		parts.append(str(InventoryService.GetItemData(required_item).get("name", required_item)))
+	return "  +  ".join(parts) if not parts.is_empty() else "FREE"
+
+
+# Auto-resolve presentation: the GAME has chosen `index`. Locks out manual picks
+# and plays a roulette-style highlight that decelerates onto the winning card,
+# then dims the rest and continues. Used by random (and, later, conditional) forks.
+func reveal(index: int, caption: String = "FATE DECIDES…") -> void:
+	# Lock out manual choice.
+	for b: Button in _choose_buttons:
+		b.disabled = true
+		b.visible  = false
+	_fork_sub.text = caption
+
+	var n: int = _cards.size()
+	if n == 0 or index < 0 or index >= n:
+		emit_signal("path_chosen", clampi(index, 0, max(0, n - 1)))
+		queue_free()
+		return
+
+	# Let the container lay the cards out so scale pivots are centered.
+	await get_tree().process_frame
+	for c: Control in _cards:
+		c.pivot_offset = c.size / 2.0
+
+	# Beat so the player can actually read the options before the roll starts.
+	await get_tree().create_timer(1.0).timeout
+
+	# Roulette: cycle the highlight, decelerating, ending exactly on `index`.
+	var steps: int = n * 3 + index
+	var delay: float = 0.05
+	for s in steps + 1:
+		_set_card_state(s % n, "active")
+		if s > 0:
+			_set_card_state((s - 1) % n, "idle")
+		await get_tree().create_timer(delay).timeout
+		delay = min(delay * 1.13, 0.32)
+
+	# Settle: winner stays lit, losers dim.
+	for j in n:
+		_set_card_state(j, "active" if j == index else "dim")
+	_fork_sub.text = _path_display_name(index).to_upper()
+
+	await get_tree().create_timer(1.0).timeout
+	emit_signal("path_chosen", index)
+	queue_free()
+
+
+func _set_card_state(j: int, state: String) -> void:
+	if j < 0 or j >= _cards.size():
+		return
+	var c: Control = _cards[j]
+	match state:
+		"active":
+			c.modulate = Color(1, 1, 1, 1)
+			c.scale    = Vector2(1.06, 1.06)
+		"dim":
+			c.modulate = Color(1, 1, 1, 0.35)
+			c.scale    = Vector2(1, 1)
+		_:
+			c.modulate = Color(1, 1, 1, 1)
+			c.scale    = Vector2(1, 1)
+
+
+func _path_display_name(index: int) -> String:
+	if index >= 0 and index < _paths.size():
+		var n: String = (_paths[index].get("name", "") as String).strip_edges()
+		if n != "":
+			return n
+	return "Path %d" % (index + 1)
 
 
 func _apply_layout() -> void:

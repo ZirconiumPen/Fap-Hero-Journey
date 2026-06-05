@@ -44,10 +44,19 @@ static func new_item(type: String) -> Dictionary:
 		"storyboard":
 			return {"type": "storyboard", "coins": 0, "image": "", "lines": []}
 		"fork":
-			return {"type": "fork", "title": "", "description": "", "paths": [
-				{"name": "Path A", "description": "", "image_path": "", "items": []},
-				{"name": "Path B", "description": "", "image_path": "", "items": []},
-			]}
+			# resolution: "choice" | "random" | "conditional" | "sacrifice"
+			# cond_metric (conditional only): "score" | "coins" | "item"
+			# default_path (conditional only): index taken when no rule matches
+			# Per-path config (only the field(s) for the active resolution are used):
+			#   weight (random) · threshold (conditional score/coins) ·
+			#   required_item (conditional item check, OR sacrifice — consumed) ·
+			#   cost (sacrifice — coins spent). required_item "" = none/free.
+			return {"type": "fork", "title": "", "description": "",
+				"resolution": "choice", "cond_metric": "score", "default_path": 0,
+				"paths": [
+					{"name": "Path A", "description": "", "image_path": "", "items": [], "weight": 1, "threshold": 0, "required_item": "", "cost": 0},
+					{"name": "Path B", "description": "", "image_path": "", "items": [], "weight": 1, "threshold": 0, "required_item": "", "cost": 0},
+				]}
 	return {"type": type}
 
 
@@ -161,16 +170,23 @@ static func _build_fork_item(f: Dictionary) -> Dictionary:
 	var paths_out: Array = []
 	for p: Dictionary in f.get("paths", []):
 		paths_out.append({
-			"name":        p.get("name", ""),
-			"description": p.get("description", ""),
-			"image_path":  p.get("image_path", ""),
-			"items":       _build_path_items(p),
+			"name":          p.get("name", ""),
+			"description":   p.get("description", ""),
+			"image_path":    p.get("image_path", ""),
+			"items":         _build_path_items(p),
+			"weight":        int(p.get("weight", 1)),
+			"threshold":     int(p.get("threshold", 0)),
+			"required_item": str(p.get("required_item", "")),
+			"cost":          int(p.get("cost", 0)),
 		})
 	return {
-		"type":        "fork",
-		"title":       f.get("title", ""),
-		"description": f.get("description", ""),
-		"paths":       paths_out,
+		"type":         "fork",
+		"title":        f.get("title", ""),
+		"description":  f.get("description", ""),
+		"resolution":   str(f.get("resolution", "choice")),
+		"cond_metric":  str(f.get("cond_metric", "score")),
+		"default_path": int(f.get("default_path", 0)),
+		"paths":        paths_out,
 	}
 
 

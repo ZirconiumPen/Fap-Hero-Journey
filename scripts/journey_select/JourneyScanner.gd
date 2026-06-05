@@ -199,22 +199,30 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 # in its "Forks" array.
 static func parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary:
 	var fork_entry: Dictionary = {
-		"after_order": raw_fork.get("AfterOrder", raw_fork.get("after_order", 0)),
-		"title":       raw_fork.get("Title",       raw_fork.get("title",       "")),
-		"description": raw_fork.get("Description", raw_fork.get("description", "")),
-		"paths":       [],
+		"after_order":  raw_fork.get("AfterOrder", raw_fork.get("after_order", 0)),
+		"title":        raw_fork.get("Title",       raw_fork.get("title",       "")),
+		"description":  raw_fork.get("Description", raw_fork.get("description", "")),
+		# Fork resolution config (defaults keep legacy journeys as player-choice).
+		"resolution":   raw_fork.get("Resolution",  raw_fork.get("resolution",  "choice")),
+		"cond_metric":  raw_fork.get("CondMetric",  raw_fork.get("cond_metric", "score")),
+		"default_path": int(raw_fork.get("DefaultPath", raw_fork.get("default_path", 0))),
+		"paths":        [],
 	}
 	var raw_paths: Array = raw_fork.get("Paths", raw_fork.get("paths", []))
 	for raw_path: Dictionary in raw_paths:
 		var img_file: String = raw_path.get("Image", raw_path.get("image", ""))
 		var path_entry: Dictionary = {
-			"name":        raw_path.get("Name",        raw_path.get("name",        "Path")),
-			"description": raw_path.get("Description", raw_path.get("description", "")),
-			"image_path":  (journey_path + "/" + img_file) if img_file != "" else "",
-			"rounds":      [],
-			"shops":       [],
-			"storyboards": [],
-			"forks":       [],
+			"name":          raw_path.get("Name",        raw_path.get("name",        "Path")),
+			"description":   raw_path.get("Description", raw_path.get("description", "")),
+			"image_path":    (journey_path + "/" + img_file) if img_file != "" else "",
+			"weight":        int(raw_path.get("Weight",       raw_path.get("weight",        1))),
+			"threshold":     int(raw_path.get("Threshold",    raw_path.get("threshold",     0))),
+			"required_item": raw_path.get("RequiredItem", raw_path.get("required_item", "")),
+			"cost":          int(raw_path.get("Cost",         raw_path.get("cost",          0))),
+			"rounds":        [],
+			"shops":         [],
+			"storyboards":   [],
+			"forks":         [],
 		}
 		var raw_pr_rounds: Array = raw_path.get("Rounds", raw_path.get("rounds", []))
 		for raw_pr: Dictionary in raw_pr_rounds:

@@ -203,6 +203,18 @@ public partial class InventoryService : Node
 			["duration_ms"] = 0,
 			["kind"]        = "save_now",
 		};
+		// Key — held until spent at an item-conditional fork; not manually
+		// activatable (see ActivateItem). Mirrors data/shop_items.json.
+		_registry["key"] = new Dictionary
+		{
+			["id"]          = "key",
+			["name"]        = "Key",
+			["description"] = "Opens a locked fork path. Consumed when the path is taken.",
+			["category"]    = "utility",
+			["price"]       = 50,
+			["duration_ms"] = 0,
+			["kind"]        = "key",
+		};
 	}
 
 	// --- Registry access -------------------------------------------------------
@@ -306,6 +318,32 @@ public partial class InventoryService : Node
 		EmitSignal(SignalName.InventoryChanged);
 	}
 
+	// True if the player currently holds at least one item with this id. Used by
+	// Sacrifice forks (gating) and item-Conditional forks (the ownership check).
+	public bool OwnsItem(string id)
+	{
+		foreach (var item in _items)
+			if (item.ContainsKey("id") && item["id"].AsString() == id)
+				return true;
+		return false;
+	}
+
+	// Removes one held item with this id. Returns true if one was removed. Used
+	// when a Sacrifice fork path is chosen.
+	public bool ConsumeItem(string id)
+	{
+		for (int i = 0; i < _items.Count; i++)
+		{
+			if (_items[i].ContainsKey("id") && _items[i]["id"].AsString() == id)
+			{
+				_items.RemoveAt(i);
+				EmitSignal(SignalName.InventoryChanged);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// ─── Save / Resume ────────────────────────────────────────────────────
 	//
 	// Inventory portion of the journey save record. Only owned (unactivated)
@@ -347,6 +385,12 @@ public partial class InventoryService : Node
 			return false;
 
 		var item = _items[slotIndex];
+
+		// Keys aren't manually usable — they're consumed automatically at an
+		// item-conditional fork. Refuse activation so the player can't waste one.
+		if (item.ContainsKey("kind") && item["kind"].AsString() == "key")
+			return false;
+
 		_items.RemoveAt(slotIndex);
 
 		// save_now is an instantaneous utility — it doesn't enter the active-

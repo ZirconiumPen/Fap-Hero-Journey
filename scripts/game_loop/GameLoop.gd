@@ -216,6 +216,74 @@ func _show_fork_screen(fork_data: Dictionary) -> void:
 	add_child(fork_screen)
 	fork_screen.setup(fork_data)
 
+	# Auto-resolved fork types pick a path and play a reveal instead of waiting
+	# for the player. (Sacrifice stays interactive — the player picks & pays.)
+	match fork_data.get("resolution", "choice"):
+		"random":
+			fork_screen.reveal(_weighted_random_path(fork_data.get("paths", [])))
+		"conditional":
+			fork_screen.reveal(_conditional_path(fork_data), _conditional_caption(fork_data))
+
+
+# Picks a path index by weight (per-path "weight", default 1). Zero/negative
+# weights are treated as 0; if every weight is 0, all paths are equally likely.
+func _weighted_random_path(paths: Array) -> int:
+	if paths.is_empty():
+		return 0
+	var total: int = 0
+	for p: Dictionary in paths:
+		total += maxi(0, int(p.get("weight", 1)))
+	if total <= 0:
+		return randi() % paths.size()
+	var r: int = randi() % total
+	var acc: int = 0
+	for i in paths.size():
+		acc += maxi(0, int(paths[i].get("weight", 1)))
+		if r < acc:
+			return i
+	return paths.size() - 1
+
+
+# Resolves a conditional fork to a path index. Score/coins use tiered thresholds
+# (highest one the value meets wins). Item checks ownership top-down (NOT
+# consumed). Falls back to the author's default path when nothing matches.
+func _conditional_path(fork_data: Dictionary) -> int:
+	var paths: Array = fork_data.get("paths", [])
+	if paths.is_empty():
+		return 0
+	var default_idx: int = clampi(int(fork_data.get("default_path", 0)), 0, paths.size() - 1)
+	var metric: String = fork_data.get("cond_metric", "score")
+
+	if metric == "item":
+		for i in paths.size():
+			var req: String = str(paths[i].get("required_item", ""))
+			if req != "" and InventoryService.OwnsItem(req):
+				return i
+		return default_idx
+
+	# score / coins → highest met threshold wins.
+	var value: int = ScoreService.LastRoundScore if metric == "score" else CoinService.Balance
+	var best_idx: int = -1
+	var best_threshold: int = -1
+	for i in paths.size():
+		var t: int = int(paths[i].get("threshold", 0))
+		if value >= t and t > best_threshold:
+			best_threshold = t
+			best_idx = i
+	return best_idx if best_idx >= 0 else default_idx
+
+
+# Flavour text shown during a conditional fork's reveal, per metric.
+func _conditional_caption(fork_data: Dictionary) -> String:
+	match fork_data.get("cond_metric", "score"):
+		"score":
+			return "BY YOUR SCORE…"
+		"coins":
+			return "BY YOUR COINS…"
+		"item":
+			return "BY WHAT YOU CARRY…"
+	return "FATE DECIDES…"
+
 
 func _on_fork_path_chosen(path_index: int) -> void:
 	_is_overlay_open = false

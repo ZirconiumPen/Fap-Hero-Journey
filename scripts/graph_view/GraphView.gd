@@ -605,8 +605,18 @@ func _type_sublabel(item: Dictionary) -> String:
 			return "STORYBOARD   %d LINE%s" % [n, "S" if n != 1 else ""]
 		"fork":
 			var paths: Array = item.get("paths", [])
-			return "FORK   %d PATHS" % paths.size()
+			return "%s   %d PATHS" % [_fork_type_label(item.get("resolution", "choice")), paths.size()]
 	return ""
+
+
+# Sublabel prefix for a fork node, by resolution: "FORK" (choice), "RANDOM FORK",
+# "CONDITIONAL FORK", "SACRIFICE FORK".
+func _fork_type_label(resolution: String) -> String:
+	match resolution:
+		"random":      return "RANDOM FORK"
+		"conditional": return "CONDITIONAL FORK"
+		"sacrifice":   return "SACRIFICE FORK"
+	return "FORK"
 
 
 # ---------------------------------------------------------------------------
