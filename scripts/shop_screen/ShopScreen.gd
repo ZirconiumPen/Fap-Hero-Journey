@@ -281,13 +281,15 @@ func _input(event: InputEvent) -> void:
 func _on_continue_pressed() -> void:
 	_continue.disabled = true
 	_panel.pivot_offset = _panel.size / 2.0
+	# Pop the panel out but keep the backdrop covering the play area — GameLoop's
+	# transition fades black over it next, and frees this screen once the black
+	# is opaque (don't fade the backdrop out or self-free, or the play area
+	# behind would flash before the fade covers it).
 	var tween: Tween = create_tween().set_parallel(true)
-	tween.tween_property(_panel,    "scale",      Vector2(0.92, 0.92), 0.16).set_ease(Tween.EASE_IN)
-	tween.tween_property(_panel,    "modulate:a", 0.0, 0.16).set_ease(Tween.EASE_IN)
-	tween.tween_property(_backdrop, "modulate:a", 0.0, 0.16).set_ease(Tween.EASE_IN)
+	tween.tween_property(_panel, "scale",      Vector2(0.92, 0.92), 0.16).set_ease(Tween.EASE_IN)
+	tween.tween_property(_panel, "modulate:a", 0.0, 0.16).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(func() -> void:
 		emit_signal("closed")
-		queue_free()
 	)
 
 

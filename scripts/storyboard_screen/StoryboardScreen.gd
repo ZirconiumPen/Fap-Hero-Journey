@@ -121,8 +121,10 @@ func _finish() -> void:
 	var tween: Tween = create_tween()
 	tween.tween_property(_fade, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_IN)
 	tween.tween_callback(func() -> void:
+		# GameLoop frees this screen during the transition (after the black
+		# covers it) — see _transition_swap. Don't self-free, or the play area
+		# behind would flash before the fade completes.
 		emit_signal("completed", _coins)
-		queue_free()
 	)
 
 

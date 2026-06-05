@@ -69,6 +69,10 @@ var _inventory_panel: Control = null
 # True while a full-screen overlay (shop / fork / storyboard) is active.
 # Used to suppress gameplay hotkeys that should not fire through an overlay.
 var _is_overlay_open: bool = false
+# The current full-screen overlay (storyboard / shop / fork), or null. It is
+# freed by the transition (after the black covers it), not by itself — see
+# _transition_swap.
+var _current_overlay: Control = null
 
 # True for the duration of a boss round (set when the round loads, cleared at
 # round end). Drives item lockout, the red frame, and the climax pulse.
@@ -156,6 +160,7 @@ func _show_storyboard_screen(sb_data: Dictionary) -> void:
 	var storyboard: Control = StoryboardScene.instantiate()
 	storyboard.completed.connect(_on_storyboard_completed)
 	add_child(storyboard)
+	_current_overlay = storyboard
 	storyboard.setup(sb_data)
 
 
@@ -191,6 +196,7 @@ func _show_shop_screen(shop_data: Dictionary) -> void:
 	var shop: Control = ShopScene.instantiate()
 	shop.closed.connect(_on_shop_closed)
 	add_child(shop)
+	_current_overlay = shop
 	shop.setup(shop_data)
 
 
@@ -214,6 +220,7 @@ func _show_fork_screen(fork_data: Dictionary) -> void:
 	var fork_screen = ForkScene.instantiate()
 	fork_screen.path_chosen.connect(_on_fork_path_chosen)
 	add_child(fork_screen)
+	_current_overlay = fork_screen
 	fork_screen.setup(fork_data)
 
 	# Auto-resolved fork types pick a path and play a reveal instead of waiting
@@ -795,14 +802,55 @@ func _transition_swap(swap_action: Callable) -> void:
 	tween_in.tween_property(_transition, "modulate:a", 1.0, TRANSITION_FADE_TIME).set_ease(Tween.EASE_IN)
 	await tween_in.finished
 
+	# Black now fully covers the screen — including any overlay we're leaving.
+	# Overlays deliberately don't free themselves (see _show_*_screen), so they
+	# stay visible and dim into the black instead of vanishing and flashing the
+	# play area behind them. Free it now, under cover of the opaque black.
+	_free_current_overlay()
+
+	# Hide the HUD under the black so it can't flash in at full opacity when the
+	# black clears; it's faded back in below once we land on a round.
+	_hud.modulate.a = 0.0
+
 	await get_tree().create_timer(TRANSITION_HOLD_TIME).timeout
 	swap_action.call()
+
+	# Hold the black until the next round's video actually has a frame, so the
+	# fade never reveals the bare background between rounds.
+	await _await_video_ready()
 
 	var tween_out: Tween = create_tween()
 	tween_out.tween_property(_transition, "modulate:a", 0.0, TRANSITION_FADE_TIME).set_ease(Tween.EASE_OUT)
 	await tween_out.finished
 
 	_transition.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Fade the HUD back in only when we've landed on a round — overlays (fork /
+	# shop / storyboard) cover the screen and own their own UI.
+	if not (GameState.CurrentItemType() in ["fork", "shop", "storyboard"]):
+		_show_hud(true)
+
+
+# Waits until the video player has produced a frame (or a short cap elapses), so
+# a round transition doesn't reveal the background before the video renders.
+# Returns immediately when no video is playing (no-video rounds / overlays).
+func _await_video_ready() -> void:
+	if not _video.is_playing():
+		return
+	for _i in 90:  # ~1.5s cap so a stalled or failed decode never hangs the fade
+		var tex: Texture2D = _video.get_video_texture()
+		if tex != null and tex.get_size().x > 0.0:
+			return
+		await get_tree().process_frame
+
+
+# Frees the overlay we're transitioning away from. Called from _transition_swap
+# once the black is opaque, so the overlay dims into the black instead of
+# vanishing and exposing the play area. No-op for round-to-round transitions.
+func _free_current_overlay() -> void:
+	if is_instance_valid(_current_overlay):
+		_current_overlay.queue_free()
+	_current_overlay = null
 
 
 func _go_to_menu() -> void:
@@ -956,9 +1004,15 @@ func _toggle_pause() -> void:
 		_pause_btn.text = "|| PAUSE"
 
 
-func _show_hud() -> void:
-	_hud.modulate = Color(1, 1, 1, 1)
-	_hud.visible  = true
+func _show_hud(fade: bool = false) -> void:
+	_hud.visible = true
+	if fade:
+		# Smoothly bring the HUD back after a round transition (rather than
+		# popping in at full opacity the instant the fade clears).
+		_hud.modulate = Color(1, 1, 1, 0)
+		create_tween().tween_property(_hud, "modulate:a", 1.0, 0.3)
+	else:
+		_hud.modulate = Color(1, 1, 1, 1)
 	_hide_timer.start(SettingsService.get_hud_hide_delay())
 
 

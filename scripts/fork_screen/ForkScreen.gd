@@ -236,8 +236,9 @@ func _on_path_chosen(index: int) -> void:
 			CoinService.SpendCoins(cost)
 		if req != "":
 			InventoryService.ConsumeItem(req)
+	# Note: GameLoop frees this screen during the transition (after the black
+	# covers it), so it dims into the fade rather than vanishing first.
 	emit_signal("path_chosen", index)
-	queue_free()
 
 
 # True if the player can pay this path's coin cost and owns its required item.
@@ -292,7 +293,6 @@ func reveal(index: int, caption: String = "FATE DECIDES…") -> void:
 	var n: int = _cards.size()
 	if n == 0 or index < 0 or index >= n:
 		emit_signal("path_chosen", clampi(index, 0, max(0, n - 1)))
-		queue_free()
 		return
 
 	# Let the container lay the cards out so scale pivots are centered.
@@ -320,7 +320,6 @@ func reveal(index: int, caption: String = "FATE DECIDES…") -> void:
 
 	await get_tree().create_timer(1.0).timeout
 	emit_signal("path_chosen", index)
-	queue_free()
 
 
 func _set_card_state(j: int, state: String) -> void:
