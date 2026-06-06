@@ -390,6 +390,26 @@ static func load_image_smart(user_path: String) -> Image:
 # the timestamp of the last action. Both 0 if the file is missing/unreadable.
 # JourneyBuilder calls this once at save time to cache the stats into
 # journey.json so the catalogue scan never has to re-parse funscripts.
+# Loads a funscript's action points as an Array of Vector2(at_ms, pos), sorted by
+# time. Returns [] if the file is missing or malformed. Used by the in-builder
+# funscript preview graph.
+static func read_funscript_actions(path: String) -> Array:
+	var points: Array = []
+	if path == "" or not FileAccess.file_exists(path):
+		return points
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return points
+	var parser: JSON = JSON.new()
+	if parser.parse(f.get_as_text()) == OK and parser.data is Dictionary:
+		for a in (parser.data as Dictionary).get("actions", []):
+			if a is Dictionary:
+				points.append(Vector2(float(a.get("at", 0)), float(a.get("pos", 0))))
+	f.close()
+	points.sort_custom(func(p: Vector2, q: Vector2) -> bool: return p.x < q.x)
+	return points
+
+
 static func read_funscript_stats(path: String) -> Dictionary:
 	var result: Dictionary = {"count": 0, "length_ms": 0}
 	if path == "" or not FileAccess.file_exists(path):

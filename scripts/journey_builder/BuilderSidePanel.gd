@@ -825,6 +825,20 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 	_update_funscript_readout(fs_stats_lbl, round_data.get("funscript_path", ""))
 	col.add_child(fs_stats_lbl)
 
+	# Preview the funscript curve (and any boss modifiers applied to it) in a
+	# graph overlay. Enabled once a funscript is attached.
+	var preview_btn: Button = UITheme.make_icon_btn(
+		"📈 PREVIEW FUNSCRIPT", round_data.get("funscript_path", "") == "", UITheme.CYAN)
+	preview_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_btn.pressed.connect(func() -> void:
+		FunscriptPreview.new().open(
+			_owner,
+			arr[idx].get("funscript_path", ""),
+			arr[idx].get("video_path", ""),
+			arr[idx].get("boss_modifiers", []),
+			arr[idx].get("name", "")))
+	col.add_child(preview_btn)
+
 	col.add_child(_side_section_separator())
 	col.add_child(_side_field_label("COINS AWARDED"))
 	var coins_spin: SpinBox = SpinBox.new()

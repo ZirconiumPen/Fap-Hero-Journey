@@ -737,8 +737,8 @@ public partial class FunscriptPlayer : Node
         if (effects != null && HasBlockEffect(effects))
             return;
 
-        int currentPos = TransformPos(_actions[index].Pos, effects);
-        int nextPos = index + 1 < _actions.Count ? TransformPos(_actions[index + 1].Pos, effects) : currentPos;
+        int currentPos = TransformPos(index, effects);
+        int nextPos = index + 1 < _actions.Count ? TransformPos(index + 1, effects) : currentPos;
 
         // Apply user-configured hard range clamp (device settings → Position Clamp).
         // Runs after inventory effects so shop modifiers compose correctly with the limit.
@@ -854,31 +854,42 @@ public partial class FunscriptPlayer : Node
         _mirrorBlend = Mathf.MoveToward(_mirrorBlend, target, (float)(dt / MirrorEaseMs));
     }
 
-    // Mirror, then scale around centre, then remap into clamp range. Multiple
-    // effects of the same kind stack multiplicatively (scale) or successively
-    // (clamp). The mirror flip uses the eased _mirrorBlend factor so it is never
-    // an instant reversal — see UpdateMirrorBlend.
-    private int TransformPos(int rawPos, Godot.Collections.Array effects)
+    // Applies the eased mirror flip to a single position (toward 100 - v).
+    private float MirrorOne(float v)
     {
-        float pos = rawPos;
+        return _mirrorBlend > 0f ? Mathf.Lerp(v, 100f - v, _mirrorBlend) : v;
+    }
 
-        // Mirror: blend toward 100 - pos. Applied before the early-out so a
-        // mirror ease still settling after the effect ended is honoured even
-        // when no effects remain.
-        if (_mirrorBlend > 0f)
-            pos = Mathf.Lerp(pos, 100f - pos, _mirrorBlend);
+    // Transforms the action at `index`: mirror, then scale each stroke around its
+    // LOCAL centre (the midpoint of its neighbours), then remap into clamp range.
+    // Local-centre scaling grows/shrinks each stroke's amplitude in place rather
+    // than around a global 50, so strokes near the rails keep their shape instead
+    // of being squashed by the 0–100 clamp. Multiple scale effects stack
+    // multiplicatively; clamps apply successively. The mirror uses the eased
+    // _mirrorBlend so it is never an instant reversal — see UpdateMirrorBlend.
+    private int TransformPos(int index, Godot.Collections.Array effects)
+    {
+        float pos = MirrorOne(_actions[index].Pos);
 
         if (effects == null || effects.Count == 0)
             return (int)Math.Round(Math.Clamp(pos, 0f, 100f));
 
+        // Combined scale factor — all scale effects multiply.
+        float scaleFactor = 1f;
         foreach (var effect in effects)
         {
             var effectProp = effect.AsGodotDictionary();
             if (effectProp.ContainsKey("kind") && effectProp["kind"].AsString() == "scale" && effectProp.ContainsKey("factor"))
-            {
-                float factor = effectProp["factor"].AsSingle();
-                pos = 50f + (pos - 50f) * factor;
-            }
+                scaleFactor *= effectProp["factor"].AsSingle();
+        }
+        if (!Mathf.IsEqualApprox(scaleFactor, 1f))
+        {
+            // Scale around the midpoint of the neighbouring points (clamped to the
+            // ends), so each stroke's amplitude scales about its own centre.
+            float prev = MirrorOne(_actions[Math.Max(0, index - 1)].Pos);
+            float next = MirrorOne(_actions[Math.Min(_actions.Count - 1, index + 1)].Pos);
+            float center = (prev + next) * 0.5f;
+            pos = center + (pos - center) * scaleFactor;
         }
 
         foreach (var effect in effects)
@@ -892,8 +903,6 @@ public partial class FunscriptPlayer : Node
             }
         }
 
-        pos = Math.Clamp(pos, 0f, 100f);
-
-        return (int)Math.Round(pos);
+        return (int)Math.Round(Math.Clamp(pos, 0f, 100f));
     }
 }
