@@ -1678,6 +1678,15 @@ func _create_save_progress_modal_if_needed() -> Control:
 # journey.json data on success or an empty Dictionary on cancel/I-O failure;
 # in the latter case the user-facing error modal is already shown and the
 # staging folder is already cleaned up.
+# Maps the in-memory round_type to its journey.json label.
+func _round_type_label(round_type: String) -> String:
+	match round_type:
+		"boss":    return "Boss"
+		"cursed":  return "Cursed"
+		"blessed": return "Blessed"
+		_:         return "Normal"
+
+
 func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 	# Pull the paths-dict entries into the locals the loop body already uses,
 	# so the legacy code below doesn't have to be reflowed to dict access.
@@ -1738,6 +1747,7 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 			storyboards_json.append({
 				"Order":        rorder,
 				"CoinsAwarded": item.get("coins", 0) as int,
+				"Item":         item.get("item", ""),
 				"Image":        sb_img_fname,
 				"Lines":        sb_lines_json,
 			})
@@ -1850,11 +1860,22 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 				"FolderName":     round_slug,
 				"Order":          rorder,
 				"CoinsAwarded":   item.get("coins",0) as int,
-				"RoundType":      "Boss" if round_type == "boss" else "Normal",
+				"RoundType":      _round_type_label(round_type),
 				"IsCheckpoint":   bool(item.get("is_checkpoint", false)),
+				"CurseReward":    int(item.get("curse_reward", 0)),
+				"CleanseCost":    int(item.get("cleanse_cost", 50)),
+				"CurseRandom":    bool(item.get("curse_random", true)),
+				"Curses":         item.get("curses", []),
+				"BoonRandom":     bool(item.get("boon_random", true)),
+				"Boons":          item.get("boons", []),
+				"GiftItem":       item.get("gift_item", ""),
 				"BossImage":      boss_image_rel,
 				"BossTagline":    item.get("boss_tagline", ""),
 				"BossModifiers":  _boss_modifiers_json(item.get("boss_modifiers", [])),
+				"Sensory":        item.get("sensory", []),
+				"SensoryInPool":  bool(item.get("sensory_in_pool", false)),
+				"SensoryIntensity": item.get("sensory_intensity", {}),
+				"ShowReveal":     bool(item.get("show_reveal", true)),
 				"FunscriptPath":  round_slug + "/" + fs_dst_name,
 				"AxisScripts":    axis_scripts_rel,
 				"VibScripts":     vib_scripts_rel,
@@ -2066,6 +2087,7 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 				path_entry["Storyboards"].append({
 					"Order":        pr_order,
 					"CoinsAwarded": pi_item.get("coins",0) as int,
+					"Item":         pi_item.get("item", ""),
 					"Image":        psb_img_fname,
 					"Lines":        psb_lines_json,
 				})
@@ -2167,11 +2189,22 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 					"FolderName":    pr_slug,
 					"Order":         pr_order,
 					"CoinsAwarded":  pi_item.get("coins",0) as int,
-					"RoundType":     "Boss" if pr_round_type == "boss" else "Normal",
+					"RoundType":     _round_type_label(pr_round_type),
 					"IsCheckpoint":  bool(pi_item.get("is_checkpoint", false)),
+					"CurseReward":   int(pi_item.get("curse_reward", 0)),
+					"CleanseCost":   int(pi_item.get("cleanse_cost", 50)),
+					"CurseRandom":   bool(pi_item.get("curse_random", true)),
+					"Curses":        pi_item.get("curses", []),
+					"BoonRandom":    bool(pi_item.get("boon_random", true)),
+					"Boons":         pi_item.get("boons", []),
+					"GiftItem":      pi_item.get("gift_item", ""),
 					"BossImage":     pr_boss_image_rel,
 					"BossTagline":   pi_item.get("boss_tagline", ""),
 					"BossModifiers": _boss_modifiers_json(pi_item.get("boss_modifiers", [])),
+					"Sensory":       pi_item.get("sensory", []),
+					"SensoryInPool": bool(pi_item.get("sensory_in_pool", false)),
+					"SensoryIntensity": pi_item.get("sensory_intensity", {}),
+					"ShowReveal":    bool(pi_item.get("show_reveal", true)),
 					"FunscriptPath": pr_slug + "/" + pr_fs_dst_name if pr_fs_dst_name != "" else "",
 					"AxisScripts":   pr_axis_rel,
 					"VibScripts":    pr_vib_rel,

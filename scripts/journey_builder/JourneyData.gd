@@ -29,6 +29,83 @@ const IMAGE_EXTENSIONS:     Array[String] = ["png", "jpg", "jpeg", "webp"]
 # Secondary T-code axes supported for serial devices (L0 = main stroke, handled separately).
 const EXTRA_AXES: Array[String] = ["L1", "L2", "R0", "R1", "R2"]
 
+# Curse catalog — the GAMEPLAY afflictions a cursed round can apply (they change
+# the device output, the economy, or the controls). Non-gameplay visual/audio
+# effects live in SENSORY_CATALOG below. Single source of truth shared by the
+# builder (curse picker) and GameLoop (rolling/applying). Each entry is a
+# boss-modifier-shaped dict: stroke curses (scale/clamp/reverse/block) are applied
+# by FunscriptPlayer; the rest (coin_penalty/toll/hud_hide/no_pause) by GameLoop.
+# "name" is the unique id used to select.
+const CURSE_CATALOG: Array = [
+	{"kind": "scale",        "factor": 0.6,        "name": "Shrunken", "desc": "Strokes shortened to 60% of their length."},
+	{"kind": "clamp",        "min": 40, "max": 60, "name": "Choked",   "desc": "Strokes confined to the middle of the range."},
+	{"kind": "clamp",        "min": 0,  "max": 45, "name": "Sunken",   "desc": "Strokes confined to the bottom of the range."},
+	{"kind": "reverse",                            "name": "Inverted", "desc": "Up and down are flipped."},
+	{"kind": "block",                              "name": "Numbed",   "desc": "The device ignores the script entirely."},
+	{"kind": "coin_penalty", "factor": 0.5,        "name": "Greed",    "desc": "Coins earned this round are halved."},
+	{"kind": "coin_penalty", "factor": 0.0,        "name": "Pauper",   "desc": "No coins are earned this round."},
+	{"kind": "toll",                               "name": "Toll",     "desc": "Lose 40 coins immediately."},
+	{"kind": "hud_hide",                           "name": "Fog",      "desc": "The HUD is hidden for the whole round."},
+	{"kind": "no_pause",                           "name": "Restless", "desc": "You can't pause this round."},
+]
+
+# Non-gameplay (sensory) modifiers — purely visual/audio; they don't touch the
+# device, economy, or controls. Authors can add these to cursed or boss rounds
+# (the "Non-gameplay modifiers" picker), and a cursed round can optionally let
+# them into its random pool. Single-sourced here; GameLoop applies every kind via
+# its hex pipeline (_apply_hex), and Blinded rides the active-effect chip scan.
+# Each entry with an adjustable intensity carries imin/imax/idef: a per-round
+# slider edits a normalized intensity (0–1), and the real effect value is
+# lerp(imin, imax, intensity). imin may exceed imax for "inverted" effects where
+# a stronger result is a lower number (pixelate blocks, strobe interval, low-pass
+# cutoff, tunnel ramp). idef reproduces the current default value. Binary effects
+# (Blinded, Silence) carry no intensity fields → no slider.
+const SENSORY_CATALOG: Array = [
+	# Visibility / audio deniers.
+	{"kind": "blackout",  "name": "Blinded",  "desc": "The video is hidden — the device plays on in the dark."},
+	{"kind": "murk",      "name": "Murk",     "desc": "The screen is dimmed.", "imin": 0.40, "imax": 0.95, "idef": 0.58},
+	{"kind": "tunnel",    "name": "Tunnel",   "desc": "Vision closes to a narrow tunnel.", "imin": 0.60, "imax": 0.20, "idef": 0.38},
+	{"kind": "strobe",    "name": "Strobe",   "desc": "The screen fades to black and back every few seconds.", "imin": 5.0, "imax": 1.0, "idef": 0.50},
+	{"kind": "mute",      "name": "Silence",  "desc": "The audio is muted."},
+	# Per-pixel video effects (one composable shader on the video).
+	{"kind": "grayscale", "name": "Drained",  "desc": "Color is drained from the video.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
+	{"kind": "blur",      "name": "Bleary",   "desc": "The video blurs out of focus.", "imin": 1.0, "imax": 6.0, "idef": 0.30},
+	{"kind": "pixelate",  "name": "Censored", "desc": "The video is pixelated.", "imin": 160.0, "imax": 30.0, "idef": 0.54},
+	{"kind": "invert",    "name": "Negative", "desc": "The video's colors are inverted.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
+	{"kind": "sepia",     "name": "Faded",    "desc": "The video washes out to sepia.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
+	{"kind": "posterize", "name": "Banded",   "desc": "The video's colors crush into harsh bands.", "imin": 10.0, "imax": 3.0, "idef": 0.71},
+	{"kind": "saturate",  "name": "Feverish", "desc": "The video's colors run hot and oversaturated.", "imin": 1.4, "imax": 3.5, "idef": 0.38},
+	{"kind": "chromatic", "name": "Fracture", "desc": "The video's colors split apart.", "imin": 0.002, "imax": 0.020, "idef": 0.22},
+	{"kind": "wave",      "name": "Swoon",    "desc": "The video ripples and sways.", "imin": 0.003, "imax": 0.020, "idef": 0.29},
+	# Overlay-node visual effects.
+	{"kind": "bloodshot", "name": "Bloodshot",   "desc": "A red haze pulses over the screen.", "imin": 0.50, "imax": 1.00, "idef": 1.00},
+	{"kind": "static",    "name": "Interference","desc": "Static crawls across the screen.", "imin": 0.12, "imax": 0.50, "idef": 0.47},
+	{"kind": "flicker",   "name": "Flicker",  "desc": "The screen flickers erratically.", "imin": 0.50, "imax": 1.20, "idef": 0.71},
+	{"kind": "tremor",    "name": "Tremor",   "desc": "The screen shakes.", "imin": 3.0, "imax": 18.0, "idef": 0.40},
+	# Audio-bus effects.
+	{"kind": "lowpass",   "name": "Muffled",  "desc": "The audio is muffled, as if underwater.", "imin": 2200.0, "imax": 300.0, "idef": 0.79},
+	{"kind": "reverb",    "name": "Cavern",   "desc": "The audio echoes in a vast space.", "imin": 0.30, "imax": 0.90, "idef": 0.50},
+	{"kind": "distort",   "name": "Distorted","desc": "The audio is distorted and harsh.", "imin": 0.20, "imax": 0.90, "idef": 0.43},
+	{"kind": "volwobble", "name": "Faltering","desc": "The audio swells and fades.", "imin": -10.0, "imax": -40.0, "idef": 0.47},
+]
+
+# The SENSORY_CATALOG kinds that are audio (everything else is visual). Used to
+# split the "Non-gameplay modifiers" picker into Visual / Audio subsections.
+const AUDIO_SENSORY_KINDS: Array = ["mute", "lowpass", "reverb", "distort", "volwobble"]
+
+# Boon catalog — the blessings a blessed round can apply. Like CURSE_CATALOG, but
+# positive. score_multiplier/coin_jackpot/scale ride existing effect kinds;
+# gift/ward/lingering/interest are applied by GameLoop.
+const BLESSING_CATALOG: Array = [
+	{"kind": "score_multiplier", "factor": 2.0,    "name": "Fervor",    "desc": "Double score this round."},
+	{"kind": "coin_jackpot",     "factor": 2.0,    "name": "Fortune",   "desc": "Double the coins earned this round."},
+	{"kind": "scale",            "factor": 1.35,   "name": "Surge",     "desc": "Stronger, longer strokes."},
+	{"kind": "gift",                               "name": "Gift",      "desc": "Start the round holding a free item."},
+	{"kind": "ward",                               "name": "Ward",      "desc": "The next curse is repelled automatically."},
+	{"kind": "lingering",                          "name": "Lingering", "desc": "Your active item effects don't run out this round."},
+	{"kind": "interest",                           "name": "Interest",  "desc": "Gain coins equal to 25% of your balance."},
+]
+
 
 # ── Item templates ───────────────────────────────────────────────────────────
 
@@ -42,7 +119,8 @@ static func new_item(type: String) -> Dictionary:
 		"shop":
 			return {"type": "shop", "title": ""}
 		"storyboard":
-			return {"type": "storyboard", "coins": 0, "image": "", "lines": []}
+			# coins / item: optional reward granted when the storyboard is finished.
+			return {"type": "storyboard", "coins": 0, "item": "", "image": "", "lines": []}
 		"fork":
 			# resolution: "choice" | "random" | "conditional" | "sacrifice"
 			# cond_metric (conditional only): "score" | "coins" | "item"
@@ -106,9 +184,20 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 				"vib_scripts":     r.get("vib_scripts", {}),
 				"round_type":      r.get("round_type", "normal"),
 				"is_checkpoint":   bool(r.get("is_checkpoint", false)),
+				"curse_reward":    int(r.get("curse_reward", 0)),
+				"cleanse_cost":    int(r.get("cleanse_cost", 50)),
+				"curse_random":    bool(r.get("curse_random", true)),
+				"curses":          (r.get("curses", []) as Array).duplicate(),
+				"boon_random":     bool(r.get("boon_random", true)),
+				"boons":           (r.get("boons", []) as Array).duplicate(),
+				"gift_item":       r.get("gift_item", ""),
 				"boss_image":      r.get("boss_image", ""),
 				"boss_tagline":    r.get("boss_tagline", ""),
 				"boss_modifiers":  r.get("boss_modifiers", []),
+				"sensory":         (r.get("sensory", []) as Array).duplicate(),
+				"sensory_in_pool": bool(r.get("sensory_in_pool", false)),
+				"sensory_intensity": (r.get("sensory_intensity", {}) as Dictionary).duplicate(),
+				"show_reveal":     bool(r.get("show_reveal", true)),
 				"video_path":      find_video_in_round(r.get("folder", "")),
 				"coins":           r.get("coins", 0),
 				"original_folder": r.get("folder", ""),
@@ -120,6 +209,7 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 			"data": {
 				"type":  "storyboard",
 				"coins": sb.get("coins", 0),
+				"item":  sb.get("item", ""),
 				"image": sb.get("image", ""),
 				"lines": sb.get("lines", []),
 			},
@@ -205,9 +295,20 @@ static func _build_path_items(p: Dictionary) -> Array:
 				"vib_scripts":     pr.get("vib_scripts", {}),
 				"round_type":      pr.get("round_type", "normal"),
 				"is_checkpoint":   bool(pr.get("is_checkpoint", false)),
+				"curse_reward":    int(pr.get("curse_reward", 0)),
+				"cleanse_cost":    int(pr.get("cleanse_cost", 50)),
+				"curse_random":    bool(pr.get("curse_random", true)),
+				"curses":          (pr.get("curses", []) as Array).duplicate(),
+				"boon_random":     bool(pr.get("boon_random", true)),
+				"boons":           (pr.get("boons", []) as Array).duplicate(),
+				"gift_item":       pr.get("gift_item", ""),
 				"boss_image":      pr.get("boss_image", ""),
 				"boss_tagline":    pr.get("boss_tagline", ""),
 				"boss_modifiers":  pr.get("boss_modifiers", []),
+				"sensory":         (pr.get("sensory", []) as Array).duplicate(),
+				"sensory_in_pool": bool(pr.get("sensory_in_pool", false)),
+				"sensory_intensity": (pr.get("sensory_intensity", {}) as Dictionary).duplicate(),
+				"show_reveal":     bool(pr.get("show_reveal", true)),
 				"video_path":      find_video_in_round(pr.get("folder", "")),
 				"coins":           pr.get("coins", 0),
 				"original_folder": pr.get("folder", ""),
@@ -219,6 +320,7 @@ static func _build_path_items(p: Dictionary) -> Array:
 			"data": {
 				"type":  "storyboard",
 				"coins": psb.get("coins", 0),
+				"item":  psb.get("item", ""),
 				"image": psb.get("image", ""),
 				"lines": psb.get("lines", []),
 			},

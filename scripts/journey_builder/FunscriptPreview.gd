@@ -4,8 +4,8 @@ extends Control
 # ---------------------------------------------------------------------------
 # FunscriptPreview
 # In-builder preview overlay for a round's funscript. Plots the raw stroke curve
-# and — when the round has boss modifiers — an overlaid curve showing what those
-# modifiers do to it, so the author can see the effect before playing.
+# and — when the round has stroke modifiers (boss / curse / boon) — an overlaid
+# curve showing what those do to it, so the author can see the effect beforehand.
 #
 # The funscript graph (zoomable, horizontally scrollable, draggable playhead) and
 # the modifier overlay work on any codec and on unsaved edits, since funscripts
@@ -14,12 +14,13 @@ extends Control
 # stays graph-only. Video clock ↔ playhead are kept in lockstep both ways.
 #
 # Open with:
-#   FunscriptPreview.new().open(parent, funscript_path, video_path, boss_modifiers, name)
+#   FunscriptPreview.new().open(parent, funscript_path, video_path, modifiers, name, mod_label)
 # The overlay frees itself on close.
 # ---------------------------------------------------------------------------
 
 var _graph: _Graph = null
-var _modifiers: Array = []        # the round's boss_modifiers (effect-shaped dicts)
+var _modifiers: Array = []        # effect-shaped dicts (boss modifiers / curse / boon)
+var _mod_label: String = "Boss Modifiers"  # what the modifiers are called for this round
 var _show_modifiers: bool = true
 var _caption: Label = null
 
@@ -33,11 +34,13 @@ var _video_ok: bool = false
 var _play_btn: Button = null
 
 
-# Builds and shows the overlay over `parent`. boss_modifiers are the round's
-# `boss_modifiers` array (each {kind, factor?/min?/max?}); pass [] for none.
+# Builds and shows the overlay over `parent`. `modifiers` are stroke-affecting
+# effect dicts (each {kind, factor?/min?/max?}); pass [] for none. `mod_label`
+# names them ("Boss Modifiers" / "Curse effects" / "Boon effects").
 # video_path may be "" (graph-only) or a non-decodable codec (falls back too).
-func open(parent: Control, funscript_path: String, video_path: String, boss_modifiers: Array, round_name: String) -> void:
-	_modifiers = boss_modifiers
+func open(parent: Control, funscript_path: String, video_path: String, modifiers: Array, round_name: String, mod_label: String = "Boss Modifiers") -> void:
+	_modifiers = modifiers
+	_mod_label = mod_label
 	_build_ui(round_name)
 	parent.add_child(self)
 	move_to_front()  # sit above the builder's graph / side panel siblings
@@ -156,7 +159,7 @@ func _build_ui(round_name: String) -> void:
 
 	if not _modifiers.is_empty():
 		var toggle: CheckButton = CheckButton.new()
-		toggle.text = "SHOW BOSS MODIFIERS"
+		toggle.text = "SHOW %s" % _mod_label.to_upper()
 		toggle.button_pressed = true
 		toggle.add_theme_font_size_override("font_size", 12)
 		toggle.toggled.connect(func(on: bool) -> void:
@@ -175,7 +178,7 @@ func _build_ui(round_name: String) -> void:
 func _refresh_modified() -> void:
 	if _modifiers.is_empty():
 		_graph.set_modified([], false)
-		_caption.text = "No boss modifiers on this round — showing the raw script."
+		_caption.text = "No %s on this round — showing the raw script." % _mod_label.to_lower()
 		_caption.add_theme_color_override("font_color", UITheme.SEPARATOR)
 		return
 	if not _show_modifiers:

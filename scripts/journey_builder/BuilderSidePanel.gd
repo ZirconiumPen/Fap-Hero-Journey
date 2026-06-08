@@ -42,12 +42,13 @@ const VIB_CHANNELS_INFO: Array = [
 
 # Forced-modifier kinds a boss round can impose. Parallel arrays: KINDS feeds the
 # saved data, LABELS feeds the editor dropdown.
-const BOSS_MODIFIER_KINDS:  Array = ["scale", "clamp", "reverse", "blackout", "score_multiplier"]
+# Gameplay forced-modifier kinds a boss round can impose. Visual/audio effects
+# (incl. the old BLACKOUT) now live in the "Non-gameplay modifiers" picker.
+const BOSS_MODIFIER_KINDS:  Array = ["scale", "clamp", "reverse", "score_multiplier"]
 const BOSS_MODIFIER_LABELS: Array = [
 	"SCALE  —  STROKE LENGTH",
 	"CLAMP  —  POSITION RANGE",
 	"REVERSE  —  MIRROR",
-	"BLACKOUT  —  HIDE VIDEO",
 	"SCORE MULTIPLIER",
 ]
 
@@ -825,8 +826,9 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 	_update_funscript_readout(fs_stats_lbl, round_data.get("funscript_path", ""))
 	col.add_child(fs_stats_lbl)
 
-	# Preview the funscript curve (and any boss modifiers applied to it) in a
-	# graph overlay. Enabled once a funscript is attached.
+	# Preview the funscript curve (and any stroke modifiers a boss / cursed /
+	# blessed round applies to it) in a graph overlay. Enabled once a funscript
+	# is attached.
 	var preview_btn: Button = UITheme.make_icon_btn(
 		"📈 PREVIEW FUNSCRIPT", round_data.get("funscript_path", "") == "", UITheme.CYAN)
 	preview_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -835,8 +837,9 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 			_owner,
 			arr[idx].get("funscript_path", ""),
 			arr[idx].get("video_path", ""),
-			arr[idx].get("boss_modifiers", []),
-			arr[idx].get("name", "")))
+			_round_preview_modifiers(arr[idx]),
+			arr[idx].get("name", ""),
+			_round_preview_label(arr[idx])))
 	col.add_child(preview_btn)
 
 	col.add_child(_side_section_separator())
@@ -863,7 +866,13 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 	col.add_child(_make_checkpoint_toggle(arr, idx))
 
 	col.add_child(_side_section_separator())
-	col.add_child(_make_boss_expander(arr, idx))
+	col.add_child(_make_boss_expander(arr, idx, reselect))
+
+	col.add_child(_side_section_separator())
+	col.add_child(_make_cursed_toggle(arr, idx, reselect))
+
+	col.add_child(_side_section_separator())
+	col.add_child(_make_blessed_toggle(arr, idx, reselect))
 
 	col.add_child(_side_section_separator())
 	col.add_child(_side_action_row(arr, idx, graph, reselect))
@@ -1011,6 +1020,20 @@ func _make_side_storyboard_editor(arr: Array, idx: int, graph: Control, reselect
 		arr[idx]["coins"] = int(v)
 	)
 	col.add_child(coins_spin)
+
+	# Optional item reward — granted (alongside coins) when the storyboard ends.
+	col.add_child(_side_field_label("ITEM REWARD  (OPTIONAL)"))
+	var item_values: Array = [""]
+	var item_dd: OptionButton = OptionButton.new()
+	item_dd.add_item("None")
+	for k: String in InventoryService.GetAllItemIds():
+		item_values.append(k)
+		item_dd.add_item(str(InventoryService.GetItemData(k).get("name", k)))
+	item_dd.selected = max(0, item_values.find(str(sb_data.get("item", ""))))
+	item_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_option_button(item_dd)
+	item_dd.item_selected.connect(func(i: int) -> void: arr[idx]["item"] = item_values[i])
+	col.add_child(item_dd)
 
 	col.add_child(_side_section_separator())
 	col.add_child(_side_field_label("DEFAULT IMAGE"))
@@ -1830,11 +1853,12 @@ func _make_checkpoint_toggle(arr: Array, idx: int) -> Control:
 # A "BOSS ROUND" toggle that, when on, marks the round as a boss and reveals its
 # config: an optional intro image, an optional tagline, and a list of forced
 # modifiers the player cannot remove. Toggling off reverts it to a normal round.
-func _make_boss_expander(arr: Array, idx: int) -> Control:
+func _make_boss_expander(arr: Array, idx: int, reselect: Callable) -> Control:
 	if not arr[idx].has("round_type"):
 		arr[idx]["round_type"] = "normal"
 	if not arr[idx].has("boss_modifiers"):
 		arr[idx]["boss_modifiers"] = []
+	_migrate_sensory_boss_modifiers(arr, idx)
 
 	var is_boss: bool = arr[idx]["round_type"] == "boss"
 
@@ -1904,13 +1928,419 @@ func _make_boss_expander(arr: Array, idx: int) -> Control:
 	)
 	boss_panel.add_child(add_btn)
 
+	# Optional non-gameplay (visual/audio) modifiers the boss imposes alongside its
+	# forced modifiers. Explicit-pick only for boss rounds — no random pool.
+	boss_panel.add_child(_build_sensory_picker(arr, idx))
+
+	# Rebuild on toggle so the round-type stays consistent with the Cursed toggle
+	# (turning boss on clears cursed, and vice versa — they share round_type).
 	toggle_btn.toggled.connect(func(pressed: bool) -> void:
-		toggle_btn.text = ("▼  BOSS ROUND" if pressed else "▶  BOSS ROUND")
 		arr[idx]["round_type"] = "boss" if pressed else "normal"
-		boss_panel.visible = pressed
+		reselect.call(idx)
 	)
 
 	return wrapper
+
+
+# Cursed-round toggle. Shares round_type with the boss toggle (mutually
+# exclusive). A cursed round rolls a random negative modifier at the start;
+# there's nothing to configure, so this is just a switch.
+func _make_cursed_toggle(arr: Array, idx: int, reselect: Callable) -> Control:
+	if not arr[idx].has("round_type"):
+		arr[idx]["round_type"] = "normal"
+	var is_cursed: bool = arr[idx]["round_type"] == "cursed"
+
+	var wrapper: VBoxContainer = VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 6)
+
+	var toggle_btn: Button = Button.new()
+	toggle_btn.text = "☠  CURSED ROUND  ✓" if is_cursed else "☠  CURSED ROUND"
+	toggle_btn.toggle_mode = true
+	toggle_btn.button_pressed = is_cursed
+	toggle_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(toggle_btn, UITheme.ERROR_SOFT)
+	toggle_btn.toggled.connect(func(pressed: bool) -> void:
+		arr[idx]["round_type"] = "cursed" if pressed else "normal"
+		reselect.call(idx)
+	)
+	wrapper.add_child(toggle_btn)
+
+	if is_cursed:
+		var hint: Label = Label.new()
+		hint.text = "A hex is applied at the start. Items stay usable; the player can pay to cleanse it, or endure it for the reward."
+		hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+		hint.add_theme_font_size_override("font_size", 10)
+		hint.uppercase = true
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		wrapper.add_child(hint)
+
+		wrapper.add_child(_make_reveal_toggle(arr, idx))
+		wrapper.add_child(_make_cursed_int_field(arr, idx, "cleanse_cost", "CLEANSE COST (COINS)", 50))
+		wrapper.add_child(_make_cursed_int_field(arr, idx, "curse_reward", "ENDURE REWARD (COINS)", 0))
+
+		# Random vs fixed selection.
+		var rand_toggle: CheckButton = CheckButton.new()
+		rand_toggle.text = "RANDOM (roll the curse)"
+		rand_toggle.add_theme_font_size_override("font_size", 12)
+		rand_toggle.button_pressed = bool(arr[idx].get("curse_random", true))
+		rand_toggle.toggled.connect(func(on: bool) -> void: arr[idx]["curse_random"] = on)
+		wrapper.add_child(rand_toggle)
+
+		wrapper.add_child(_side_field_label("CURSES  (NONE TICKED = FULL RANDOM POOL)"))
+		var selected: Array = arr[idx].get("curses", [])
+		for entry: Dictionary in JourneyData.CURSE_CATALOG:
+			var cname: String = str(entry.get("name", ""))
+			var cb: CheckButton = CheckButton.new()
+			cb.text = cname
+			cb.tooltip_text = str(entry.get("desc", ""))
+			cb.add_theme_font_size_override("font_size", 11)
+			cb.button_pressed = cname in selected
+			cb.toggled.connect(func(on: bool) -> void: _toggle_curse(arr, idx, cname, on))
+			wrapper.add_child(cb)
+
+		# Divider — sets the non-gameplay (visual/audio) section apart from the
+		# gameplay curses above.
+		wrapper.add_child(HSeparator.new())
+
+		# Pool toggle sits above the picker. Ticked modifiers always apply; the
+		# toggle additionally lets random sensory modifiers be rolled into the curse.
+		var pool_toggle: CheckButton = CheckButton.new()
+		pool_toggle.text = "INCLUDE IN RANDOM POOL"
+		pool_toggle.tooltip_text = "When on, the random curse roll can also surface non-gameplay modifiers from the full sensory set (not just ticked ones)."
+		pool_toggle.add_theme_font_size_override("font_size", 12)
+		pool_toggle.button_pressed = bool(arr[idx].get("sensory_in_pool", false))
+		pool_toggle.toggled.connect(func(on: bool) -> void: arr[idx]["sensory_in_pool"] = on)
+		wrapper.add_child(pool_toggle)
+
+		wrapper.add_child(_build_sensory_picker(arr, idx))
+
+	return wrapper
+
+
+# Labeled int SpinBox bound to arr[idx][key]. Used by the cursed-round fields.
+func _make_cursed_int_field(arr: Array, idx: int, key: String, label: String, def: int) -> Control:
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.add_child(_side_field_label(label))
+	var spin: SpinBox = SpinBox.new()
+	spin.min_value = 0; spin.max_value = 999999; spin.step = 1
+	spin.value = int(arr[idx].get(key, def))
+	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_spin_box(spin)
+	spin.value_changed.connect(func(v: float) -> void: arr[idx][key] = int(v))
+	box.add_child(spin)
+	return box
+
+
+# Adds/removes a curse name from a cursed round's selected-curses list.
+func _toggle_curse(arr: Array, idx: int, curse_name: String, on: bool) -> void:
+	if not arr[idx].has("curses"):
+		arr[idx]["curses"] = []
+	var list: Array = arr[idx]["curses"]
+	if on:
+		if curse_name not in list:
+			list.append(curse_name)
+	else:
+		list.erase(curse_name)
+
+
+# A "Non-gameplay modifiers" checklist bound to arr[idx]["sensory"], split into
+# Visual and Audio subsections. Shared by the boss and cursed editors.
+func _build_sensory_picker(arr: Array, idx: int) -> Control:
+	if not arr[idx].has("sensory"):
+		arr[idx]["sensory"] = []
+	var selected: Array = arr[idx]["sensory"]
+
+	var wrapper: VBoxContainer = VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 4)
+
+	# Collapsed by default to keep the panel tidy; auto-expanded when the round
+	# already has modifiers so its setup is visible at a glance.
+	var open: bool = not selected.is_empty()
+	var header: Button = Button.new()
+	header.toggle_mode = true
+	header.button_pressed = open
+	header.text = ("▼  NON-GAMEPLAY MODIFIERS  (%d)" % selected.size()) if open else "▶  NON-GAMEPLAY MODIFIERS"
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(header, UITheme.PURPLE_MID)
+	wrapper.add_child(header)
+
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 4)
+	content.visible = open
+	wrapper.add_child(content)
+
+	content.add_child(_side_field_label("VISUAL"))
+	for entry: Dictionary in JourneyData.SENSORY_CATALOG:
+		if str(entry.get("kind", "")) not in JourneyData.AUDIO_SENSORY_KINDS:
+			content.add_child(_make_sensory_row(arr, idx, entry, selected))
+
+	content.add_child(HSeparator.new())
+	content.add_child(_side_field_label("AUDIO"))
+	for entry: Dictionary in JourneyData.SENSORY_CATALOG:
+		if str(entry.get("kind", "")) in JourneyData.AUDIO_SENSORY_KINDS:
+			content.add_child(_make_sensory_row(arr, idx, entry, selected))
+
+	header.toggled.connect(func(on: bool) -> void:
+		content.visible = on
+		header.text = ("▼  NON-GAMEPLAY MODIFIERS  (%d)" % (arr[idx].get("sensory", []) as Array).size()) if on else "▶  NON-GAMEPLAY MODIFIERS"
+	)
+	return wrapper
+
+
+# One non-gameplay-modifier row: a tick (bound to the round's sensory list) and,
+# for effects with an adjustable strength, an intensity control on its own
+# indented line below — a slider plus a synced % spin box for precise entry. The
+# control is only editable while the modifier is ticked; binary effects
+# (Blinded/Silence) show no control.
+func _make_sensory_row(arr: Array, idx: int, entry: Dictionary, selected: Array) -> Control:
+	var sname: String = str(entry.get("name", ""))
+	var col: VBoxContainer = VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+
+	var cb: CheckButton = CheckButton.new()
+	cb.text = sname
+	cb.tooltip_text = str(entry.get("desc", ""))
+	cb.add_theme_font_size_override("font_size", 11)
+	cb.button_pressed = sname in selected
+	col.add_child(cb)
+
+	if not entry.has("idef"):
+		cb.toggled.connect(func(on: bool) -> void: _toggle_sensory(arr, idx, sname, on))
+		return col
+
+	# Intensity line, indented under the checkbox: slider (drag) + spin box (exact).
+	var indent: MarginContainer = MarginContainer.new()
+	indent.add_theme_constant_override("margin_left", 28)
+	col.add_child(indent)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	indent.add_child(row)
+
+	var slider: HSlider = HSlider.new()
+	slider.min_value = 0.0; slider.max_value = 100.0; slider.step = 1.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.tooltip_text = "Intensity"
+	row.add_child(slider)
+
+	var spin: SpinBox = SpinBox.new()
+	spin.min_value = 0.0; spin.max_value = 100.0; spin.step = 1.0
+	spin.suffix = "%"
+	spin.custom_minimum_size = Vector2(68, 0)
+	UITheme.style_spin_box(spin)
+	row.add_child(spin)
+
+	var pct: float = _sensory_intensity_pct(arr, idx, entry)
+	slider.set_value_no_signal(pct)
+	spin.set_value_no_signal(pct)
+	slider.editable = cb.button_pressed
+	spin.editable = cb.button_pressed
+
+	# Keep the two in sync without re-triggering each other, and persist the value.
+	slider.value_changed.connect(func(v: float) -> void:
+		spin.set_value_no_signal(v)
+		_set_sensory_intensity(arr, idx, sname, v / 100.0)
+	)
+	spin.value_changed.connect(func(v: float) -> void:
+		slider.set_value_no_signal(v)
+		_set_sensory_intensity(arr, idx, sname, v / 100.0)
+	)
+	cb.toggled.connect(func(on: bool) -> void:
+		_toggle_sensory(arr, idx, sname, on)
+		slider.editable = on
+		spin.editable = on
+	)
+	return col
+
+
+# The stored intensity for a modifier as a 0–100 percentage (author override, or
+# the catalog default when unset).
+func _sensory_intensity_pct(arr: Array, idx: int, entry: Dictionary) -> float:
+	var nm: String = str(entry.get("name", ""))
+	var overrides: Dictionary = arr[idx].get("sensory_intensity", {})
+	var v: float = float(overrides[nm]) if overrides.has(nm) else float(entry.get("idef", 0.5))
+	return v * 100.0
+
+
+# Stores a modifier's intensity override (normalized 0–1) on the round.
+func _set_sensory_intensity(arr: Array, idx: int, sensory_name: String, value: float) -> void:
+	if not arr[idx].has("sensory_intensity"):
+		arr[idx]["sensory_intensity"] = {}
+	(arr[idx]["sensory_intensity"] as Dictionary)[sensory_name] = clampf(value, 0.0, 1.0)
+
+
+# Back-compat: older journeys could carry visual/audio kinds (e.g. BLACKOUT) as
+# boss FORCED modifiers. Those kinds are now non-gameplay, so on load we move them
+# into the round's sensory list and drop them from boss_modifiers. Idempotent.
+func _migrate_sensory_boss_modifiers(arr: Array, idx: int) -> void:
+	var mods: Array = arr[idx].get("boss_modifiers", [])
+	if mods.is_empty():
+		return
+	var kept: Array = []
+	for mod: Dictionary in mods:
+		var mname: String = _sensory_name_for_kind(str(mod.get("kind", "")))
+		if mname == "":
+			kept.append(mod)  # genuine gameplay modifier — leave it
+			continue
+		if not arr[idx].has("sensory"):
+			arr[idx]["sensory"] = []
+		if mname not in (arr[idx]["sensory"] as Array):
+			(arr[idx]["sensory"] as Array).append(mname)
+	if kept.size() != mods.size():
+		arr[idx]["boss_modifiers"] = kept
+
+
+# The SENSORY_CATALOG display name for a kind, or "" if the kind isn't sensory.
+func _sensory_name_for_kind(kind: String) -> String:
+	for entry: Dictionary in JourneyData.SENSORY_CATALOG:
+		if str(entry.get("kind", "")) == kind:
+			return str(entry.get("name", ""))
+	return ""
+
+
+# Adds/removes a non-gameplay modifier name from a round's sensory list.
+func _toggle_sensory(arr: Array, idx: int, sensory_name: String, on: bool) -> void:
+	if not arr[idx].has("sensory"):
+		arr[idx]["sensory"] = []
+	var list: Array = arr[idx]["sensory"]
+	if on:
+		if sensory_name not in list:
+			list.append(sensory_name)
+	else:
+		list.erase(sensory_name)
+
+
+# A "Show intro card" toggle (default on) — whether a cursed/blessed round plays
+# its animated reveal card naming the effect(s) before the video starts. Off =
+# surprise the player. Shared by the cursed and blessed editors.
+func _make_reveal_toggle(arr: Array, idx: int) -> CheckButton:
+	var t: CheckButton = CheckButton.new()
+	t.text = "SHOW INTRO CARD"
+	t.tooltip_text = "Play the animated card naming the effect(s) before the round starts. Off = no telegraph; the effect just hits."
+	t.add_theme_font_size_override("font_size", 12)
+	t.button_pressed = bool(arr[idx].get("show_reveal", true))
+	t.toggled.connect(func(on: bool) -> void: arr[idx]["show_reveal"] = on)
+	return t
+
+
+# Blessed-round toggle — the positive mirror of cursed. Shares round_type (so it's
+# mutually exclusive with Boss / Cursed). Boons are pure upside: no cleanse/cost.
+func _make_blessed_toggle(arr: Array, idx: int, reselect: Callable) -> Control:
+	if not arr[idx].has("round_type"):
+		arr[idx]["round_type"] = "normal"
+	var is_blessed: bool = arr[idx]["round_type"] == "blessed"
+
+	var wrapper: VBoxContainer = VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 6)
+
+	var toggle_btn: Button = Button.new()
+	toggle_btn.text = "✦  BLESSED ROUND  ✓" if is_blessed else "✦  BLESSED ROUND"
+	toggle_btn.toggle_mode = true
+	toggle_btn.button_pressed = is_blessed
+	toggle_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(toggle_btn, UITheme.AMBER)
+	toggle_btn.toggled.connect(func(pressed: bool) -> void:
+		arr[idx]["round_type"] = "blessed" if pressed else "normal"
+		reselect.call(idx)
+	)
+	wrapper.add_child(toggle_btn)
+
+	if is_blessed:
+		var hint: Label = Label.new()
+		hint.text = "A boon is applied at the start — score, coins, stronger strokes, a free item, a ward against the next curse, or lingering buffs."
+		hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+		hint.add_theme_font_size_override("font_size", 10)
+		hint.uppercase = true
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		wrapper.add_child(hint)
+
+		wrapper.add_child(_make_reveal_toggle(arr, idx))
+
+		var rand_toggle: CheckButton = CheckButton.new()
+		rand_toggle.text = "RANDOM (roll the boon)"
+		rand_toggle.add_theme_font_size_override("font_size", 12)
+		rand_toggle.button_pressed = bool(arr[idx].get("boon_random", true))
+		rand_toggle.toggled.connect(func(on: bool) -> void: arr[idx]["boon_random"] = on)
+		wrapper.add_child(rand_toggle)
+
+		wrapper.add_child(_side_field_label("BOONS  (NONE TICKED = FULL RANDOM POOL)"))
+		var selected: Array = arr[idx].get("boons", [])
+		for entry: Dictionary in JourneyData.BLESSING_CATALOG:
+			var bname: String = str(entry.get("name", ""))
+			var cb: CheckButton = CheckButton.new()
+			cb.text = bname
+			cb.tooltip_text = str(entry.get("desc", ""))
+			cb.add_theme_font_size_override("font_size", 11)
+			cb.button_pressed = bname in selected
+			cb.toggled.connect(func(on: bool) -> void: _toggle_boon(arr, idx, bname, on))
+			wrapper.add_child(cb)
+
+		wrapper.add_child(_side_field_label("GIFT ITEM  (FOR THE GIFT BOON)"))
+		var values: Array = [""]
+		var gift_dd: OptionButton = OptionButton.new()
+		gift_dd.add_item("None")
+		for k: String in InventoryService.GetAllItemIds():
+			values.append(k)
+			gift_dd.add_item(str(InventoryService.GetItemData(k).get("name", k)))
+		gift_dd.selected = max(0, values.find(str(arr[idx].get("gift_item", ""))))
+		gift_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_option_button(gift_dd)
+		gift_dd.item_selected.connect(func(i: int) -> void: arr[idx]["gift_item"] = values[i])
+		wrapper.add_child(gift_dd)
+
+	return wrapper
+
+
+# Adds/removes a boon name from a blessed round's selected-boons list.
+func _toggle_boon(arr: Array, idx: int, boon_name: String, on: bool) -> void:
+	if not arr[idx].has("boons"):
+		arr[idx]["boons"] = []
+	var list: Array = arr[idx]["boons"]
+	if on:
+		if boon_name not in list:
+			list.append(boon_name)
+	else:
+		list.erase(boon_name)
+
+
+# Stroke-affecting modifiers to preview for this round, by type: boss modifiers
+# directly, or the round's selected curse/boon catalog entries — filtered to the
+# kinds that actually change the funscript curve (others don't show in a preview).
+func _round_preview_modifiers(item: Dictionary) -> Array:
+	match item.get("round_type", "normal"):
+		"boss":
+			return _stroke_only(item.get("boss_modifiers", []))
+		"cursed":
+			return _stroke_only(_catalog_entries(JourneyData.CURSE_CATALOG, item.get("curses", [])))
+		"blessed":
+			return _stroke_only(_catalog_entries(JourneyData.BLESSING_CATALOG, item.get("boons", [])))
+	return []
+
+
+func _round_preview_label(item: Dictionary) -> String:
+	match item.get("round_type", "normal"):
+		"cursed":  return "Curse effects"
+		"blessed": return "Boon effects"
+	return "Boss modifiers"
+
+
+# Catalog entries whose name is in `names`, preserving catalog order.
+func _catalog_entries(catalog: Array, names: Array) -> Array:
+	var out: Array = []
+	for entry: Dictionary in catalog:
+		if entry.get("name", "") in names:
+			out.append(entry)
+	return out
+
+
+# Keeps only modifiers whose kind changes the stroke curve.
+func _stroke_only(mods: Array) -> Array:
+	var out: Array = []
+	for m: Dictionary in mods:
+		if String(m.get("kind", "")) in ["scale", "clamp", "reverse", "block"]:
+			out.append(m)
+	return out
 
 
 # Returns a fresh modifier dict for `kind` seeded with sensible default params.

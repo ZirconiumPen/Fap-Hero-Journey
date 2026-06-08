@@ -215,6 +215,18 @@ public partial class InventoryService : Node
 			["duration_ms"] = 0,
 			["kind"]        = "key",
 		};
+		// Cleanse — held until used on a cursed round; not manually activatable
+		// (see ActivateItem). Mirrors data/shop_items.json.
+		_registry["cleanse"] = new Dictionary
+		{
+			["id"]          = "cleanse",
+			["name"]        = "Cleanse",
+			["description"] = "Lifts the curse on a cursed round for free. Consumed when used.",
+			["category"]    = "utility",
+			["price"]       = 60,
+			["duration_ms"] = 0,
+			["kind"]        = "cleanse",
+		};
 	}
 
 	// --- Registry access -------------------------------------------------------
@@ -386,9 +398,11 @@ public partial class InventoryService : Node
 
 		var item = _items[slotIndex];
 
-		// Keys aren't manually usable — they're consumed automatically at an
-		// item-conditional fork. Refuse activation so the player can't waste one.
-		if (item.ContainsKey("kind") && item["kind"].AsString() == "key")
+		// Keys and Cleanses aren't manually usable — a Key is consumed at an
+		// item-conditional fork, a Cleanse via the cursed-round cleanse button.
+		// Refuse activation so the player can't waste one.
+		string itemKind = item.ContainsKey("kind") ? item["kind"].AsString() : "";
+		if (itemKind == "key" || itemKind == "cleanse")
 			return false;
 
 		_items.RemoveAt(slotIndex);

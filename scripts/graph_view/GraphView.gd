@@ -379,10 +379,22 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 # is_terminal: true when this node ends the run (no path leads beyond it).
 func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = false) -> Control:
 	var item_type: String = item.get("type", "round")
-	var is_boss: bool = item_type == "round" and item.get("round_type", "normal") == "boss"
-	# Terminal nodes use AMBER; boss rounds use DANGER red; else the type colour.
-	var accent: Color = UITheme.AMBER if is_terminal else (UITheme.DANGER if is_boss else _type_color(item_type))
-	var icon: String = "⚔" if is_boss else _type_icon(item_type)
+	var round_type: String = item.get("round_type", "normal") if item_type == "round" else ""
+	var is_boss: bool = round_type == "boss"
+	# Terminal nodes use AMBER; boss/cursed/blessed rounds get their own accent;
+	# otherwise the type colour.
+	var accent: Color
+	if is_terminal:
+		accent = UITheme.AMBER
+	elif round_type == "boss":
+		accent = UITheme.DANGER
+	elif round_type == "cursed":
+		accent = Color(0.45, 0.95, 0.30)  # toxic green
+	elif round_type == "blessed":
+		accent = Color(1.0, 0.84, 0.30)   # gold
+	else:
+		accent = _type_color(item_type)
+	var icon: String = "⚔" if is_boss else ("☠" if round_type == "cursed" else ("✦" if round_type == "blessed" else _type_icon(item_type)))
 	var primary: String = _type_label(item)
 	var secondary: String = _type_sublabel(item)
 	if is_terminal:
@@ -609,8 +621,13 @@ func _type_sublabel(item: Dictionary) -> String:
 	match item_type:
 		"round":
 			var c: int = item.get("coins", 0)
-			var is_boss: bool = item.get("round_type", "normal") == "boss"
-			var rlabel: String = "BOSS ROUND" if is_boss else "ROUND"
+			var rt: String = item.get("round_type", "normal")
+			var is_boss: bool = rt == "boss"
+			var rlabel: String = "ROUND"
+			match rt:
+				"boss":    rlabel = "BOSS ROUND"
+				"cursed":  rlabel = "☠ CURSED ROUND"
+				"blessed": rlabel = "✦ BLESSED ROUND"
 			# Checkpoint marker — author-set save point. Suppressed on bosses
 			# since the runtime ignores the flag inside a boss round, so the
 			# graph shouldn't claim something the play loop won't deliver.
@@ -621,7 +638,15 @@ func _type_sublabel(item: Dictionary) -> String:
 			return "SHOP"
 		"storyboard":
 			var n: int = (item.get("lines", []) as Array).size()
-			return "STORYBOARD   %d LINE%s" % [n, "S" if n != 1 else ""]
+			var sub: String = "STORYBOARD   %d LINE%s" % [n, "S" if n != 1 else ""]
+			var rewards: Array = []
+			if int(item.get("coins", 0)) > 0:
+				rewards.append("♦ %d" % int(item.get("coins", 0)))
+			if str(item.get("item", "")) != "":
+				rewards.append("+ ITEM")
+			if not rewards.is_empty():
+				sub += "   " + "  ".join(rewards)
+			return sub
 		"fork":
 			var paths: Array = item.get("paths", [])
 			return "%s   %d PATHS" % [_fork_type_label(item.get("resolution", "choice")), paths.size()]

@@ -125,5 +125,14 @@
 		"price":        50,
 		"duration_ms":  0,
 		"kind":         "key"
+	},
+	{
+		"id":           "cleanse",
+		"name":         "Cleanse",
+		"description":  "Lifts the curse on a cursed round for free. Consumed when used.",
+		"category":     "utility",
+		"price":        60,
+		"duration_ms":  0,
+		"kind":         "cleanse"
 	}
 ]
