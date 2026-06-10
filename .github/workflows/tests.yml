@@ -30,6 +30,9 @@ jobs:
           version: 'v6.1.3'           # gdUnit4 plugin version — matches local addons/gdUnit4 (not committed, so CI installs it)
           paths: 'res://tests'
           timeout: 10
-          publish-report: true
+          # publish-report defaults to the 'dotnet-trx' parser when godot-net is on,
+          # but GDScript suites emit JUnit XML (no TRX <TestDefinitions>) so it crashes.
+          # Job pass/fail comes from the action's exit code; the artifact has the report.
+          publish-report: false
           upload-report: true
           report-name: gdunit-report
