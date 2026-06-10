@@ -1679,14 +1679,6 @@ func _create_save_progress_modal_if_needed() -> Control:
 # in the latter case the user-facing error modal is already shown and the
 # staging folder is already cleaned up.
 # Maps the in-memory round_type to its journey.json label.
-func _round_type_label(round_type: String) -> String:
-	match round_type:
-		"boss":    return "Boss"
-		"cursed":  return "Cursed"
-		"blessed": return "Blessed"
-		_:         return "Normal"
-
-
 func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 	# Pull the paths-dict entries into the locals the loop body already uses,
 	# so the legacy code below doesn't have to be reflowed to dict access.
@@ -1855,33 +1847,19 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 			# subfolders with it. Touching the live folder mid-save would break
 			# the staging rollback on a later failure.)
 
-			rounds_json.append({
-				"Name":           round_name,
-				"FolderName":     round_slug,
-				"Order":          rorder,
-				"CoinsAwarded":   item.get("coins",0) as int,
-				"RoundType":      _round_type_label(round_type),
-				"IsCheckpoint":   bool(item.get("is_checkpoint", false)),
-				"CurseReward":    int(item.get("curse_reward", 0)),
-				"CleanseCost":    int(item.get("cleanse_cost", 50)),
-				"CurseRandom":    bool(item.get("curse_random", true)),
-				"Curses":         item.get("curses", []),
-				"BoonRandom":     bool(item.get("boon_random", true)),
-				"Boons":          item.get("boons", []),
-				"GiftItem":       item.get("gift_item", ""),
-				"BossImage":      boss_image_rel,
-				"BossTagline":    item.get("boss_tagline", ""),
-				"BossModifiers":  _boss_modifiers_json(item.get("boss_modifiers", [])),
-				"Sensory":        item.get("sensory", []),
-				"SensoryInPool":  bool(item.get("sensory_in_pool", false)),
-				"SensoryIntensity": item.get("sensory_intensity", {}),
-				"ShowReveal":     bool(item.get("show_reveal", true)),
-				"FunscriptPath":  round_slug + "/" + fs_dst_name,
-				"AxisScripts":    axis_scripts_rel,
-				"VibScripts":     vib_scripts_rel,
-				"ActionCount":    fs_stats["count"],
-				"LengthMs":       fs_stats["length_ms"],
-			})
+			# Authored gameplay fields come from the shared serializer; the media /
+			# slug fields are merged in from what this save loop computed.
+			var round_json: Dictionary = JourneyData.round_to_json(item)
+			round_json["Name"]          = round_name
+			round_json["FolderName"]    = round_slug
+			round_json["Order"]         = rorder
+			round_json["BossImage"]     = boss_image_rel
+			round_json["FunscriptPath"] = round_slug + "/" + fs_dst_name
+			round_json["AxisScripts"]   = axis_scripts_rel
+			round_json["VibScripts"]    = vib_scripts_rel
+			round_json["ActionCount"]   = fs_stats["count"]
+			round_json["LengthMs"]      = fs_stats["length_ms"]
+			rounds_json.append(round_json)
 		else:
 			# Fork — recursively save the fork and all nested forks.
 			var slug_prefix: String = "fork%d" % forks_json.size()
@@ -2189,33 +2167,19 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 				# (Renamed-round cleanup is implicit at swap time — see the
 				# top-level round save above. Deleting the live original mid-
 				# save would break the staging rollback if a later step fails.)
-				path_entry["Rounds"].append({
-					"Name":          pr_name,
-					"FolderName":    pr_slug,
-					"Order":         pr_order,
-					"CoinsAwarded":  pi_item.get("coins",0) as int,
-					"RoundType":     _round_type_label(pr_round_type),
-					"IsCheckpoint":  bool(pi_item.get("is_checkpoint", false)),
-					"CurseReward":   int(pi_item.get("curse_reward", 0)),
-					"CleanseCost":   int(pi_item.get("cleanse_cost", 50)),
-					"CurseRandom":   bool(pi_item.get("curse_random", true)),
-					"Curses":        pi_item.get("curses", []),
-					"BoonRandom":    bool(pi_item.get("boon_random", true)),
-					"Boons":         pi_item.get("boons", []),
-					"GiftItem":      pi_item.get("gift_item", ""),
-					"BossImage":     pr_boss_image_rel,
-					"BossTagline":   pi_item.get("boss_tagline", ""),
-					"BossModifiers": _boss_modifiers_json(pi_item.get("boss_modifiers", [])),
-					"Sensory":       pi_item.get("sensory", []),
-					"SensoryInPool": bool(pi_item.get("sensory_in_pool", false)),
-					"SensoryIntensity": pi_item.get("sensory_intensity", {}),
-					"ShowReveal":    bool(pi_item.get("show_reveal", true)),
-					"FunscriptPath": pr_slug + "/" + pr_fs_dst_name if pr_fs_dst_name != "" else "",
-					"AxisScripts":   pr_axis_rel,
-					"VibScripts":    pr_vib_rel,
-					"ActionCount":   pr_fs_stats["count"],
-					"LengthMs":      pr_fs_stats["length_ms"],
-				})
+				# Same shared serializer as the top-level round save; merge in the
+				# fork-path media / slug fields.
+				var pr_json: Dictionary = JourneyData.round_to_json(pi_item)
+				pr_json["Name"]          = pr_name
+				pr_json["FolderName"]    = pr_slug
+				pr_json["Order"]         = pr_order
+				pr_json["BossImage"]     = pr_boss_image_rel
+				pr_json["FunscriptPath"] = (pr_slug + "/" + pr_fs_dst_name) if pr_fs_dst_name != "" else ""
+				pr_json["AxisScripts"]   = pr_axis_rel
+				pr_json["VibScripts"]    = pr_vib_rel
+				pr_json["ActionCount"]   = pr_fs_stats["count"]
+				pr_json["LengthMs"]      = pr_fs_stats["length_ms"]
+				path_entry["Rounds"].append(pr_json)
 
 	return path_entry
 
@@ -2688,22 +2652,6 @@ func _delete_stale_axis_files(dir_path: String, axis: String, keep_filename: Str
 
 # Converts the internal boss-modifier model ({kind, factor, min, max}) into the
 # PascalCase form written to journey.json, keeping only the keys each kind uses.
-func _boss_modifiers_json(modifiers: Array) -> Array:
-	var out: Array = []
-	for mod in modifiers:
-		if not mod is Dictionary:
-			continue
-		var entry: Dictionary = {"Kind": mod.get("kind", "")}
-		if mod.has("factor"):
-			entry["Factor"] = mod["factor"]
-		if mod.has("min"):
-			entry["Min"] = mod["min"]
-		if mod.has("max"):
-			entry["Max"] = mod["max"]
-		out.append(entry)
-	return out
-
-
 # Removes stale vibrator-channel funscript files for a specific channel key
 # (i.e. `*_vib1.funscript`) but are not the newly written `keep_filename`.
 func _delete_stale_vib_files(dir_path: String, ch_key: String, keep_filename: String) -> void:

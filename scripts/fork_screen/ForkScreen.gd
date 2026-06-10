@@ -242,12 +242,10 @@ func _on_path_chosen(index: int) -> void:
 
 
 # True if the player can pay this path's coin cost and owns its required item.
+# Gating logic is shared with the resolver (pure, tested); here we feed it the
+# live coin balance and ownership.
 func _can_afford(cost: int, required_item: String) -> bool:
-	if cost > 0 and not CoinService.CanAfford(cost):
-		return false
-	if required_item != "" and not InventoryService.OwnsItem(required_item):
-		return false
-	return true
+	return ForkResolver.path_affordable(cost, required_item, CoinService.Balance, Callable(InventoryService, "OwnsItem"))
 
 
 # Requirement text for a conditional path's card, e.g. "SCORE ≥ 100" or

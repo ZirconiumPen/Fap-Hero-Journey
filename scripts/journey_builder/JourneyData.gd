@@ -107,6 +107,62 @@ const BLESSING_CATALOG: Array = [
 ]
 
 
+# ── Round serialization ──────────────────────────────────────────────────────
+
+# The authored (non-media) journey.json fields for a round, derived purely from
+# the builder item model — the gameplay config shared by top-level and fork-path
+# rounds. The save flow merges in the media/slug fields (Name, FolderName, Order,
+# FunscriptPath, AxisScripts, VibScripts, BossImage, ActionCount, LengthMs) it
+# computes while copying files. Single source for the bug-prone curse/boon/sensory/
+# boss key set; JourneyScanner.parse_journey reads these keys back.
+static func round_to_json(item: Dictionary) -> Dictionary:
+	return {
+		"CoinsAwarded":     int(item.get("coins", 0)),
+		"RoundType":        round_type_label(item.get("round_type", "normal")),
+		"IsCheckpoint":     bool(item.get("is_checkpoint", false)),
+		"CurseReward":      int(item.get("curse_reward", 0)),
+		"CleanseCost":      int(item.get("cleanse_cost", 50)),
+		"CurseRandom":      bool(item.get("curse_random", true)),
+		"Curses":           item.get("curses", []),
+		"BoonRandom":       bool(item.get("boon_random", true)),
+		"Boons":            item.get("boons", []),
+		"GiftItem":         item.get("gift_item", ""),
+		"BossTagline":      item.get("boss_tagline", ""),
+		"BossModifiers":    boss_modifiers_json(item.get("boss_modifiers", [])),
+		"Sensory":          item.get("sensory", []),
+		"SensoryInPool":    bool(item.get("sensory_in_pool", false)),
+		"SensoryIntensity": item.get("sensory_intensity", {}),
+		"ShowReveal":       bool(item.get("show_reveal", true)),
+	}
+
+
+# Internal round_type → journey.json label. JourneyScanner lowercases on parse.
+static func round_type_label(round_type: String) -> String:
+	match round_type:
+		"boss":    return "Boss"
+		"cursed":  return "Cursed"
+		"blessed": return "Blessed"
+		_:         return "Normal"
+
+
+# Internal boss modifiers ({kind, factor?/min?/max?}) → journey.json form
+# ({Kind, Factor?/Min?/Max?}). Only the keys relevant to the kind are written.
+static func boss_modifiers_json(modifiers: Array) -> Array:
+	var out: Array = []
+	for mod in modifiers:
+		if not mod is Dictionary:
+			continue
+		var entry: Dictionary = {"Kind": mod.get("kind", "")}
+		if mod.has("factor"):
+			entry["Factor"] = mod["factor"]
+		if mod.has("min"):
+			entry["Min"] = mod["min"]
+		if mod.has("max"):
+			entry["Max"] = mod["max"]
+		out.append(entry)
+	return out
+
+
 # ── Item templates ───────────────────────────────────────────────────────────
 
 # Returns a fresh default item dict for a builder node of the given type. Single

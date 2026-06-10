@@ -106,25 +106,12 @@ const CLEANSE_COST_DEFAULT: int = 50
 
 var _curse_frame:   Panel     = null  # green "hex" border (cursed counterpart to _boss_frame)
 var _curse_tint:    ColorRect = null  # faint sickly tint over the play area
-var _curse_murk:    ColorRect = null  # "Murk" — dims the screen
-var _curse_strobe:  ColorRect = null  # "Strobe" — flickering black overlay
-var _curse_tunnel:  TextureRect = null  # "Tunnel" — closing vignette
-var _curse_bloodshot: ColorRect = null  # "Bloodshot" — pulsing red haze
-var _curse_static:    ColorRect = null  # "Interference" — animated TV static
-var _curse_flicker:   ColorRect = null  # "Flicker" — erratic brightness dips
-var _video_fx_mat:    ShaderMaterial = null  # composable per-pixel video effects (Drained/Bleary/Censored/…)
-var _strobe_tween:    Tween     = null
-var _bloodshot_tween: Tween     = null
-var _flicker_tween:   Tween     = null
-var _volwobble_tween: Tween     = null
-var _curse_tremor:    bool      = false  # "Tremor" — shakes the video each frame
-var _curse_tremor_amp: float    = 9.0    # Tremor shake amplitude (set from intensity)
-var _curse_tunnel_grad: Gradient = null  # Tunnel vignette gradient (mid point set from intensity)
-const VIDEO_FX_BUS: String = "VideoFX"  # dedicated audio bus for hex audio effects
+# The non-gameplay (visual/audio) modifier engine — overlays, video shader,
+# audio bus, tremor, mute. Built in _build_curse_overlay; every hex routes
+# through it first (see _apply_hex). Gameplay hexes below stay here.
+var _sensory: SensoryFX = null
 var _curse_hud_hidden: bool   = false  # a "Fog" hex hid the HUD for this round
-var _curse_muted:      bool   = false  # a "Silence" hex muted the video this round
 var _curse_no_pause:   bool   = false  # a "Restless" hex disabled pausing this round
-var _pre_curse_volume_db: float = 0.0  # restored when a "Silence" hex ends
 const TOLL_AMOUNT: int = 40  # coins a "Toll" hex takes immediately
 
 # Blessed round — the positive mirror of cursed. Applies boon(s) from
@@ -169,7 +156,6 @@ var _run_accounted: bool = false
 
 func _ready() -> void:
 	MusicService.stop()
-	_setup_audio_fx_bus()
 	_apply_layout()
 	_apply_theme()
 	_build_boss_frame()
@@ -261,14 +247,6 @@ func _apply_pause_penalty(delta: float) -> void:
 	while _pause_penalty_accum >= 1.0:
 		_pause_penalty_accum -= 1.0
 		ScoreService.PenalizeScore(PAUSE_PENALTY_PER_SEC)
-
-
-# Leaving the game loop (Esc out of a test, journey complete, etc.) — strip any
-# audio effects off the global VideoFX bus so they don't bleed into the next run
-# or anything else routed through it.
-func _exit_tree() -> void:
-	_stop_volwobble()
-	_clear_audio_effects()
 
 
 # ---------------------------------------------------------------------------
@@ -371,52 +349,36 @@ func _show_fork_screen(fork_data: Dictionary) -> void:
 			fork_screen.reveal(_conditional_path(fork_data), _conditional_caption(fork_data))
 
 
-# Picks a path index by weight (per-path "weight", default 1). Zero/negative
-# weights are treated as 0; if every weight is 0, all paths are equally likely.
+# Picks a path index by weight (per-path "weight", default 1). The weighting math
+# lives in ForkResolver.weighted_pick (pure, tested); only the random draw stays
+# here. If every weight is 0, all paths are equally likely.
 func _weighted_random_path(paths: Array) -> int:
 	if paths.is_empty():
 		return 0
+	var weights: Array = []
 	var total: int = 0
 	for p: Dictionary in paths:
-		total += maxi(0, int(p.get("weight", 1)))
+		var w: int = maxi(0, int(p.get("weight", 1)))
+		weights.append(w)
+		total += w
 	if total <= 0:
 		return randi() % paths.size()
-	var r: int = randi() % total
-	var acc: int = 0
-	for i in paths.size():
-		acc += maxi(0, int(paths[i].get("weight", 1)))
-		if r < acc:
-			return i
-	return paths.size() - 1
+	return ForkResolver.weighted_pick(weights, randi() % total)
 
 
-# Resolves a conditional fork to a path index. Score/coins use tiered thresholds
-# (highest one the value meets wins). Item checks ownership top-down (NOT
-# consumed). Falls back to the author's default path when nothing matches.
+# Resolves a conditional fork to a path index. Score/coins use tiered thresholds;
+# item checks ownership (not consumed); default path on no-match. The resolution
+# logic lives in ForkResolver.conditional_path (pure, tested) — here we just gather
+# the current score / coins / ownership.
 func _conditional_path(fork_data: Dictionary) -> int:
-	var paths: Array = fork_data.get("paths", [])
-	if paths.is_empty():
-		return 0
-	var default_idx: int = clampi(int(fork_data.get("default_path", 0)), 0, paths.size() - 1)
 	var metric: String = fork_data.get("cond_metric", "score")
-
-	if metric == "item":
-		for i in paths.size():
-			var req: String = str(paths[i].get("required_item", ""))
-			if req != "" and InventoryService.OwnsItem(req):
-				return i
-		return default_idx
-
-	# score / coins → highest met threshold wins.
 	var value: int = ScoreService.LastRoundScore if metric == "score" else CoinService.Balance
-	var best_idx: int = -1
-	var best_threshold: int = -1
-	for i in paths.size():
-		var t: int = int(paths[i].get("threshold", 0))
-		if value >= t and t > best_threshold:
-			best_threshold = t
-			best_idx = i
-	return best_idx if best_idx >= 0 else default_idx
+	return ForkResolver.conditional_path(
+		fork_data.get("paths", []),
+		metric,
+		int(fork_data.get("default_path", 0)),
+		value,
+		Callable(InventoryService, "OwnsItem"))
 
 
 # Flavour text shown during a conditional fork's reveal, per metric.
@@ -729,7 +691,7 @@ func _enter_boss_mode(round: Dictionary) -> void:
 		var hx: Dictionary = _make_boss_effect(roll)
 		hx["name"] = roll.get("name", hx["name"])
 		InventoryService.AddBossEffects([hx])
-		_apply_hex(roll, _sensory_intensity(round, roll))
+		_apply_hex(roll, SensoryFX.intensity_for(round, roll))
 
 	# Item use is disabled for the whole boss round.
 	if is_instance_valid(_inventory_panel):
@@ -928,7 +890,7 @@ func _enter_cursed_mode() -> void:
 		var fx: Dictionary = _make_boss_effect(roll)
 		fx["name"] = roll.get("name", fx["name"])
 		InventoryService.AddBossEffects([fx])  # also shows as a (red) HUD chip
-		_apply_hex(roll, _sensory_intensity(round, roll))  # GameLoop-side hex behaviours
+		_apply_hex(roll, SensoryFX.intensity_for(round, roll))  # sensory → SensoryFX, gameplay → here
 
 	_curse_cleansed = false
 	_show_curse_overlay()
@@ -1015,168 +977,37 @@ func _cleanse_curse() -> void:
 	_show_save_toast("✦  CURSE CLEANSED")
 
 
-# Undoes every hex side-effect (HUD/mute/pause/visuals). Safe to call when none
-# are active (boss rounds, plain rounds) — each branch no-ops.
+# Undoes every hex side-effect — sensory ones via SensoryFX, gameplay ones
+# (HUD/pause/blackout) here. Safe to call when none are active (boss rounds,
+# plain rounds) — each branch no-ops.
 func _clear_curse_hexes() -> void:
 	_curse_hud_hidden = false
-	if _curse_muted:
-		_curse_muted = false
-		_video.volume_db = _pre_curse_volume_db
 	if _curse_no_pause:
 		_curse_no_pause = false
 		_pause_btn.disabled = false
 	_video.visible = true  # undo a Blinded (blackout) hex
-	_reset_video_fx()      # undo every per-pixel video hex (Drained/Bleary/…)
-	_clear_audio_effects() # undo low-pass / reverb / distortion + restore bus level
-	_stop_strobe()
-	_stop_bloodshot()
-	_stop_flicker()
-	_stop_volwobble()
-	_curse_tremor = false
-	if _curse_murk != null:
-		_curse_murk.visible = false
-	if _curse_strobe != null:
-		_curse_strobe.visible = false
-	if _curse_tunnel != null:
-		_curse_tunnel.visible = false
-	if _curse_bloodshot != null:
-		_curse_bloodshot.visible = false
-	if _curse_static != null:
-		_curse_static.visible = false
-	if _curse_flicker != null:
-		_curse_flicker.visible = false
-
-
-func _start_strobe(clear_secs: float = 3.0) -> void:
-	_stop_strobe()
-	# Pulse to full black: <clear_secs> clear → 1s fade in → 1s black → 1s fade
-	# back. Intensity shortens the clear gap (more frequent = more intense).
-	_curse_strobe.modulate.a = 0.0
-	_strobe_tween = create_tween().set_loops()
-	_strobe_tween.tween_interval(maxf(0.2, clear_secs))
-	_strobe_tween.tween_property(_curse_strobe, "modulate:a", 1.0, 1.0)
-	_strobe_tween.tween_interval(1.0)
-	_strobe_tween.tween_property(_curse_strobe, "modulate:a", 0.0, 1.0)
-
-
-func _stop_strobe() -> void:
-	if _strobe_tween != null and _strobe_tween.is_valid():
-		_strobe_tween.kill()
-	_strobe_tween = null
-	if _curse_strobe != null:
-		_curse_strobe.modulate.a = 0.0
-
-
-# The real effect value for a sensory hex at the given intensity (0–1), mapped
-# through the catalog entry's imin/imax. imin may exceed imax (inverted effects).
-func _ival(roll: Dictionary, intensity: float) -> float:
-	return lerpf(float(roll.get("imin", 0.0)), float(roll.get("imax", 1.0)), clampf(intensity, 0.0, 1.0))
-
-
-# This round's intensity (0–1) for a sensory modifier: the author's per-round
-# override if set, else the catalog default. Used by cursed and boss rounds.
-func _sensory_intensity(round: Dictionary, entry: Dictionary) -> float:
-	var overrides: Dictionary = round.get("sensory_intensity", {})
-	var nm: String = str(entry.get("name", ""))
-	if overrides.has(nm):
-		return clampf(float(overrides[nm]), 0.0, 1.0)
-	return float(entry.get("idef", 0.5))
-
-
-# Moves the Tunnel vignette's mid ramp point — smaller offset = narrower clear
-# centre = a tighter tunnel. (imin/imax for tunnel are offsets, not 0–1.)
-func _set_tunnel_intensity(mid_offset: float) -> void:
-	if _curse_tunnel_grad != null:
-		_curse_tunnel_grad.set_offset(1, clampf(mid_offset, 0.05, 0.95))
+	if _sensory != null:
+		_sensory.clear_all()
 
 
 # Applies a "hex" curse — effects beyond the stroke (which FunscriptPlayer can't
-# do). coin_penalty is read at round end; here we handle the immediate ones. For
-# non-gameplay (sensory) hexes, `intensity` (0–1) maps to the real effect value
-# via the catalog's imin/imax (see _ival); other kinds ignore it.
+# do). Sensory (visual/audio) kinds are handled by SensoryFX, with `intensity`
+# (0–1) mapped through the catalog's imin/imax; the gameplay kinds are handled
+# here. coin_penalty is read at round end, not applied here.
 func _apply_hex(roll: Dictionary, intensity: float = 1.0) -> void:
+	if _sensory != null and _sensory.apply(roll, intensity):
+		return
 	match String(roll.get("kind", "")):
 		"hud_hide":
 			_curse_hud_hidden = true
 			_hud.visible = false
-		"mute":
-			_curse_muted = true
-			_pre_curse_volume_db = _video.volume_db
-			_video.volume_db = -80.0
 		"toll":
 			var take: int = mini(TOLL_AMOUNT, CoinService.Balance)
 			if take > 0:
 				CoinService.SpendCoins(take)
-		"murk":
-			if _curse_murk != null:
-				_curse_murk.color.a = _ival(roll, intensity)
-				_curse_murk.visible = true
-		"tunnel":
-			if _curse_tunnel != null:
-				_set_tunnel_intensity(_ival(roll, intensity))
-				_curse_tunnel.visible = true
-		"strobe":
-			if _curse_strobe != null:
-				_curse_strobe.visible = true
-				_start_strobe(_ival(roll, intensity))
 		"no_pause":
 			_curse_no_pause = true
 			_pause_btn.disabled = true
-		# Per-pixel video hexes — one composable shader, one uniform each.
-		"grayscale":
-			_set_video_fx("grayscale", _ival(roll, intensity))
-		"blur":
-			_set_video_fx("blur", _ival(roll, intensity))
-		"pixelate":
-			_set_video_fx("pixelate", _ival(roll, intensity))
-		"invert":
-			_set_video_fx("invert", _ival(roll, intensity))
-		"sepia":
-			_set_video_fx("sepia", _ival(roll, intensity))
-		"posterize":
-			_set_video_fx("posterize", _ival(roll, intensity))
-		"saturate":
-			_set_video_fx("saturation", _ival(roll, intensity))
-		"chromatic":
-			_set_video_fx("chromatic", _ival(roll, intensity))
-		"wave":
-			_set_video_fx("wave", _ival(roll, intensity))
-		# Overlay-node visual hexes.
-		"bloodshot":
-			if _curse_bloodshot != null:
-				_curse_bloodshot.visible = true
-				_start_bloodshot(_ival(roll, intensity))
-		"static":
-			if _curse_static != null:
-				if _curse_static.material != null:
-					(_curse_static.material as ShaderMaterial).set_shader_parameter("strength", _ival(roll, intensity))
-				_curse_static.visible = true
-		"flicker":
-			if _curse_flicker != null:
-				_curse_flicker.visible = true
-				_start_flicker(_ival(roll, intensity))
-		"tremor":
-			_curse_tremor_amp = _ival(roll, intensity)
-			_curse_tremor = true
-		# Audio hexes — bus effects (Faltering wobbles the bus level).
-		"lowpass":
-			var lp: AudioEffectLowPassFilter = AudioEffectLowPassFilter.new()
-			lp.cutoff_hz = _ival(roll, intensity)
-			_add_audio_effect(lp)
-		"reverb":
-			var rv: AudioEffectReverb = AudioEffectReverb.new()
-			rv.wet = _ival(roll, intensity)            # imin/imax = wet range
-			rv.room_size = lerpf(0.6, 0.95, clampf(intensity, 0.0, 1.0))
-			rv.dry = 0.5
-			_add_audio_effect(rv)
-		"distort":
-			var ds: AudioEffectDistortion = AudioEffectDistortion.new()
-			ds.mode = AudioEffectDistortion.MODE_CLIP
-			ds.drive = _ival(roll, intensity)
-			ds.post_gain = -10.0
-			_add_audio_effect(ds)
-		"volwobble":
-			_start_volwobble(_ival(roll, intensity))
 
 
 # Transient curse flash naming the rolled affliction.
@@ -1298,104 +1129,11 @@ func _send_frame_behind_hud(frame: Control) -> void:
 		move_child(frame, _hud.get_index())
 
 
-# One composable canvas_item shader for every per-pixel video hex. Each effect is
-# a uniform defaulting to identity (off); multiple can be on at once. Applied to
-# the video node only, so the HUD/frames keep their colour.
-const VIDEO_FX_SHADER: String = """
-shader_type canvas_item;
-
-uniform float grayscale = 0.0;
-uniform float invert = 0.0;
-uniform float sepia = 0.0;
-uniform float saturation = 1.0;
-uniform float posterize = 0.0;   // 0 = off, else number of colour levels
-uniform float blur = 0.0;        // 0 = off, else texel radius
-uniform float pixelate = 0.0;    // 0 = off, else blocks across the width
-uniform float chromatic = 0.0;   // 0 = off, else channel UV offset
-uniform float wave = 0.0;        // 0 = off, else ripple amplitude in UV
-
-void fragment() {
-	vec2 uv = UV;
-
-	if (wave > 0.0) {
-		uv.x += sin(uv.y * 28.0 + TIME * 3.0) * wave;
-		uv.y += cos(uv.x * 24.0 + TIME * 2.3) * wave;
-	}
-
-	if (pixelate > 0.0) {
-		float ar = TEXTURE_PIXEL_SIZE.y / TEXTURE_PIXEL_SIZE.x;
-		vec2 grid = vec2(pixelate, max(1.0, pixelate / ar));
-		uv = (floor(uv * grid) + 0.5) / grid;
-	}
-
-	vec4 col;
-	if (chromatic > 0.0) {
-		col.r = texture(TEXTURE, uv + vec2(chromatic, 0.0)).r;
-		col.g = texture(TEXTURE, uv).g;
-		col.b = texture(TEXTURE, uv - vec2(chromatic, 0.0)).b;
-		col.a = texture(TEXTURE, uv).a;
-	} else if (blur > 0.0) {
-		vec2 t = TEXTURE_PIXEL_SIZE * blur;
-		vec4 s = texture(TEXTURE, uv) * 2.0;
-		s += texture(TEXTURE, uv + vec2(t.x, 0.0));
-		s += texture(TEXTURE, uv - vec2(t.x, 0.0));
-		s += texture(TEXTURE, uv + vec2(0.0, t.y));
-		s += texture(TEXTURE, uv - vec2(0.0, t.y));
-		s += texture(TEXTURE, uv + t);
-		s += texture(TEXTURE, uv - t);
-		s += texture(TEXTURE, uv + vec2(t.x, -t.y));
-		s += texture(TEXTURE, uv + vec2(-t.x, t.y));
-		col = s / 10.0;
-	} else {
-		col = texture(TEXTURE, uv);
-	}
-
-	vec3 c = col.rgb;
-
-	if (saturation != 1.0) {
-		float l = dot(c, vec3(0.299, 0.587, 0.114));
-		c = mix(vec3(l), c, saturation);
-	}
-	if (posterize > 0.0) {
-		c = floor(c * posterize) / posterize;
-	}
-	if (sepia > 0.0) {
-		float l = dot(c, vec3(0.299, 0.587, 0.114));
-		c = mix(c, vec3(l) * vec3(1.07, 0.74, 0.43), sepia);
-	}
-	if (grayscale > 0.0) {
-		float l = dot(c, vec3(0.299, 0.587, 0.114));
-		c = mix(c, vec3(l), grayscale);
-	}
-	if (invert > 0.0) {
-		c = mix(c, vec3(1.0) - c, invert);
-	}
-
-	COLOR = vec4(c, col.a);
-}
-"""
-
-# Animated TV static for the Interference hex, drawn on a full-rect overlay.
-const STATIC_SHADER: String = """
-shader_type canvas_item;
-
-uniform float strength : hint_range(0.0, 1.0) = 0.30;
-
-float rand(vec2 p) {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
-
-void fragment() {
-	vec2 cell = floor(UV * vec2(480.0, 270.0));
-	float n = rand(cell + vec2(fract(TIME) * 91.0, fract(TIME * 1.7) * 57.0));
-	COLOR = vec4(vec3(n), strength);
-}
-"""
-
-
 # Builds the cursed-round overlay — a sickly green "hex" border plus a faint
 # tint over the play area, giving cursed rounds a distinct identity from the
-# boss frame's aggressive red pulse. Hidden until a cursed round starts.
+# boss frame's aggressive red pulse — and the SensoryFX engine, whose overlay
+# stack (Murk/Tunnel/Bloodshot/Static/Flicker/Strobe) slots in above the tint
+# and below the frames, preserving the original draw order. Hidden until used.
 func _build_curse_overlay() -> void:
 	_curse_tint = ColorRect.new()
 	_curse_tint.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1404,84 +1142,11 @@ func _build_curse_overlay() -> void:
 	_curse_tint.visible = false
 	add_child(_curse_tint)
 
-	# Murk — a flat dark dim (a softer Blinded; you can still half-see).
-	_curse_murk = ColorRect.new()
-	_curse_murk.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_murk.color = Color(0, 0, 0, 0.72)
-	_curse_murk.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_murk.visible = false
-	add_child(_curse_murk)
-
-	# Tunnel — a radial vignette: clear centre, dark edges.
-	var grad: Gradient = Gradient.new()
-	grad.set_color(0, Color(0, 0, 0, 0.0))
-	grad.set_color(1, Color(0, 0, 0, 0.99))
-	# Ramp the darkening inward so the clear centre is narrower and the edges
-	# crush to near-black sooner — a tighter, more obtrusive tunnel.
-	grad.add_point(0.45, Color(0, 0, 0, 0.40))
-	_curse_tunnel_grad = grad  # kept so Tunnel intensity can move the mid ramp point
-	var gtex: GradientTexture2D = GradientTexture2D.new()
-	gtex.gradient  = grad
-	gtex.fill      = GradientTexture2D.FILL_RADIAL
-	gtex.fill_from = Vector2(0.5, 0.5)
-	gtex.fill_to   = Vector2(0.5, 1.0)
-	_curse_tunnel = TextureRect.new()
-	_curse_tunnel.texture = gtex
-	_curse_tunnel.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_curse_tunnel.stretch_mode = TextureRect.STRETCH_SCALE
-	_curse_tunnel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_tunnel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_tunnel.visible = false
-	add_child(_curse_tunnel)
-
-	# Per-pixel video hexes (Drained/Bleary/Censored/Negative/Faded/Banded/
-	# Feverish/Fracture/Swoon) all ride ONE composable shader on the video node so
-	# several can stack at once (double-curse / multi-hex boss). Each is a uniform,
-	# default = identity; _set_video_fx flips one on, _reset_video_fx clears all.
-	var fx_shader: Shader = Shader.new()
-	fx_shader.code = VIDEO_FX_SHADER
-	_video_fx_mat = ShaderMaterial.new()
-	_video_fx_mat.shader = fx_shader
-	_reset_video_fx_params()
-
-	# Bloodshot — a red haze that pulses (animated in _start_bloodshot).
-	_curse_bloodshot = ColorRect.new()
-	_curse_bloodshot.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_bloodshot.color = Color(0.6, 0.0, 0.0, 0.35)
-	_curse_bloodshot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_bloodshot.visible = false
-	add_child(_curse_bloodshot)
-
-	# Interference — animated TV static, generated by a noise shader on the rect.
-	var static_shader: Shader = Shader.new()
-	static_shader.code = STATIC_SHADER
-	var static_mat: ShaderMaterial = ShaderMaterial.new()
-	static_mat.shader = static_shader
-	_curse_static = ColorRect.new()
-	_curse_static.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_static.material = static_mat
-	_curse_static.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_static.visible = false
-	add_child(_curse_static)
-
-	# Flicker — opaque black whose alpha jitters in quick dips (animated in
-	# _start_flicker). Distinct from Strobe's slow full fade-to-black.
-	_curse_flicker = ColorRect.new()
-	_curse_flicker.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_flicker.color = Color(0, 0, 0, 1)
-	_curse_flicker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_flicker.modulate.a = 0.0
-	_curse_flicker.visible = false
-	add_child(_curse_flicker)
-
-	# Strobe — opaque black whose alpha flickers (animated in _start_strobe).
-	_curse_strobe = ColorRect.new()
-	_curse_strobe.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_curse_strobe.color = Color(0, 0, 0, 1)
-	_curse_strobe.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_curse_strobe.visible = false
-	_curse_strobe.modulate.a = 0.0
-	add_child(_curse_strobe)
+	# Non-gameplay (sensory) modifier engine — owns its overlays, the composable
+	# video shader, the VideoFX audio bus, tremor, and mute.
+	_sensory = SensoryFX.new()
+	add_child(_sensory)
+	_sensory.setup(_video, self)
 
 	_curse_frame = Panel.new()
 	_curse_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1516,134 +1181,6 @@ func _build_curse_overlay() -> void:
 	_blessing_frame.add_theme_stylebox_override("panel", gs)
 	add_child(_blessing_frame)
 	_send_frame_behind_hud(_blessing_frame)
-
-
-# Routes the video's audio through a dedicated bus (→ Master) so audio hexes
-# (low-pass / reverb / distortion / volume wobble) affect only the video, never
-# any other sound. Idempotent — the bus survives scene reloads, so reuse it.
-func _setup_audio_fx_bus() -> void:
-	if AudioServer.get_bus_index(VIDEO_FX_BUS) == -1:
-		var idx: int = AudioServer.bus_count
-		AudioServer.add_bus(idx)
-		AudioServer.set_bus_name(idx, VIDEO_FX_BUS)
-		AudioServer.set_bus_send(idx, "Master")
-	_video.bus = VIDEO_FX_BUS
-	# The bus is global and survives scene reloads — start each session clean so a
-	# prior run that exited mid-round (e.g. Esc out of a test) can't leave a stale
-	# audio effect (distortion/reverb/…) routed onto this run's video.
-	_clear_audio_effects()
-
-
-# Turns one per-pixel video effect on (lazily assigning the shared shader to the
-# video). Several may be active at once — each is an independent uniform.
-func _set_video_fx(param: String, value: float) -> void:
-	if _video_fx_mat == null:
-		return
-	_video.material = _video_fx_mat
-	_video_fx_mat.set_shader_parameter(param, value)
-
-
-# Resets every video-effect uniform to its identity (off) value.
-func _reset_video_fx_params() -> void:
-	if _video_fx_mat == null:
-		return
-	_video_fx_mat.set_shader_parameter("grayscale", 0.0)
-	_video_fx_mat.set_shader_parameter("invert", 0.0)
-	_video_fx_mat.set_shader_parameter("sepia", 0.0)
-	_video_fx_mat.set_shader_parameter("saturation", 1.0)
-	_video_fx_mat.set_shader_parameter("posterize", 0.0)
-	_video_fx_mat.set_shader_parameter("blur", 0.0)
-	_video_fx_mat.set_shader_parameter("pixelate", 0.0)
-	_video_fx_mat.set_shader_parameter("chromatic", 0.0)
-	_video_fx_mat.set_shader_parameter("wave", 0.0)
-
-
-# Clears all video effects and drops the shader off the video entirely.
-func _reset_video_fx() -> void:
-	_reset_video_fx_params()
-	_video.material = null
-
-
-func _add_audio_effect(effect: AudioEffect) -> void:
-	var idx: int = AudioServer.get_bus_index(VIDEO_FX_BUS)
-	if idx != -1:
-		AudioServer.add_bus_effect(idx, effect)
-
-
-# Strips every audio effect off the VideoFX bus and restores its level (undoing a
-# Faltering wobble). Safe when none are present.
-func _clear_audio_effects() -> void:
-	var idx: int = AudioServer.get_bus_index(VIDEO_FX_BUS)
-	if idx == -1:
-		return
-	while AudioServer.get_bus_effect_count(idx) > 0:
-		AudioServer.remove_bus_effect(idx, 0)
-	AudioServer.set_bus_volume_db(idx, 0.0)
-
-
-func _start_bloodshot(peak: float = 1.0) -> void:
-	_stop_bloodshot()
-	# Pulse between a faint floor and the intensity-driven peak alpha.
-	_curse_bloodshot.modulate.a = 0.0
-	_bloodshot_tween = create_tween().set_loops()
-	_bloodshot_tween.tween_property(_curse_bloodshot, "modulate:a", clampf(peak, 0.0, 1.0), 0.9)
-	_bloodshot_tween.tween_property(_curse_bloodshot, "modulate:a", clampf(peak * 0.3, 0.0, 1.0), 0.9)
-
-
-func _stop_bloodshot() -> void:
-	if _bloodshot_tween != null and _bloodshot_tween.is_valid():
-		_bloodshot_tween.kill()
-	_bloodshot_tween = null
-	if _curse_bloodshot != null:
-		_curse_bloodshot.modulate.a = 0.0
-
-
-# Quick erratic black dips — a jittered cadence so it reads as a faulty signal
-# rather than the slow, regular Strobe fade.
-func _start_flicker(scale: float = 1.0) -> void:
-	_stop_flicker()
-	# Intensity scales the dip darkness (cadence stays fixed). clampf keeps the
-	# scaled peaks valid even when the catalog range pushes above 1.0.
-	var s: float = clampf(scale, 0.0, 1.0 / 0.85)  # 0.85 is the tallest dip below
-	_curse_flicker.modulate.a = 0.0
-	_flicker_tween = create_tween().set_loops()
-	_flicker_tween.tween_interval(0.8)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.7 * s, 0.04)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.0, 0.04)
-	_flicker_tween.tween_interval(0.12)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.45 * s, 0.03)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.0, 0.06)
-	_flicker_tween.tween_interval(0.5)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.85 * s, 0.03)
-	_flicker_tween.tween_property(_curse_flicker, "modulate:a", 0.0, 0.05)
-
-
-func _stop_flicker() -> void:
-	if _flicker_tween != null and _flicker_tween.is_valid():
-		_flicker_tween.kill()
-	_flicker_tween = null
-	if _curse_flicker != null:
-		_curse_flicker.modulate.a = 0.0
-
-
-# Faltering — swells the VideoFX bus level up and down (bus, not _video.volume_db,
-# so it never collides with a Silence/mute hex on the same round).
-func _start_volwobble(depth_db: float = -24.0) -> void:
-	_stop_volwobble()
-	var idx: int = AudioServer.get_bus_index(VIDEO_FX_BUS)
-	if idx == -1:
-		return
-	# Swell between 0 dB and the intensity-driven depth (deeper = more dramatic).
-	var set_db: Callable = func(v: float) -> void: AudioServer.set_bus_volume_db(idx, v)
-	_volwobble_tween = create_tween().set_loops()
-	_volwobble_tween.tween_method(set_db, 0.0, depth_db, 1.2)
-	_volwobble_tween.tween_method(set_db, depth_db, 0.0, 1.2)
-
-
-func _stop_volwobble() -> void:
-	if _volwobble_tween != null and _volwobble_tween.is_valid():
-		_volwobble_tween.kill()
-	_volwobble_tween = null
 
 
 func _show_curse_overlay() -> void:
@@ -1713,14 +1250,10 @@ func _fit_video_cover() -> void:
 	_video.position = (screen - scaled) / 2.0
 	_video.size = scaled
 
-	# Tremor hex — jitter the video each frame (mixed frequencies so it reads as a
-	# shake, not a wobble). _fit_video_cover runs every frame from _process.
-	if _curse_tremor:
-		var ts: float = Time.get_ticks_msec() / 1000.0
-		_video.position += Vector2(
-			sin(ts * 97.0) + sin(ts * 61.0),
-			cos(ts * 89.0) + sin(ts * 53.0)
-		) * (_curse_tremor_amp * 0.5)
+	# Tremor hex — per-frame jitter (zero when inactive). _fit_video_cover runs
+	# every frame from _process, so this re-applies on top of the clean fit.
+	if _sensory != null:
+		_video.position += _sensory.tremor_offset()
 
 
 func _find_video(folder: String) -> String:

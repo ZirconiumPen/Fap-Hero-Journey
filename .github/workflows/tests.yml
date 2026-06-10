@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel an in-progress run when a newer commit lands on the same ref.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gdunit4:
+    name: GdUnit4 (Godot 4.6 .NET)
+    # ubuntu-22.04 (older glibc) is the safer host for the bundled EIRTeam.FFmpeg
+    # Linux .so — newer runners can fail to load older native libs.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run GdUnit4 tests
+        uses: godot-gdunit-labs/gdUnit4-action@v1
+        with:
+          godot-version: '4.6'        # must match a published Godot release the action can download
+          godot-net: true             # .NET build of Godot — needed for the C# autoloads (ScoreService/GameState)
+          dotnet-version: 'net8.0'    # the project's TargetFramework
+          version: 'v6.1.3'           # gdUnit4 plugin version — matches local addons/gdUnit4 (not committed, so CI installs it)
+          paths: 'res://tests'
+          timeout: 10
+          publish-report: true
+          upload-report: true
+          report-name: gdunit-report

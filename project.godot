@@ -41,6 +41,20 @@ window/size/viewport_height=1080
 
 project/assembly_name="Fap Hero Journey"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")
+
+[file_customization]
+
+folder_colors={
+"res://tests/": "red"
+}
+
+[gdunit4]
+
+settings/test/test_discovery=true
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
