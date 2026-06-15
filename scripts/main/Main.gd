@@ -29,12 +29,7 @@ func _ready() -> void:
 	_connect_buttons()
 	_setup_version_label()
 	_check_for_update()
-	if _intro_played:
-		# Already played this session — show the menu fully formed.
-		_intro_done = true
-	else:
-		_intro_played = true
-		_play_intro()
+	_play_intro()
 
 
 func _process(delta: float) -> void:
@@ -273,6 +268,11 @@ func _connect_buttons() -> void:
 # Staged entrance: the title section pops in, the buttons cascade up one at a
 # time, then the tagline fades in. Buttons are locked until it finishes.
 func _play_intro() -> void:
+	if _intro_played:
+		# Already played this session — show the menu fully formed.
+		_intro_done = true
+		return
+	_intro_played = true
 	var btns: Array = [_start_btn, _options_btn, _build_btn, _quit_btn]
 	_title_section.modulate.a = 0.0
 	_tagline.modulate.a = 0.0
