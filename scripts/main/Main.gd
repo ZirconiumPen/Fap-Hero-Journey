@@ -6,11 +6,7 @@ extends Control
 # neon-sign glowing border that occasionally flickers.
 # ---------------------------------------------------------------------------
 
-const FONT_SIZE_EYEBROW: int = 12
-const FONT_SIZE_TITLE: int = 54
-const FONT_SIZE_SUBTITLE: int = 24
 const FONT_SIZE_BUTTON: int = 17
-const FONT_SIZE_TAGLINE: int = 12
 
 const PANEL_PADDING_H: int = 48
 const PANEL_PADDING_V: int = 40
@@ -43,9 +39,6 @@ var _border_alpha: float = 1.0
 
 @onready var _panel_container: PanelContainer = %PanelContainer
 @onready var _title_section: VBoxContainer = %TitleSection
-@onready var _eyebrow: Label = %Eyebrow
-@onready var _title: Label = %TitleLabel
-@onready var _subtitle: Label = %SubtitleLabel
 @onready var _divider: HSeparator = %TitleDivider
 @onready var _start_btn: Button = %StartButton
 @onready var _options_btn: Button = %OptionsButton
@@ -303,10 +296,6 @@ func _open_update_modal() -> void:
 func _apply_theme() -> void:
 	_update_panel_border()
 
-	_style_label(_eyebrow, UITheme.MAGENTA, FONT_SIZE_EYEBROW, true)
-	_style_label(_title, UITheme.PURPLE_BRIGHT, FONT_SIZE_TITLE, true)
-	_style_label(_subtitle, UITheme.MAGENTA, FONT_SIZE_SUBTITLE, true)
-
 	var sep: StyleBoxFlat = StyleBoxFlat.new()
 	sep.bg_color = UITheme.SEPARATOR
 	sep.content_margin_top = 1
@@ -317,8 +306,6 @@ func _apply_theme() -> void:
 	_style_button(_options_btn, UITheme.MAGENTA)
 	_style_button(_build_btn, UITheme.PURPLE_MID)
 	_style_button(_quit_btn, UITheme.PURPLE_MID)
-
-	_style_label(_tagline, UITheme.PURPLE_BRIGHT, FONT_SIZE_TAGLINE, true)
 
 
 func _update_panel_border() -> void:
@@ -347,12 +334,6 @@ func _update_panel_border() -> void:
 	s.content_margin_top = PANEL_PADDING_V
 	s.content_margin_bottom = PANEL_PADDING_V
 	_panel_container.add_theme_stylebox_override("panel", s)
-
-
-func _style_label(label: Label, color: Color, size: int, uppercase: bool = false) -> void:
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
-	label.uppercase = uppercase
 
 
 func _style_button(btn: Button, accent: Color) -> void:
