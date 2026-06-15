@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://bdp54guew1es1"]
+
+[ext_resource type="Script" uid="uid://deyg6n0p0megc" path="res://scenes/main/update_banner.gd" id="1_501d5"]
+
+[node name="UpdateBanner" type="Button" unique_id=1591516518]
+custom_minimum_size = Vector2(256, 36)
+offset_right = 4.0
+offset_bottom = 4.0
+tooltip_text = "Opens the release page in your browser"
+text = "▲  UPDATE AVAILABLE  —  v%s"
+script = ExtResource("1_501d5")

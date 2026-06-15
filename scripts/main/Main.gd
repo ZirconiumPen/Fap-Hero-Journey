@@ -22,77 +22,8 @@ var _btn_tweens: Dictionary = {}
 func _ready() -> void:
 	MusicService.play()
 	_connect_buttons()
-	_check_for_update()
 	_play_intro()
 	_tagline.get_node("Blinker").enabled = true
-
-
-# ---------------------------------------------------------------------------
-# Update check (Phase 1 — notify only)
-# ---------------------------------------------------------------------------
-
-
-# Best-effort GitHub release check (once per session — UpdateService caches the
-# result). The banner appears only if a newer build exists; failures are silent.
-# On returning to the menu, re-shows the banner from cache without re-checking.
-func _check_for_update() -> void:
-	if UpdateService.has_update():
-		_show_update_banner(UpdateService.available_version)
-	elif not UpdateService.checked() and SettingsService.get_update_check_enabled():
-		UpdateService.update_available.connect(_on_update_available, CONNECT_ONE_SHOT)
-		UpdateService.check_for_update()
-
-
-func _on_update_available(latest_version: String, _release: Dictionary) -> void:
-	_show_update_banner(latest_version)
-
-
-# A subtle top-center banner; clicking opens the release page. (A later phase
-# swaps the click for an in-app download.) Added to the root so it sits above the
-# panel and outside the intro tweens.
-func _show_update_banner(latest_version: String) -> void:
-	var banner: Button = Button.new()
-	banner.text = "▲  UPDATE AVAILABLE  —  v%s" % latest_version
-	banner.tooltip_text = "Opens the release page in your browser"
-	banner.focus_mode = Control.FOCUS_NONE
-	banner.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-	banner.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
-	banner.add_theme_font_size_override("font_size", 13)
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.18)
-	s.border_color = UITheme.MAGENTA
-	s.border_width_left = 1
-	s.border_width_right = 1
-	s.border_width_top = 1
-	s.border_width_bottom = 1
-	s.corner_radius_top_left = 4
-	s.corner_radius_top_right = 4
-	s.corner_radius_bottom_left = 4
-	s.corner_radius_bottom_right = 4
-	s.content_margin_left = 18
-	s.content_margin_right = 18
-	s.content_margin_top = 8
-	s.content_margin_bottom = 8
-	banner.add_theme_stylebox_override("normal", s)
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.34)
-	banner.add_theme_stylebox_override("hover", s_hover)
-	banner.add_theme_stylebox_override("pressed", s_hover)
-	banner.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-	# Pinned to top-centre, sizing to its content.
-	banner.anchor_left = 0.5
-	banner.anchor_right = 0.5
-	banner.anchor_top = 0.0
-	banner.anchor_bottom = 0.0
-	banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	banner.offset_top = 18
-	banner.pressed.connect(_open_update_modal)
-
-	banner.modulate.a = 0.0
-	add_child(banner)
-	create_tween().tween_property(banner, "modulate:a", 1.0, 0.4)
 
 
 # The update flow: download the platform build, verify, extract into a sibling
@@ -291,3 +222,7 @@ func _on_options_button_pressed() -> void:
 
 func _on_quit_button_pressed() -> void:
 	get_tree().quit()
+
+
+func _on_update_banner_pressed() -> void:
+	_open_update_modal()

@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_nha0i"]
 [ext_resource type="PackedScene" uid="uid://dk87out6m1h2h" path="res://components/blinker.tscn" id="3_gyg6b"]
 [ext_resource type="Script" uid="uid://cnfaeqf83ubro" path="res://scenes/main/version_label.gd" id="3_q24mn"]
+[ext_resource type="PackedScene" uid="uid://bdp54guew1es1" path="res://scenes/main/update_banner.tscn" id="5_dc040"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_q24mn"]
 font_size = 12
@@ -162,7 +163,20 @@ vertical_alignment = 2
 script = ExtResource("3_q24mn")
 metadata/_custom_type_script = "uid://cnfaeqf83ubro"
 
+[node name="UpdateBanner" parent="." unique_id=1591516518 instance=ExtResource("5_dc040")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -2.0
+offset_top = 18.0
+offset_right = 2.0
+offset_bottom = 22.0
+grow_horizontal = 2
+
 [connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/StartButton" to="." method="_on_start_button_pressed"]
 [connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/BuildButton" to="." method="_on_build_button_pressed"]
 [connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/OptionsButton" to="." method="_on_options_button_pressed"]
 [connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/QuitButton" to="." method="_on_quit_button_pressed"]
+[connection signal="pressed" from="UpdateBanner" to="." method="_on_update_banner_pressed"]
