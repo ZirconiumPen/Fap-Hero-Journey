@@ -711,8 +711,8 @@ public partial class FunscriptPlayer : Node {
     // Apply user-configured hard range clamp (device settings → Position
     // Clamp). Runs after inventory effects so shop modifiers compose correctly
     // with the limit.
-    currentPos = Math.Clamp(currentPos, _rangeMin, _rangeMax);
-    nextPos = Math.Clamp(nextPos, _rangeMin, _rangeMax);
+    currentPos = (int)Double.Lerp(_rangeMin, _rangeMax, currentPos / 100.0);
+    nextPos = (int)Double.Lerp(_rangeMin, _rangeMax, nextPos / 100.0);
 
     // Ease-in blend: interpolate from neutral (50) toward the script positions
     // over the computed ease duration. Both current and next are blended so the
