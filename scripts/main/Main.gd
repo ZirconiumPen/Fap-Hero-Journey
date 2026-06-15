@@ -1,13 +1,6 @@
 extends Control
 
-# ---------------------------------------------------------------------------
-# Main.gd  –  Main menu controller
-# Purple matrix theme. Title + buttons enclosed in an opaque panel with a
-# neon-sign glowing border that occasionally flickers.
-# ---------------------------------------------------------------------------
-
 const BLINK_INTERVAL: float = 0.85
-
 const FLICKER_INTERVAL_MIN: float = 3.5
 const FLICKER_INTERVAL_MAX: float = 7.0
 const FLICKER_DURATION: float = 0.08
