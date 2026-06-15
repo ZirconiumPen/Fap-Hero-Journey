@@ -41,7 +41,6 @@ var _flickering: bool = false
 var _flicker_elapsed: float = 0.0
 var _border_alpha: float = 1.0
 
-@onready var _bg: ColorRect = %Background
 @onready var _panel_container: PanelContainer = %PanelContainer
 @onready var _title_section: VBoxContainer = %TitleSection
 @onready var _eyebrow: Label = %Eyebrow
@@ -302,7 +301,6 @@ func _open_update_modal() -> void:
 
 
 func _apply_theme() -> void:
-	_bg.color = UITheme.BG
 	_update_panel_border()
 
 	_style_label(_eyebrow, UITheme.MAGENTA, FONT_SIZE_EYEBROW, true)

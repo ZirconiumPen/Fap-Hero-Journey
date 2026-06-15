@@ -15,8 +15,8 @@ extends Node
 # ── Palette ────────────────────────────────────────────────────────────────
 
 # Backgrounds
-const BG: Color = Color(0.0, 0.0, 0.0, 1.0)  # #000000
-const BG_ZERO: Color = Color(0.0, 0.0, 0.0, 0.0)  # fully transparent black
+const BG: Color = Color.BLACK
+const BG_ZERO: Color = Color(Color.BLACK, 0.0)  # fully transparent black
 const PANEL_BG: Color = Color(0.055, 0.008, 0.086, 1.0)  # #0e0216 – flat panels
 const PANEL_BG_GAME: Color = Color(0.055, 0.008, 0.086, 0.88)  # HUD-bar variant
 const PANEL_BG_DEEP: Color = Color(0.035, 0.005, 0.055, 0.97)  # deeper panel (inventory)
