@@ -7,10 +7,10 @@ extends Control
 # ---------------------------------------------------------------------------
 
 const COLORS: Array[Color] = [
-	Color(0.698, 0.118, 1.0, 1.0),  # bright violet  #b21eff
-	Color(0.878, 0.0, 0.878, 1.0),  # magenta        #e000e0
-	Color(0.408, 0.063, 0.627, 1.0),  # mid purple     #6810a0
-	Color(0.800, 0.600, 1.0, 1.0),  # pale lavender  #cc99ff
+	Color(0.698, 0.118, 1.0),  # bright violet  #b21eff
+	Color(0.878, 0.0, 0.878),  # magenta        #e000e0
+	Color(0.408, 0.063, 0.627),  # mid purple     #6810a0
+	Color(0.800, 0.600, 1.0),  # pale lavender  #cc99ff
 ]
 
 const NUM_INDICATORS: int = 8
