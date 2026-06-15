@@ -1,9 +1,6 @@
 extends Control
 
 const BLINK_INTERVAL: float = 0.85
-const FLICKER_INTERVAL_MIN: float = 3.5
-const FLICKER_INTERVAL_MAX: float = 7.0
-const FLICKER_DURATION: float = 0.08
 
 # Plays the entrance animation only once per app session — replaying it on every
 # return to the menu gets tiresome. Static, so it survives scene reloads but
@@ -18,13 +15,7 @@ var _btn_tweens: Dictionary = {}
 
 var _blink_timer: float = 0.0
 var _blink_visible: bool = true
-var _flicker_timer: float = 0.0
-var _flicker_next: float = 0.0
-var _flickering: bool = false
-var _flicker_elapsed: float = 0.0
-var _border_alpha: float = 1.0
 
-@onready var _panel_container: PanelContainer = %PanelContainer
 @onready var _title_section: VBoxContainer = %TitleSection
 @onready var _start_btn: Button = %StartButton
 @onready var _options_btn: Button = %OptionsButton
@@ -35,7 +26,6 @@ var _border_alpha: float = 1.0
 
 func _ready() -> void:
 	MusicService.play()
-	_flicker_next = randf_range(FLICKER_INTERVAL_MIN, FLICKER_INTERVAL_MAX)
 	_connect_buttons()
 	_setup_version_label()
 	_check_for_update()
@@ -58,22 +48,6 @@ func _process(delta: float) -> void:
 			var c: Color = _tagline.modulate
 			c.a = 1.0 if _blink_visible else 0.0
 			_tagline.modulate = c
-
-	# Neon border flicker
-	_flicker_timer += delta
-	if not _flickering and _flicker_timer >= _flicker_next:
-		_flickering = true
-		_flicker_elapsed = 0.0
-		_flicker_timer = 0.0
-		_flicker_next = randf_range(FLICKER_INTERVAL_MIN, FLICKER_INTERVAL_MAX)
-
-	if _flickering:
-		_flicker_elapsed += delta
-		_border_alpha = 0.15 if _flicker_elapsed < FLICKER_DURATION * 0.5 else 1.0
-		if _flicker_elapsed >= FLICKER_DURATION:
-			_flickering = false
-			_border_alpha = 1.0
-		_panel_container.self_modulate = Color(Color.WHITE, _border_alpha)
 
 
 # ---------------------------------------------------------------------------
