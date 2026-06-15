@@ -113,21 +113,21 @@ Notes for Linux users:
 
 Journeys are stored as folders inside the journeys directory (default `user://journeys/`, configurable in **Options → Storage Location**; open it via **Options → Open Journeys Folder**).
 
-Rounds are written to short, fixed-length **slug folders** (`r001`, `r002`, …) with standard filenames inside. This bounds path length on Windows and prevents same-named rounds in different fork paths from colliding. The human-readable name lives in `journey.json`; the slug lives in each round's `FolderName`.
+Playback assets (video, funscript, secondary-axis and vibrator scripts, boss images) are **pooled**: each file is stored once under `content/` with a content-based name (`m_<fingerprint>.<ext>`) and referenced from `journey.json` by an explicit relative path. An asset reused across rounds — e.g. one clip used by a Normal round on the main path *and* a Cursed round in a fork — is therefore stored **once** on disk and in the shared zip. The `media/` folder holds journey **images** (cover, storyboard, fork-path art).
+
+Rounds don't have their own folders. Each round references its assets by explicit `VideoPath` / `FunscriptPath` / `AxisScripts` / `VibScripts` / `BossImage` paths (all into `content/`). The human-readable name lives in `journey.json`; `FolderName` (`r001`, `r002`, …) is still written as a stable per-round id — and the fallback used to load older journeys — but no per-round folder is created.
 
 ```
 <journeys>/
-└── My Journey/                  ← folder = sanitized journey name
-	├── journey.json             ← metadata, round list, forks, shops, storyboards
-	├── media/                   ← cover, storyboard images, fork-path images
-	├── r001/
-	│   ├── script.funscript     ← main stroke script
-	│   ├── video.mp4            ← copied or transcoded to H.264
-	│   ├── axis_L1.funscript    ← optional secondary axis
-	│   ├── vib_vib1.funscript   ← optional vibrator channel
-	│   └── boss.png             ← optional boss intro image
-	└── r002/
-		└── ...
+└── My Journey/                          ← folder = sanitized journey name
+	├── journey.json                     ← metadata, round list, forks, shops, storyboards
+	├── media/                           ← journey images: cover, storyboard, fork-path art
+	│   └── cover.png
+	└── content/                         ← playback assets, pooled & deduped by content fingerprint
+	    ├── m_4f1a2b3c8d9e0f12.mp4        ← video (copied, or transcoded to H.264)
+	    ├── m_91c0a7e2d3b4f5a6.funscript  ← main stroke script
+	    ├── m_2d7be4a1c0938f5d.funscript  ← optional secondary axis / vibrator channel
+	    └── m_6a3f0b9e8c1d2740.png        ← optional boss intro image
 ```
 
 `journey.json` schema (abbreviated — keys are PascalCase):
@@ -141,13 +141,17 @@ Rounds are written to short, fixed-length **slug folders** (`r001`, `r002`, …)
   "Rounds": [
     { "Name": "Round 1", "FolderName": "r001", "Order": 1,
       "CoinsAwarded": 10, "RoundType": "Normal", "IsCheckpoint": false,
-      "FunscriptPath": "r001/script.funscript", "AxisScripts": {}, "VibScripts": {} }
+      "VideoPath": "content/m_4f1a2b3c8d9e0f12.mp4",
+      "FunscriptPath": "content/m_91c0a7e2d3b4f5a6.funscript",
+      "AxisScripts": {}, "VibScripts": {} }
   ],
   "Forks": [...],
   "Shops": [...],
   "Storyboards": [...]
 }
 ```
+
+> Older journeys saved before pooling used a per-round folder layout (`r001/video.mp4`, `r001/script.funscript`, …); they still load — the player falls back to those folder paths when the explicit `content/` paths are absent.
 
 > The cover image isn't stored as a JSON key — it's auto-detected from `media/cover.*` when the catalogue scans the folder.
 
