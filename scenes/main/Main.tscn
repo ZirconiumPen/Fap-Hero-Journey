@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d288w124lrltr" path="res://scripts/main/Main.gd" id="1_u1xfj"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_nha0i"]
+[ext_resource type="Script" uid="uid://cnfaeqf83ubro" path="res://scenes/main/version_label.gd" id="3_q24mn"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_q24mn"]
 font_size = 12
@@ -18,6 +19,10 @@ font_color = Color(1, 0, 1, 1)
 [sub_resource type="LabelSettings" id="LabelSettings_dc040"]
 font_size = 12
 font_color = Color(0.69803923, 0.11764706, 1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_1rhdn"]
+font_size = 12
+font_color = Color(0.40784314, 0.0627451, 0.627451, 1)
 
 [node name="root" type="Control" unique_id=116107514]
 layout_mode = 3
@@ -129,3 +134,23 @@ text = "INSERT COCK TO CONTINUE"
 label_settings = SubResource("LabelSettings_dc040")
 horizontal_alignment = 1
 uppercase = true
+
+[node name="VersionLabel" type="Label" parent="." unique_id=943340438]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -61.0
+offset_top = -38.0
+offset_right = -21.0
+offset_bottom = -15.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "v0.0.0"
+label_settings = SubResource("LabelSettings_1rhdn")
+horizontal_alignment = 2
+vertical_alignment = 2
+script = ExtResource("3_q24mn")
+metadata/_custom_type_script = "uid://cnfaeqf83ubro"
