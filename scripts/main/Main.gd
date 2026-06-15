@@ -12,9 +12,6 @@ const FONT_SIZE_SUBTITLE: int = 24
 const FONT_SIZE_BUTTON: int = 17
 const FONT_SIZE_TAGLINE: int = 12
 
-const BUTTON_MIN_WIDTH: int = 280
-const BUTTON_MIN_HEIGHT: int = 52
-
 const PANEL_PADDING_H: int = 48
 const PANEL_PADDING_V: int = 40
 const BORDER_WIDTH: int = 3
@@ -24,29 +21,6 @@ const BLINK_INTERVAL: float = 0.85
 const FLICKER_INTERVAL_MIN: float = 3.5
 const FLICKER_INTERVAL_MAX: float = 7.0
 const FLICKER_DURATION: float = 0.08
-
-@onready var _bg: ColorRect = %Background
-@onready var _panel_container: PanelContainer = %PanelContainer
-@onready var _center: VBoxContainer = %CenterContainer
-@onready var _title_section: VBoxContainer = %TitleSection
-@onready var _eyebrow: Label = %Eyebrow
-@onready var _title: Label = %TitleLabel
-@onready var _subtitle: Label = %SubtitleLabel
-@onready var _divider: HSeparator = %TitleDivider
-@onready var _button_container: VBoxContainer = %ButtonContainer
-@onready var _start_btn: Button = %StartButton
-@onready var _options_btn: Button = %OptionsButton
-@onready var _build_btn: Button = %BuildButton
-@onready var _quit_btn: Button = %QuitButton
-@onready var _tagline: Label = %TaglineLabel
-
-var _blink_timer: float = 0.0
-var _blink_visible: bool = true
-var _flicker_timer: float = 0.0
-var _flicker_next: float = 0.0
-var _flickering: bool = false
-var _flicker_elapsed: float = 0.0
-var _border_alpha: float = 1.0
 
 # Plays the entrance animation only once per app session — replaying it on every
 # return to the menu gets tiresome. Static, so it survives scene reloads but
@@ -59,11 +33,31 @@ var _intro_done: bool = false
 # Per-button hover scale tween, so a fast re-hover replaces rather than stacks.
 var _btn_tweens: Dictionary = {}
 
+var _blink_timer: float = 0.0
+var _blink_visible: bool = true
+var _flicker_timer: float = 0.0
+var _flicker_next: float = 0.0
+var _flickering: bool = false
+var _flicker_elapsed: float = 0.0
+var _border_alpha: float = 1.0
+
+@onready var _bg: ColorRect = %Background
+@onready var _panel_container: PanelContainer = %PanelContainer
+@onready var _title_section: VBoxContainer = %TitleSection
+@onready var _eyebrow: Label = %Eyebrow
+@onready var _title: Label = %TitleLabel
+@onready var _subtitle: Label = %SubtitleLabel
+@onready var _divider: HSeparator = %TitleDivider
+@onready var _start_btn: Button = %StartButton
+@onready var _options_btn: Button = %OptionsButton
+@onready var _build_btn: Button = %BuildButton
+@onready var _quit_btn: Button = %QuitButton
+@onready var _tagline: Label = %TaglineLabel
+
 
 func _ready() -> void:
 	MusicService.play()
 	_flicker_next = randf_range(FLICKER_INTERVAL_MIN, FLICKER_INTERVAL_MAX)
-	_apply_layout()
 	_apply_theme()
 	_connect_buttons()
 	_setup_version_label()
@@ -108,38 +102,6 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
-
-
-func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_bg.anchor_left = 0.0
-	_bg.anchor_top = 0.0
-	_bg.anchor_right = 1.0
-	_bg.anchor_bottom = 1.0
-	_bg.offset_left = 0
-	_bg.offset_top = 0
-	_bg.offset_right = 0
-	_bg.offset_bottom = 0
-
-	_panel_container.anchor_left = 0.5
-	_panel_container.anchor_right = 0.5
-	_panel_container.anchor_top = 0.5
-	_panel_container.anchor_bottom = 0.5
-	_panel_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel_container.grow_vertical = Control.GROW_DIRECTION_BOTH
-
-	_center.add_theme_constant_override("separation", 36)
-
-	_title_section.add_theme_constant_override("separation", 6)
-	_title_section.alignment = BoxContainer.ALIGNMENT_CENTER
-
-	_button_container.add_theme_constant_override("separation", 14)
-	_button_container.alignment = BoxContainer.ALIGNMENT_CENTER
-
-	for btn: Button in [_start_btn, _options_btn, _build_btn, _quit_btn]:
-		btn.custom_minimum_size = Vector2(BUTTON_MIN_WIDTH, BUTTON_MIN_HEIGHT)
 
 
 # Pins a subtle version label to the bottom-right corner. Read from
