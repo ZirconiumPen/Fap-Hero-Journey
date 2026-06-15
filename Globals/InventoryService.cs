@@ -2,547 +2,522 @@ using Godot;
 using Godot.Collections;
 using System.Collections.Generic;
 
-public partial class InventoryService : Node
-{
-	[Signal] public delegate void InventoryChangedEventHandler();
-	[Signal] public delegate void ActiveEffectsChangedEventHandler();
-	// Fired when a utility item with kind == "save_now" is activated.
-	// GameLoop listens and writes a journey save in response. Separate signal
-	// from ActiveEffectsChanged because save_now never enters _active.
-	[Signal] public delegate void SaveRequestedEventHandler();
+public partial class InventoryService : Node {
+  [Signal]
+  public delegate void InventoryChangedEventHandler();
+  [Signal]
+  public delegate void ActiveEffectsChangedEventHandler();
+  // Fired when a utility item with kind == "save_now" is activated.
+  // GameLoop listens and writes a journey save in response. Separate signal
+  // from ActiveEffectsChanged because save_now never enters _active.
+  [Signal]
+  public delegate void SaveRequestedEventHandler();
 
-	// ---------------------------------------------------------------------------
-	// Item registry
-	// Loaded from res://data/shop_items.json on startup. Edit that file to tune
-	// balance without touching C#. Falls back to hardcoded defaults if the file
-	// is missing or malformed.
-	// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Item registry
+  // Loaded from res://data/shop_items.json on startup. Edit that file to tune
+  // balance without touching C#. Falls back to hardcoded defaults if the file
+  // is missing or malformed.
+  // ---------------------------------------------------------------------------
 
-	// Non-static so it is populated once the node is ready (autoload order is safe).
-	private Dictionary _registry = new Dictionary();
+  // Non-static so it is populated once the node is ready (autoload order is
+  // safe).
+  private Dictionary _registry = new Dictionary();
 
-	// Path of the JSON data file inside the project.
-	private const string RegistryPath = "res://data/shop_items.json";
+  // Path of the JSON data file inside the project.
+  private const string RegistryPath = "res://data/shop_items.json";
 
-	public override void _Ready()
-	{
-		_LoadRegistry();
-	}
+  public override void _Ready() { _LoadRegistry(); }
 
-	private void _LoadRegistry()
-	{
-		_registry.Clear();
+  private void _LoadRegistry() {
+    _registry.Clear();
 
-		if (FileAccess.FileExists(RegistryPath))
-		{
-			using var registryFile = FileAccess.Open(RegistryPath, FileAccess.ModeFlags.Read);
-			if (registryFile != null)
-			{
-				var json = new Json();
-				if (json.Parse(registryFile.GetAsText()) == Error.Ok && json.Data.VariantType == Variant.Type.Array)
-				{
-					foreach (var item in json.Data.AsGodotArray())
-					{
-						if (item.VariantType != Variant.Type.Dictionary)
-							continue;
-						var d  = item.AsGodotDictionary();
-						var id = d.ContainsKey("id") ? d["id"].AsString() : "";
-						if (id != "")
-							_registry[id] = d;
-					}
+    if (FileAccess.FileExists(RegistryPath)) {
+      using var registryFile =
+          FileAccess.Open(RegistryPath, FileAccess.ModeFlags.Read);
+      if (registryFile != null) {
+        var json = new Json();
+        if (json.Parse(registryFile.GetAsText()) == Error.Ok &&
+            json.Data.VariantType == Variant.Type.Array) {
+          foreach (var item in json.Data.AsGodotArray()) {
+            if (item.VariantType != Variant.Type.Dictionary)
+              continue;
+            var d = item.AsGodotDictionary();
+            var id = d.ContainsKey("id") ? d["id"].AsString() : "";
+            if (id != "")
+              _registry[id] = d;
+          }
 
-					GD.Print($"InventoryService: loaded {_registry.Count} items from {RegistryPath}");
-					return;
-				}
+          GD.Print(
+              $"InventoryService: loaded {_registry.Count} items from {RegistryPath}");
+          return;
+        }
 
-				GD.PrintErr($"InventoryService: failed to parse {RegistryPath} — using hardcoded defaults.");
-			}
-		}
-		else
-		{
-			GD.PrintErr($"InventoryService: {RegistryPath} not found — using hardcoded defaults.");
-		}
+        GD.PrintErr(
+            $"InventoryService: failed to parse {RegistryPath} — using hardcoded defaults.");
+      }
+    } else {
+      GD.PrintErr(
+          $"InventoryService: {RegistryPath} not found — using hardcoded defaults.");
+    }
 
-		_LoadHardcodedDefaults();
-	}
+    _LoadHardcodedDefaults();
+  }
 
-	private void _LoadHardcodedDefaults()
-	{
-		_registry["long_game"] = new Dictionary
-		{
-			["id"]          = "long_game",
-			["name"]        = "The Long Game",
-			["description"] = "Expands the funscript stroke length by 20%.",
-			["category"]    = "modifier",
-			["price"]       = 30,
-			["duration_ms"] = 30000,
-			["kind"]        = "scale",
-			["factor"]      = 1.2f,
-		};
-		_registry["cock_lock"] = new Dictionary
-		{
-			["id"]          = "cock_lock",
-			["name"]        = "Cock Lock",
-			["description"] = "Ignores funscript playback for 10 seconds.",
-			["category"]    = "modifier",
-			["price"]       = 25,
-			["duration_ms"] = 10000,
-			["kind"]        = "block",
-		};
-		_registry["shrink_ray"] = new Dictionary
-		{
-			["id"]          = "shrink_ray",
-			["name"]        = "Shrink Ray",
-			["description"] = "Reduces the funscript stroke length by 20%.",
-			["category"]    = "modifier",
-			["price"]       = 40,
-			["duration_ms"] = 30000,
-			["kind"]        = "scale",
-			["factor"]      = 0.8f,
-		};
-		_registry["final_inch"] = new Dictionary
-		{
-			["id"]          = "final_inch",
-			["name"]        = "The Final Inch",
-			["description"] = "Confines the script to only the top 50% of the stroke range.",
-			["category"]    = "modifier",
-			["price"]       = 35,
-			["duration_ms"] = 25000,
-			["kind"]        = "clamp",
-			["min"]         = 50,
-			["max"]         = 100,
-		};
-		_registry["low_tide"] = new Dictionary
-		{
-			["id"]          = "low_tide",
-			["name"]        = "Low Tide",
-			["description"] = "Confines the script to only the bottom 50% of the stroke range.",
-			["category"]    = "modifier",
-			["price"]       = 35,
-			["duration_ms"] = 25000,
-			["kind"]        = "clamp",
-			["min"]         = 0,
-			["max"]         = 50,
-		};
-		_registry["mirror"] = new Dictionary
-		{
-			["id"]          = "mirror",
-			["name"]        = "Mirror",
-			["description"] = "Inverts all stroke positions for 30 seconds. Up becomes down.",
-			["category"]    = "modifier",
-			["price"]       = 30,
-			["duration_ms"] = 30000,
-			["kind"]        = "reverse",
-		};
-		_registry["blackout"] = new Dictionary
-		{
-			["id"]          = "blackout",
-			["name"]        = "Blackout",
-			["description"] = "Hides the video for 30 seconds. The device keeps going in the dark.",
-			["category"]    = "modifier",
-			["price"]       = 20,
-			["duration_ms"] = 30000,
-			["kind"]        = "blackout",
-		};
-		_registry["score_rush"] = new Dictionary
-		{
-			["id"]          = "score_rush",
-			["name"]        = "Score Rush",
-			["description"] = "Doubles score earned from every stroke for 30 seconds.",
-			["category"]    = "modifier",
-			["price"]       = 40,
-			["duration_ms"] = 30000,
-			["kind"]        = "score_multiplier",
-			["factor"]      = 2.0f,
-		};
-		_registry["jackpot"] = new Dictionary
-		{
-			["id"]          = "jackpot",
-			["name"]        = "Jackpot",
-			["description"] = "Doubles the coin reward at the end of this round.",
-			["category"]    = "modifier",
-			["price"]       = 50,
-			["duration_ms"] = 300000,
-			["kind"]        = "coin_jackpot",
-			["factor"]      = 2.0f,
-		};
-		_registry["pleasure_band"] = new Dictionary
-		{
-			["id"]          = "pleasure_band",
-			["name"]        = "Pleasure Band Clamp",
-			["description"] = "Confines the script to the middle 30-70% of the stroke range.",
-			["category"]    = "modifier",
-			["price"]       = 35,
-			["duration_ms"] = 25000,
-			["kind"]        = "clamp",
-			["min"]         = 30,
-			["max"]         = 70,
-		};
-		_registry["wildcard"] = new Dictionary
-		{
-			["id"]          = "wildcard",
-			["name"]        = "Wildcard",
-			["description"] = "Activates a random modifier - could be anything. A cheap gamble.",
-			["category"]    = "modifier",
-			["price"]       = 20,
-			["duration_ms"] = 30000,
-			["kind"]        = "wildcard",
-		};
-		// Utility item — saves progress at the start of the current round and
-		// is consumed. Locked out during boss rounds (because the inventory
-		// button itself is disabled during bosses). Doesn't apply a runtime
-		// effect; GameLoop catches the SaveRequested signal and writes the
-		// save file via JourneySaveService.
-		_registry["safe_word"] = new Dictionary
-		{
-			["id"]          = "safe_word",
-			["name"]        = "The Safe Word",
-			["description"] = "Saves your run at the start of the current round. One-time save — used up when you resume.",
-			["category"]    = "utility",
-			["price"]       = 120,
-			["duration_ms"] = 0,
-			["kind"]        = "save_now",
-		};
-		// Key — held until spent at an item-conditional fork; not manually
-		// activatable (see ActivateItem). Mirrors data/shop_items.json.
-		_registry["key"] = new Dictionary
-		{
-			["id"]          = "key",
-			["name"]        = "Key",
-			["description"] = "Opens a locked fork path. Consumed when the path is taken.",
-			["category"]    = "utility",
-			["price"]       = 50,
-			["duration_ms"] = 0,
-			["kind"]        = "key",
-		};
-		// Cleanse — held until used on a cursed round; not manually activatable
-		// (see ActivateItem). Mirrors data/shop_items.json.
-		_registry["cleanse"] = new Dictionary
-		{
-			["id"]          = "cleanse",
-			["name"]        = "Cleanse",
-			["description"] = "Lifts the curse on a cursed round for free. Consumed when used.",
-			["category"]    = "utility",
-			["price"]       = 60,
-			["duration_ms"] = 0,
-			["kind"]        = "cleanse",
-		};
-	}
+  private void _LoadHardcodedDefaults() {
+    _registry["long_game"] = new Dictionary {
+      ["id"] = "long_game",
+      ["name"] = "The Long Game",
+      ["description"] = "Expands the funscript stroke length by 20%.",
+      ["category"] = "modifier",
+      ["price"] = 30,
+      ["duration_ms"] = 30000,
+      ["kind"] = "scale",
+      ["factor"] = 1.2f,
+    };
+    _registry["cock_lock"] = new Dictionary {
+      ["id"] = "cock_lock",
+      ["name"] = "Cock Lock",
+      ["description"] = "Ignores funscript playback for 10 seconds.",
+      ["category"] = "modifier",
+      ["price"] = 25,
+      ["duration_ms"] = 10000,
+      ["kind"] = "block",
+    };
+    _registry["shrink_ray"] = new Dictionary {
+      ["id"] = "shrink_ray",
+      ["name"] = "Shrink Ray",
+      ["description"] = "Reduces the funscript stroke length by 20%.",
+      ["category"] = "modifier",
+      ["price"] = 40,
+      ["duration_ms"] = 30000,
+      ["kind"] = "scale",
+      ["factor"] = 0.8f,
+    };
+    _registry["final_inch"] = new Dictionary {
+      ["id"] = "final_inch",
+      ["name"] = "The Final Inch",
+      ["description"] =
+          "Confines the script to only the top 50% of the stroke range.",
+      ["category"] = "modifier",
+      ["price"] = 35,
+      ["duration_ms"] = 25000,
+      ["kind"] = "clamp",
+      ["min"] = 50,
+      ["max"] = 100,
+    };
+    _registry["low_tide"] = new Dictionary {
+      ["id"] = "low_tide",
+      ["name"] = "Low Tide",
+      ["description"] =
+          "Confines the script to only the bottom 50% of the stroke range.",
+      ["category"] = "modifier",
+      ["price"] = 35,
+      ["duration_ms"] = 25000,
+      ["kind"] = "clamp",
+      ["min"] = 0,
+      ["max"] = 50,
+    };
+    _registry["mirror"] = new Dictionary {
+      ["id"] = "mirror",
+      ["name"] = "Mirror",
+      ["description"] =
+          "Inverts all stroke positions for 30 seconds. Up becomes down.",
+      ["category"] = "modifier",
+      ["price"] = 30,
+      ["duration_ms"] = 30000,
+      ["kind"] = "reverse",
+    };
+    _registry["blackout"] = new Dictionary {
+      ["id"] = "blackout",
+      ["name"] = "Blackout",
+      ["description"] =
+          "Hides the video for 30 seconds. The device keeps going in the dark.",
+      ["category"] = "modifier",
+      ["price"] = 20,
+      ["duration_ms"] = 30000,
+      ["kind"] = "blackout",
+    };
+    _registry["score_rush"] = new Dictionary {
+      ["id"] = "score_rush",
+      ["name"] = "Score Rush",
+      ["description"] =
+          "Doubles score earned from every stroke for 30 seconds.",
+      ["category"] = "modifier",
+      ["price"] = 40,
+      ["duration_ms"] = 30000,
+      ["kind"] = "score_multiplier",
+      ["factor"] = 2.0f,
+    };
+    _registry["jackpot"] = new Dictionary {
+      ["id"] = "jackpot",
+      ["name"] = "Jackpot",
+      ["description"] = "Doubles the coin reward at the end of this round.",
+      ["category"] = "modifier",
+      ["price"] = 50,
+      ["duration_ms"] = 300000,
+      ["kind"] = "coin_jackpot",
+      ["factor"] = 2.0f,
+    };
+    _registry["pleasure_band"] = new Dictionary {
+      ["id"] = "pleasure_band",
+      ["name"] = "Pleasure Band Clamp",
+      ["description"] =
+          "Confines the script to the middle 30-70% of the stroke range.",
+      ["category"] = "modifier",
+      ["price"] = 35,
+      ["duration_ms"] = 25000,
+      ["kind"] = "clamp",
+      ["min"] = 30,
+      ["max"] = 70,
+    };
+    _registry["wildcard"] = new Dictionary {
+      ["id"] = "wildcard",
+      ["name"] = "Wildcard",
+      ["description"] =
+          "Activates a random modifier - could be anything. A cheap gamble.",
+      ["category"] = "modifier",
+      ["price"] = 20,
+      ["duration_ms"] = 30000,
+      ["kind"] = "wildcard",
+    };
+    // Utility item — saves progress at the start of the current round and
+    // is consumed. Locked out during boss rounds (because the inventory
+    // button itself is disabled during bosses). Doesn't apply a runtime
+    // effect; GameLoop catches the SaveRequested signal and writes the
+    // save file via JourneySaveService.
+    _registry["safe_word"] = new Dictionary {
+      ["id"] = "safe_word",
+      ["name"] = "The Safe Word",
+      ["description"] = "Saves your run at the start of the current round. " +
+                        "One-time save — used up when you resume.",
+      ["category"] = "utility",
+      ["price"] = 120,
+      ["duration_ms"] = 0,
+      ["kind"] = "save_now",
+    };
+    // Key — held until spent at an item-conditional fork; not manually
+    // activatable (see ActivateItem). Mirrors data/shop_items.json.
+    _registry["key"] = new Dictionary {
+      ["id"] = "key",
+      ["name"] = "Key",
+      ["description"] =
+          "Opens a locked fork path. Consumed when the path is taken.",
+      ["category"] = "utility",
+      ["price"] = 50,
+      ["duration_ms"] = 0,
+      ["kind"] = "key",
+    };
+    // Cleanse — held until used on a cursed round; not manually activatable
+    // (see ActivateItem). Mirrors data/shop_items.json.
+    _registry["cleanse"] = new Dictionary {
+      ["id"] = "cleanse",
+      ["name"] = "Cleanse",
+      ["description"] =
+          "Lifts the curse on a cursed round for free. Consumed when used.",
+      ["category"] = "utility",
+      ["price"] = 60,
+      ["duration_ms"] = 0,
+      ["kind"] = "cleanse",
+    };
+  }
 
-	// --- Registry access -------------------------------------------------------
+  // --- Registry access -------------------------------------------------------
 
-	// Returns all registered item IDs in insertion order.
-	public Array GetAllItemIds()
-	{
-		var ids = new Array();
+  // Returns all registered item IDs in insertion order.
+  public Array GetAllItemIds() {
+    var ids = new Array();
 
-		foreach (var key in _registry.Keys)
-			ids.Add(key);
+    foreach (var key in _registry.Keys)
+      ids.Add(key);
 
-		return ids;
-	}
+    return ids;
+  }
 
-	// Returns the data dictionary for the given item ID, or an empty dict if unknown.
-	public Dictionary GetItemData(string id)
-	{
-		if (id != null && _registry.ContainsKey(id))
-			return _registry[id].AsGodotDictionary();
-		return new Dictionary();
-	}
+  // Returns the data dictionary for the given item ID, or an empty dict if
+  // unknown.
+  public Dictionary GetItemData(string id) {
+    if (id != null && _registry.ContainsKey(id))
+      return _registry[id].AsGodotDictionary();
+    return new Dictionary();
+  }
 
-	// ---------------------------------------------------------------------------
-	// Inventory (owned, not-yet-activated items)
-	// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Inventory (owned, not-yet-activated items)
+  // ---------------------------------------------------------------------------
 
-	private readonly List<Dictionary> _items = new();
+  private readonly List<Dictionary> _items = new();
 
-	// Active effects: one entry per activation, with absolute end time on engine clock (ms).
-	private readonly List<Dictionary> _active = new();
+  // Active effects: one entry per activation, with absolute end time on engine
+  // clock (ms).
+  private readonly List<Dictionary> _active = new();
 
-	// Boss-round forced effects. These never expire on the timer — they are added
-	// when a boss round begins and removed wholesale via ClearBossEffects() when it
-	// ends. GetActiveEffects() returns them alongside _active so every consumer
-	// (FunscriptPlayer, ScoreService, the HUD chips) sees them transparently.
-	private readonly List<Dictionary> _bossEffects = new();
+  // Boss-round forced effects. These never expire on the timer — they are added
+  // when a boss round begins and removed wholesale via ClearBossEffects() when
+  // it ends. GetActiveEffects() returns them alongside _active so every
+  // consumer (FunscriptPlayer, ScoreService, the HUD chips) sees them
+  // transparently.
+  private readonly List<Dictionary> _bossEffects = new();
 
-	private double _nowMs = 0.0;
+  private double _nowMs = 0.0;
 
-	// When true, the effect clock is frozen — _nowMs stops advancing so active
-	// effects neither expire nor visibly count down. Driven by GameLoop while the
-	// round is paused (pause button / Options overlay) so timed effects are not
-	// drained while no round is playing.
-	private bool _paused = false;
+  // When true, the effect clock is frozen — _nowMs stops advancing so active
+  // effects neither expire nor visibly count down. Driven by GameLoop while the
+  // round is paused (pause button / Options overlay) so timed effects are not
+  // drained while no round is playing.
+  private bool _paused = false;
 
-	// Freeze or resume the active-effect countdown. Idempotent.
-	public void SetPaused(bool paused) => _paused = paused;
+  // Freeze or resume the active-effect countdown. Idempotent.
+  public void SetPaused(bool paused) => _paused = paused;
 
-	public override void _Process(double delta)
-	{
-		if (_paused)
-			return;
+  public override void _Process(double delta) {
+    if (_paused)
+      return;
 
-		_nowMs += delta * 1000.0;
+    _nowMs += delta * 1000.0;
 
-		bool removed = false;
-		for (int i = _active.Count - 1; i >= 0; i--)
-		{
-			if (_active[i]["end_time_ms"].AsDouble() <= _nowMs)
-			{
-				_active.RemoveAt(i);
-				removed = true;
-			}
-		}
+    bool removed = false;
+    for (int i = _active.Count - 1; i >= 0; i--) {
+      if (_active[i]["end_time_ms"].AsDouble() <= _nowMs) {
+        _active.RemoveAt(i);
+        removed = true;
+      }
+    }
 
-		if (removed)
-			EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+    if (removed)
+      EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	public void Reset()
-	{
-		_items.Clear();
-		_active.Clear();
-		_bossEffects.Clear();
-		// Clear any stale pause state — a player can quit to menu mid-pause,
-		// which would otherwise leave the effect clock frozen for the next journey.
-		_paused = false;
-		EmitSignal(SignalName.InventoryChanged);
-		EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+  public void Reset() {
+    _items.Clear();
+    _active.Clear();
+    _bossEffects.Clear();
+    // Clear any stale pause state — a player can quit to menu mid-pause,
+    // which would otherwise leave the effect clock frozen for the next journey.
+    _paused = false;
+    EmitSignal(SignalName.InventoryChanged);
+    EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	// --- Inventory ----------------------------------------------------------
+  // --- Inventory ----------------------------------------------------------
 
-	public Array GetItems()
-	{
-		var arr = new Array();
-		foreach (var item in _items)
-			arr.Add(item);
+  public Array GetItems() {
+    var arr = new Array();
+    foreach (var item in _items)
+      arr.Add(item);
 
-		return arr;
-	}
+    return arr;
+  }
 
-	public void AddItem(string id)
-	{
-		var data = GetItemData(id);
-		if (data.Count == 0)
-			return;
+  public void AddItem(string id) {
+    var data = GetItemData(id);
+    if (data.Count == 0)
+      return;
 
-		_items.Add(data);
-		EmitSignal(SignalName.InventoryChanged);
-	}
+    _items.Add(data);
+    EmitSignal(SignalName.InventoryChanged);
+  }
 
-	// True if the player currently holds at least one item with this id. Used by
-	// Sacrifice forks (gating) and item-Conditional forks (the ownership check).
-	public bool OwnsItem(string id)
-	{
-		foreach (var item in _items)
-			if (item.ContainsKey("id") && item["id"].AsString() == id)
-				return true;
-		return false;
-	}
+  // True if the player currently holds at least one item with this id. Used by
+  // Sacrifice forks (gating) and item-Conditional forks (the ownership check).
+  public bool OwnsItem(string id) {
+    foreach (var item in _items)
+      if (item.ContainsKey("id") && item["id"].AsString() == id)
+        return true;
+    return false;
+  }
 
-	// Removes one held item with this id. Returns true if one was removed. Used
-	// when a Sacrifice fork path is chosen.
-	public bool ConsumeItem(string id)
-	{
-		for (int i = 0; i < _items.Count; i++)
-		{
-			if (_items[i].ContainsKey("id") && _items[i]["id"].AsString() == id)
-			{
-				_items.RemoveAt(i);
-				EmitSignal(SignalName.InventoryChanged);
-				return true;
-			}
-		}
-		return false;
-	}
+  // Removes one held item with this id. Returns true if one was removed. Used
+  // when a Sacrifice fork path is chosen.
+  public bool ConsumeItem(string id) {
+    for (int i = 0; i < _items.Count; i++) {
+      if (_items[i].ContainsKey("id") && _items[i]["id"].AsString() == id) {
+        _items.RemoveAt(i);
+        EmitSignal(SignalName.InventoryChanged);
+        return true;
+      }
+    }
+    return false;
+  }
 
-	// ─── Save / Resume ────────────────────────────────────────────────────
-	//
-	// Inventory portion of the journey save record. Only owned (unactivated)
-	// items are persisted — active effects are deliberately NOT carried
-	// across saves so the player gets a clean modifier slate on resume.
+  // ─── Save / Resume ────────────────────────────────────────────────────
+  //
+  // Inventory portion of the journey save record. Only owned (unactivated)
+  // items are persisted — active effects are deliberately NOT carried
+  // across saves so the player gets a clean modifier slate on resume.
 
-	// Captures the current owned-inventory list for inclusion in the save
-	// payload. Same shape GetItems() exposes; we keep a dedicated method so
-	// the save callsite is explicit about intent.
-	public Array CaptureSaveData() => GetItems();
+  // Captures the current owned-inventory list for inclusion in the save
+  // payload. Same shape GetItems() exposes; we keep a dedicated method so
+  // the save callsite is explicit about intent.
+  public Array CaptureSaveData() => GetItems();
 
-	// Restores an inventory list from a save record. Each entry is looked up
-	// fresh in _registry by ID so registry edits made since the save (item
-	// removed, price changed, description rewritten) take effect on resume.
-	// Saved IDs that no longer exist in the registry are silently dropped.
-	public void LoadFromSave(Array savedItems)
-	{
-		_items.Clear();
-		foreach (var entry in savedItems)
-		{
-			if (entry.VariantType != Variant.Type.Dictionary)
-				continue;
-			var saved = entry.AsGodotDictionary();
-			string id = saved.ContainsKey("id") ? saved["id"].AsString() : "";
-			if (id == "")
-				continue;
-			if (_registry.ContainsKey(id))
-				_items.Add(_registry[id].AsGodotDictionary());
-			// else: item id no longer in registry — silently drop. Common
-			// after a content update that removes or renames an item.
-		}
-		EmitSignal(SignalName.InventoryChanged);
-	}
+  // Restores an inventory list from a save record. Each entry is looked up
+  // fresh in _registry by ID so registry edits made since the save (item
+  // removed, price changed, description rewritten) take effect on resume.
+  // Saved IDs that no longer exist in the registry are silently dropped.
+  public void LoadFromSave(Array savedItems) {
+    _items.Clear();
+    foreach (var entry in savedItems) {
+      if (entry.VariantType != Variant.Type.Dictionary)
+        continue;
+      var saved = entry.AsGodotDictionary();
+      string id = saved.ContainsKey("id") ? saved["id"].AsString() : "";
+      if (id == "")
+        continue;
+      if (_registry.ContainsKey(id))
+        _items.Add(_registry[id].AsGodotDictionary());
+      // else: item id no longer in registry — silently drop. Common
+      // after a content update that removes or renames an item.
+    }
+    EmitSignal(SignalName.InventoryChanged);
+  }
 
-	// Removes the item at slotIndex and starts its effect timer immediately.
-	public bool ActivateItem(int slotIndex)
-	{
-		if (slotIndex < 0 || slotIndex >= _items.Count)
-			return false;
+  // Removes the item at slotIndex and starts its effect timer immediately.
+  public bool ActivateItem(int slotIndex) {
+    if (slotIndex < 0 || slotIndex >= _items.Count)
+      return false;
 
-		var item = _items[slotIndex];
+    var item = _items[slotIndex];
 
-		// Keys and Cleanses aren't manually usable — a Key is consumed at an
-		// item-conditional fork, a Cleanse via the cursed-round cleanse button.
-		// Refuse activation so the player can't waste one.
-		string itemKind = item.ContainsKey("kind") ? item["kind"].AsString() : "";
-		if (itemKind == "key" || itemKind == "cleanse")
-			return false;
+    // Keys and Cleanses aren't manually usable — a Key is consumed at an
+    // item-conditional fork, a Cleanse via the cursed-round cleanse button.
+    // Refuse activation so the player can't waste one.
+    string itemKind = item.ContainsKey("kind") ? item["kind"].AsString() : "";
+    if (itemKind == "key" || itemKind == "cleanse")
+      return false;
 
-		_items.RemoveAt(slotIndex);
+    _items.RemoveAt(slotIndex);
 
-		// save_now is an instantaneous utility — it doesn't enter the active-
-		// effect list, it just fires a signal for GameLoop to handle and is
-		// consumed. Boss-round lockout is enforced by the inventory UI (which
-		// disables item use during bosses) so the activation-side code doesn't
-		// need its own boss check.
-		if (item.ContainsKey("kind") && item["kind"].AsString() == "save_now")
-		{
-			EmitSignal(SignalName.SaveRequested);
-			EmitSignal(SignalName.InventoryChanged);
-			return true;
-		}
+    // save_now is an instantaneous utility — it doesn't enter the active-
+    // effect list, it just fires a signal for GameLoop to handle and is
+    // consumed. Boss-round lockout is enforced by the inventory UI (which
+    // disables item use during bosses) so the activation-side code doesn't
+    // need its own boss check.
+    if (item.ContainsKey("kind") && item["kind"].AsString() == "save_now") {
+      EmitSignal(SignalName.SaveRequested);
+      EmitSignal(SignalName.InventoryChanged);
+      return true;
+    }
 
-		// Wildcard resolves to a random concrete modifier at activation time: the
-		// rolled effect supplies the kind + params, the displayed name reveals
-		// what was rolled. Every other item is its own effect source.
-		var source = item;
-		string displayName = item.ContainsKey("name") ? item["name"].AsString() : "";
-		if (item.ContainsKey("kind") && item["kind"].AsString() == "wildcard")
-		{
-			var rolled = _RollWildcard();
-			if (rolled.Count > 0)
-			{
-				source = rolled;
-				string rolledName = rolled.ContainsKey("name") ? rolled["name"].AsString() : "";
-				if (rolledName != "")
-					displayName = $"Wildcard: {rolledName}";
-			}
-		}
+    // Wildcard resolves to a random concrete modifier at activation time: the
+    // rolled effect supplies the kind + params, the displayed name reveals
+    // what was rolled. Every other item is its own effect source.
+    var source = item;
+    string displayName =
+        item.ContainsKey("name") ? item["name"].AsString() : "";
+    if (item.ContainsKey("kind") && item["kind"].AsString() == "wildcard") {
+      var rolled = _RollWildcard();
+      if (rolled.Count > 0) {
+        source = rolled;
+        string rolledName =
+            rolled.ContainsKey("name") ? rolled["name"].AsString() : "";
+        if (rolledName != "")
+          displayName = $"Wildcard: {rolledName}";
+      }
+    }
 
-		int duration = item.ContainsKey("duration_ms") ? item["duration_ms"].AsInt32() : 0;
-		var effect = new Dictionary
-		{
-			["id"]            = item.ContainsKey("id")   ? item["id"]   : "",
-			["name"]          = displayName,
-			["kind"]          = source.ContainsKey("kind") ? source["kind"] : "",
-			["duration_ms"]   = duration,
-			["end_time_ms"]   = _nowMs + duration,
-			["start_time_ms"] = _nowMs,
-		};
-		// Copy effect params used by FunscriptPlayer from the resolved source.
-		if (source.ContainsKey("factor")) effect["factor"] = source["factor"];
-		if (source.ContainsKey("min"))    effect["min"]    = source["min"];
-		if (source.ContainsKey("max"))    effect["max"]    = source["max"];
+    int duration =
+        item.ContainsKey("duration_ms") ? item["duration_ms"].AsInt32() : 0;
+    var effect = new Dictionary {
+      ["id"] = item.ContainsKey("id") ? item["id"] : "",
+      ["name"] = displayName,
+      ["kind"] = source.ContainsKey("kind") ? source["kind"] : "",
+      ["duration_ms"] = duration,
+      ["end_time_ms"] = _nowMs + duration,
+      ["start_time_ms"] = _nowMs,
+    };
+    // Copy effect params used by FunscriptPlayer from the resolved source.
+    if (source.ContainsKey("factor"))
+      effect["factor"] = source["factor"];
+    if (source.ContainsKey("min"))
+      effect["min"] = source["min"];
+    if (source.ContainsKey("max"))
+      effect["max"] = source["max"];
 
-		_active.Add(effect);
-		EmitSignal(SignalName.InventoryChanged);
-		EmitSignal(SignalName.ActiveEffectsChanged);
-		return true;
-	}
+    _active.Add(effect);
+    EmitSignal(SignalName.InventoryChanged);
+    EmitSignal(SignalName.ActiveEffectsChanged);
+    return true;
+  }
 
-	// Picks a random modifier dict from the registry for the Wildcard item.
-	// Excludes the wildcard itself and coin_jackpot — the latter's payout relies
-	// on a long lifetime that the wildcard's shorter duration would cut short.
-	private Dictionary _RollWildcard()
-	{
-		var pool = new List<Dictionary>();
-		foreach (var key in _registry.Keys)
-		{
-			var d = _registry[key].AsGodotDictionary();
-			string kind = d.ContainsKey("kind") ? d["kind"].AsString() : "";
-			if (kind != "" && kind != "wildcard" && kind != "coin_jackpot")
-				pool.Add(d);
-		}
-		if (pool.Count == 0)
-			return new Dictionary();
-		return pool[(int)(GD.Randi() % (uint)pool.Count)];
-	}
+  // Picks a random modifier dict from the registry for the Wildcard item.
+  // Excludes the wildcard itself and coin_jackpot — the latter's payout relies
+  // on a long lifetime that the wildcard's shorter duration would cut short.
+  private Dictionary _RollWildcard() {
+    var pool = new List<Dictionary>();
+    foreach (var key in _registry.Keys) {
+      var d = _registry[key].AsGodotDictionary();
+      string kind = d.ContainsKey("kind") ? d["kind"].AsString() : "";
+      if (kind != "" && kind != "wildcard" && kind != "coin_jackpot")
+        pool.Add(d);
+    }
+    if (pool.Count == 0)
+      return new Dictionary();
+    return pool[(int)(GD.Randi() % (uint)pool.Count)];
+  }
 
-	// --- Active effects -------------------------------------------------------
+  // --- Active effects -------------------------------------------------------
 
-	public Array GetActiveEffects()
-	{
-		var activeEffects = new Array();
-		foreach (var fx in _active)
-			activeEffects.Add(fx);
-		foreach (var fx in _bossEffects)
-			activeEffects.Add(fx);
+  public Array GetActiveEffects() {
+    var activeEffects = new Array();
+    foreach (var fx in _active)
+      activeEffects.Add(fx);
+    foreach (var fx in _bossEffects)
+      activeEffects.Add(fx);
 
-		return activeEffects;
-	}
+    return activeEffects;
+  }
 
-	// Clears player-activated effects only — leaves boss effects and owned
-	// inventory items untouched. Used to give a boss round a clean slate.
-	public void ClearActiveEffects()
-	{
-		if (_active.Count == 0)
-			return;
-		_active.Clear();
-		EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+  // Clears player-activated effects only — leaves boss effects and owned
+  // inventory items untouched. Used to give a boss round a clean slate.
+  public void ClearActiveEffects() {
+    if (_active.Count == 0)
+      return;
+    _active.Clear();
+    EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	// Installs a set of boss-round forced effects. Each entry must be a complete
-	// effect dictionary (kind + params + display name). They apply for the whole
-	// boss round and are removed with ClearBossEffects().
-	public void AddBossEffects(Array effects)
-	{
-		foreach (var fx in effects)
-		{
-			if (fx.VariantType == Variant.Type.Dictionary)
-				_bossEffects.Add(fx.AsGodotDictionary());
-		}
-		EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+  // Installs a set of boss-round forced effects. Each entry must be a complete
+  // effect dictionary (kind + params + display name). They apply for the whole
+  // boss round and are removed with ClearBossEffects().
+  public void AddBossEffects(Array effects) {
+    foreach (var fx in effects) {
+      if (fx.VariantType == Variant.Type.Dictionary)
+        _bossEffects.Add(fx.AsGodotDictionary());
+    }
+    EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	// Removes all boss-round forced effects. Called when a boss round ends.
-	public void ClearBossEffects()
-	{
-		if (_bossEffects.Count == 0)
-			return;
-		_bossEffects.Clear();
-		EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+  // Removes all boss-round forced effects. Called when a boss round ends.
+  public void ClearBossEffects() {
+    if (_bossEffects.Count == 0)
+      return;
+    _bossEffects.Clear();
+    EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	// Immediately removes every active effect of the given kind. Used by GameLoop
-	// to consume coin_jackpot effects right after they pay out, so a single
-	// jackpot only ever doubles one round's reward.
-	public void ConsumeEffects(string kind)
-	{
-		bool removed = false;
-		for (int i = _active.Count - 1; i >= 0; i--)
-		{
-			if (_active[i].ContainsKey("kind") && _active[i]["kind"].AsString() == kind)
-			{
-				_active.RemoveAt(i);
-				removed = true;
-			}
-		}
+  // Immediately removes every active effect of the given kind. Used by GameLoop
+  // to consume coin_jackpot effects right after they pay out, so a single
+  // jackpot only ever doubles one round's reward.
+  public void ConsumeEffects(string kind) {
+    bool removed = false;
+    for (int i = _active.Count - 1; i >= 0; i--) {
+      if (_active[i].ContainsKey("kind") &&
+          _active[i]["kind"].AsString() == kind) {
+        _active.RemoveAt(i);
+        removed = true;
+      }
+    }
 
-		if (removed)
-			EmitSignal(SignalName.ActiveEffectsChanged);
-	}
+    if (removed)
+      EmitSignal(SignalName.ActiveEffectsChanged);
+  }
 
-	// Remaining seconds for the chip countdown text. Returns 0 if expired.
-	public double GetRemainingSeconds(Dictionary effect)
-	{
-		double end = effect.ContainsKey("end_time_ms") ? effect["end_time_ms"].AsDouble() : 0.0;
-		return System.Math.Max(0.0, (end - _nowMs) / 1000.0);
-	}
+  // Remaining seconds for the chip countdown text. Returns 0 if expired.
+  public double GetRemainingSeconds(Dictionary effect) {
+    double end = effect.ContainsKey("end_time_ms")
+                     ? effect["end_time_ms"].AsDouble()
+                     : 0.0;
+    return System.Math.Max(0.0, (end - _nowMs) / 1000.0);
+  }
 }
