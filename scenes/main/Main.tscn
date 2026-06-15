@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d288w124lrltr" path="res://scripts/main/Main.gd" id="1_u1xfj"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_nha0i"]
+[ext_resource type="Script" uid="uid://byeqbxixv5a1o" path="res://components/button_effects.gd" id="3_1rhdn"]
 [ext_resource type="PackedScene" uid="uid://dk87out6m1h2h" path="res://components/blinker.tscn" id="3_gyg6b"]
 [ext_resource type="Script" uid="uid://cnfaeqf83ubro" path="res://scenes/main/version_label.gd" id="3_q24mn"]
 [ext_resource type="PackedScene" uid="uid://bdp54guew1es1" path="res://scenes/main/update_banner.tscn" id="5_dc040"]
@@ -36,7 +37,6 @@ grow_vertical = 2
 script = ExtResource("1_u1xfj")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1071955145]
-unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -50,7 +50,6 @@ anchors_preset = 0
 script = ExtResource("2_nha0i")
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=488459364]
-unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5
@@ -61,7 +60,6 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="CenterContainer" type="VBoxContainer" parent="PanelContainer" unique_id=208297822]
-unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 36
 
@@ -72,7 +70,6 @@ theme_override_constants/separation = 6
 alignment = 1
 
 [node name="Eyebrow" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=343657906]
-unique_name_in_owner = true
 layout_mode = 2
 text = "♦ NOW PLAYING ♦"
 label_settings = SubResource("LabelSettings_q24mn")
@@ -80,7 +77,6 @@ horizontal_alignment = 1
 uppercase = true
 
 [node name="TitleLabel" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=941947599]
-unique_name_in_owner = true
 layout_mode = 2
 text = "FAP HERO"
 label_settings = SubResource("LabelSettings_nha0i")
@@ -88,7 +84,6 @@ horizontal_alignment = 1
 uppercase = true
 
 [node name="SubtitleLabel" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=85976063]
-unique_name_in_owner = true
 layout_mode = 2
 text = "JOURNEY"
 label_settings = SubResource("LabelSettings_gyg6b")
@@ -96,7 +91,6 @@ horizontal_alignment = 1
 uppercase = true
 
 [node name="TitleDivider" type="HSeparator" parent="PanelContainer/CenterContainer/TitleSection" unique_id=1088994310]
-unique_name_in_owner = true
 layout_mode = 2
 
 [node name="ButtonContainer" type="VBoxContainer" parent="PanelContainer/CenterContainer" unique_id=590594392]
@@ -106,28 +100,44 @@ theme_override_constants/separation = 14
 alignment = 1
 
 [node name="StartButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=145810282]
-unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 52)
 layout_mode = 2
 text = "> START"
 
+[node name="ButtonEffects" type="Node" parent="PanelContainer/CenterContainer/ButtonContainer/StartButton" unique_id=642890908 node_paths=PackedStringArray("target")]
+script = ExtResource("3_1rhdn")
+target = NodePath("..")
+metadata/_custom_type_script = "uid://byeqbxixv5a1o"
+
 [node name="BuildButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1234567891]
-unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 52)
 layout_mode = 2
 text = "> BUILD JOURNEY"
 
+[node name="ButtonEffects" type="Node" parent="PanelContainer/CenterContainer/ButtonContainer/BuildButton" unique_id=756015319 node_paths=PackedStringArray("target")]
+script = ExtResource("3_1rhdn")
+target = NodePath("..")
+metadata/_custom_type_script = "uid://byeqbxixv5a1o"
+
 [node name="OptionsButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1785582695]
-unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 52)
 layout_mode = 2
 text = "> OPTIONS"
 
+[node name="ButtonEffects" type="Node" parent="PanelContainer/CenterContainer/ButtonContainer/OptionsButton" unique_id=882382344 node_paths=PackedStringArray("target")]
+script = ExtResource("3_1rhdn")
+target = NodePath("..")
+metadata/_custom_type_script = "uid://byeqbxixv5a1o"
+
 [node name="QuitButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1361721320]
-unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 52)
 layout_mode = 2
 text = "> QUIT"
+
+[node name="ButtonEffects" type="Node" parent="PanelContainer/CenterContainer/ButtonContainer/QuitButton" unique_id=1521276933 node_paths=PackedStringArray("target")]
+script = ExtResource("3_1rhdn")
+target = NodePath("..")
+metadata/_custom_type_script = "uid://byeqbxixv5a1o"
 
 [node name="TaglineLabel" type="Label" parent="PanelContainer/CenterContainer" unique_id=582982679]
 unique_name_in_owner = true
@@ -164,7 +174,6 @@ script = ExtResource("3_q24mn")
 metadata/_custom_type_script = "uid://cnfaeqf83ubro"
 
 [node name="UpdateBanner" parent="." unique_id=1591516518 instance=ExtResource("5_dc040")]
-unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5

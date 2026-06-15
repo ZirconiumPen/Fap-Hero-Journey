@@ -8,20 +8,14 @@ static var _intro_played: bool = false
 # True once the entrance animation has finished — gates the tagline blink and
 # button hover effects so they don't fight the intro tweens.
 var _intro_done: bool = false
-# Per-button hover scale tween, so a fast re-hover replaces rather than stacks.
-var _btn_tweens: Dictionary = {}
 
 @onready var _title_section: VBoxContainer = %TitleSection
-@onready var _start_btn: Button = %StartButton
-@onready var _options_btn: Button = %OptionsButton
-@onready var _build_btn: Button = %BuildButton
-@onready var _quit_btn: Button = %QuitButton
+@onready var _buttons: Container = %ButtonContainer
 @onready var _tagline: Label = %TaglineLabel
 
 
 func _ready() -> void:
 	MusicService.play()
-	_connect_buttons()
 	_play_intro()
 	_tagline.get_node("Blinker").enabled = true
 
@@ -122,12 +116,6 @@ func _open_update_modal() -> void:
 	add_child(modal)
 
 
-func _connect_buttons() -> void:
-	for btn: Button in [_start_btn, _options_btn, _build_btn, _quit_btn]:
-		btn.mouse_entered.connect(_hover_btn.bind(btn, true))
-		btn.mouse_exited.connect(_hover_btn.bind(btn, false))
-
-
 # ---------------------------------------------------------------------------
 # Entrance animation + hover
 # ---------------------------------------------------------------------------
@@ -141,7 +129,9 @@ func _play_intro() -> void:
 		_intro_done = true
 		return
 	_intro_played = true
-	var btns: Array = [_start_btn, _options_btn, _build_btn, _quit_btn]
+	var btns: Array[Button] = []
+	for b: Button in _buttons.get_children():
+		btns.append(b)
 	_title_section.modulate.a = 0.0
 	_tagline.modulate.a = 0.0
 	for btn: Button in btns:
@@ -187,25 +177,6 @@ func _play_intro() -> void:
 	for btn: Button in btns:
 		btn.disabled = false
 	_intro_done = true
-
-
-# Smoothly scales a menu button on hover. Ignored until the intro finishes so
-# it never competes with the cascade tweens.
-func _hover_btn(btn: Button, hovering: bool) -> void:
-	if not _intro_done:
-		return
-	var prev: Tween = _btn_tweens.get(btn)
-	if prev != null and prev.is_running():
-		prev.kill()
-	btn.pivot_offset = btn.size / 2.0
-	var tw: Tween = create_tween()
-	(
-		tw
-		. tween_property(btn, "scale", Vector2(1.04, 1.04) if hovering else Vector2.ONE, 0.10)
-		. set_ease(Tween.EASE_OUT)
-		. set_trans(Tween.TRANS_CUBIC)
-	)
-	_btn_tweens[btn] = tw
 
 
 func _on_start_button_pressed() -> void:
