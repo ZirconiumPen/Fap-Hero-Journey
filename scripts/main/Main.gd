@@ -208,16 +208,7 @@ func _open_update_modal() -> void:
 	add_child(modal)
 
 
-# ---------------------------------------------------------------------------
-# Button signals
-# ---------------------------------------------------------------------------
-
-
 func _connect_buttons() -> void:
-	_start_btn.pressed.connect(_on_start_pressed)
-	_options_btn.pressed.connect(_on_options_pressed)
-	_build_btn.pressed.connect(_on_build_pressed)
-	_quit_btn.pressed.connect(_on_quit_pressed)
 	for btn: Button in [_start_btn, _options_btn, _build_btn, _quit_btn]:
 		btn.mouse_entered.connect(_hover_btn.bind(btn, true))
 		btn.mouse_exited.connect(_hover_btn.bind(btn, false))
@@ -303,17 +294,17 @@ func _hover_btn(btn: Button, hovering: bool) -> void:
 	_btn_tweens[btn] = tw
 
 
-func _on_start_pressed() -> void:
+func _on_start_button_pressed() -> void:
 	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
 
 
-func _on_options_pressed() -> void:
-	Transition.change_scene("res://scenes/options/Options.tscn")
-
-
-func _on_build_pressed() -> void:
+func _on_build_button_pressed() -> void:
 	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
 
 
-func _on_quit_pressed() -> void:
+func _on_options_button_pressed() -> void:
+	Transition.change_scene("res://scenes/options/Options.tscn")
+
+
+func _on_quit_button_pressed() -> void:
 	get_tree().quit()
