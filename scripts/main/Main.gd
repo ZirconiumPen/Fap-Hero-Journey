@@ -25,20 +25,20 @@ const FLICKER_INTERVAL_MIN: float = 3.5
 const FLICKER_INTERVAL_MAX: float = 7.0
 const FLICKER_DURATION: float = 0.08
 
-@onready var _bg: ColorRect = $Background
-@onready var _panel: PanelContainer = $Panel
-@onready var _center: VBoxContainer = $Panel/CenterContainer
-@onready var _title_section: VBoxContainer = $Panel/CenterContainer/TitleSection
-@onready var _eyebrow: Label = $Panel/CenterContainer/TitleSection/Eyebrow
-@onready var _title: Label = $Panel/CenterContainer/TitleSection/TitleLabel
-@onready var _subtitle: Label = $Panel/CenterContainer/TitleSection/SubtitleLabel
-@onready var _divider: HSeparator = $Panel/CenterContainer/TitleSection/TitleDivider
-@onready var _button_container: VBoxContainer = $Panel/CenterContainer/ButtonContainer
-@onready var _start_btn: Button = $Panel/CenterContainer/ButtonContainer/StartButton
-@onready var _options_btn: Button = $Panel/CenterContainer/ButtonContainer/OptionsButton
-@onready var _build_btn: Button = $Panel/CenterContainer/ButtonContainer/BuildButton
-@onready var _quit_btn: Button = $Panel/CenterContainer/ButtonContainer/QuitButton
-@onready var _tagline: Label = $Panel/CenterContainer/TaglineLabel
+@onready var _bg: ColorRect = %Background
+@onready var _panel_container: PanelContainer = %PanelContainer
+@onready var _center: VBoxContainer = %CenterContainer
+@onready var _title_section: VBoxContainer = %TitleSection
+@onready var _eyebrow: Label = %Eyebrow
+@onready var _title: Label = %TitleLabel
+@onready var _subtitle: Label = %SubtitleLabel
+@onready var _divider: HSeparator = %TitleDivider
+@onready var _button_container: VBoxContainer = %ButtonContainer
+@onready var _start_btn: Button = %StartButton
+@onready var _options_btn: Button = %OptionsButton
+@onready var _build_btn: Button = %BuildButton
+@onready var _quit_btn: Button = %QuitButton
+@onready var _tagline: Label = %TaglineLabel
 
 var _blink_timer: float = 0.0
 var _blink_visible: bool = true
@@ -123,12 +123,12 @@ func _apply_layout() -> void:
 	_bg.offset_right = 0
 	_bg.offset_bottom = 0
 
-	_panel.anchor_left = 0.5
-	_panel.anchor_right = 0.5
-	_panel.anchor_top = 0.5
-	_panel.anchor_bottom = 0.5
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_panel_container.anchor_left = 0.5
+	_panel_container.anchor_right = 0.5
+	_panel_container.anchor_top = 0.5
+	_panel_container.anchor_bottom = 0.5
+	_panel_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel_container.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 	_center.add_theme_constant_override("separation", 36)
 
@@ -386,7 +386,7 @@ func _update_panel_border() -> void:
 	s.content_margin_right = PANEL_PADDING_H
 	s.content_margin_top = PANEL_PADDING_V
 	s.content_margin_bottom = PANEL_PADDING_V
-	_panel.add_theme_stylebox_override("panel", s)
+	_panel_container.add_theme_stylebox_override("panel", s)
 
 
 func _style_label(label: Label, color: Color, size: int, uppercase: bool = false) -> void:

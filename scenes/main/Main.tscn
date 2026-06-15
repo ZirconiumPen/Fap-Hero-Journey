@@ -9,6 +9,7 @@ anchors_preset = 0
 script = ExtResource("1_u1xfj")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1071955145]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -21,53 +22,66 @@ color = Color(0, 0, 0, 1)
 anchors_preset = 0
 script = ExtResource("2_nha0i")
 
-[node name="Panel" type="PanelContainer" parent="." unique_id=488459364]
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=488459364]
+unique_name_in_owner = true
 layout_mode = 0
 
-[node name="CenterContainer" type="VBoxContainer" parent="Panel" unique_id=208297822]
+[node name="CenterContainer" type="VBoxContainer" parent="PanelContainer" unique_id=208297822]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="TitleSection" type="VBoxContainer" parent="Panel/CenterContainer" unique_id=652469903]
+[node name="TitleSection" type="VBoxContainer" parent="PanelContainer/CenterContainer" unique_id=652469903]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Eyebrow" type="Label" parent="Panel/CenterContainer/TitleSection" unique_id=343657906]
+[node name="Eyebrow" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=343657906]
+unique_name_in_owner = true
 layout_mode = 2
 text = "♦ NOW PLAYING ♦"
 horizontal_alignment = 1
 
-[node name="TitleLabel" type="Label" parent="Panel/CenterContainer/TitleSection" unique_id=941947599]
+[node name="TitleLabel" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=941947599]
+unique_name_in_owner = true
 layout_mode = 2
 text = "FAP HERO"
 horizontal_alignment = 1
 
-[node name="SubtitleLabel" type="Label" parent="Panel/CenterContainer/TitleSection" unique_id=85976063]
+[node name="SubtitleLabel" type="Label" parent="PanelContainer/CenterContainer/TitleSection" unique_id=85976063]
+unique_name_in_owner = true
 layout_mode = 2
 text = "JOURNEY"
 horizontal_alignment = 1
 
-[node name="TitleDivider" type="HSeparator" parent="Panel/CenterContainer/TitleSection" unique_id=1088994310]
+[node name="TitleDivider" type="HSeparator" parent="PanelContainer/CenterContainer/TitleSection" unique_id=1088994310]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ButtonContainer" type="VBoxContainer" parent="Panel/CenterContainer" unique_id=590594392]
+[node name="ButtonContainer" type="VBoxContainer" parent="PanelContainer/CenterContainer" unique_id=590594392]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="StartButton" type="Button" parent="Panel/CenterContainer/ButtonContainer" unique_id=145810282]
+[node name="StartButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=145810282]
+unique_name_in_owner = true
 layout_mode = 2
 text = "> START"
 
-[node name="BuildButton" type="Button" parent="Panel/CenterContainer/ButtonContainer" unique_id=1234567891]
+[node name="BuildButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1234567891]
+unique_name_in_owner = true
 layout_mode = 2
 text = "> BUILD JOURNEY"
 
-[node name="OptionsButton" type="Button" parent="Panel/CenterContainer/ButtonContainer" unique_id=1785582695]
+[node name="OptionsButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1785582695]
+unique_name_in_owner = true
 layout_mode = 2
 text = "> OPTIONS"
 
-[node name="QuitButton" type="Button" parent="Panel/CenterContainer/ButtonContainer" unique_id=1361721320]
+[node name="QuitButton" type="Button" parent="PanelContainer/CenterContainer/ButtonContainer" unique_id=1361721320]
+unique_name_in_owner = true
 layout_mode = 2
 text = "> QUIT"
 
-[node name="TaglineLabel" type="Label" parent="Panel/CenterContainer" unique_id=582982679]
+[node name="TaglineLabel" type="Label" parent="PanelContainer/CenterContainer" unique_id=582982679]
+unique_name_in_owner = true
 layout_mode = 2
 text = "INSERT COCK TO CONTINUE"
 horizontal_alignment = 1
