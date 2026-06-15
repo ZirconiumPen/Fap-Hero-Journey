@@ -6,10 +6,6 @@ extends Control
 # neon-sign glowing border that occasionally flickers.
 # ---------------------------------------------------------------------------
 
-const PANEL_PADDING_H: int = 48
-const PANEL_PADDING_V: int = 40
-const BORDER_WIDTH: int = 3
-
 const BLINK_INTERVAL: float = 0.85
 
 const FLICKER_INTERVAL_MIN: float = 3.5
@@ -47,7 +43,6 @@ var _border_alpha: float = 1.0
 func _ready() -> void:
 	MusicService.play()
 	_flicker_next = randf_range(FLICKER_INTERVAL_MIN, FLICKER_INTERVAL_MAX)
-	_update_panel_border()
 	_connect_buttons()
 	_setup_version_label()
 	_check_for_update()
@@ -85,7 +80,7 @@ func _process(delta: float) -> void:
 		if _flicker_elapsed >= FLICKER_DURATION:
 			_flickering = false
 			_border_alpha = 1.0
-		_update_panel_border()
+		_panel_container.self_modulate = Color(Color.WHITE, _border_alpha)
 
 
 # ---------------------------------------------------------------------------
@@ -287,35 +282,6 @@ func _open_update_modal() -> void:
 # ---------------------------------------------------------------------------
 # Theme
 # ---------------------------------------------------------------------------
-
-
-func _update_panel_border() -> void:
-	var border_col: Color = Color(
-		UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, _border_alpha
-	)
-	var shadow_col: Color = Color(
-		UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, _border_alpha * 0.5
-	)
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = UITheme.PANEL_BG
-	s.border_color = border_col
-	s.border_width_left = BORDER_WIDTH
-	s.border_width_right = BORDER_WIDTH
-	s.border_width_top = BORDER_WIDTH
-	s.border_width_bottom = BORDER_WIDTH
-	s.corner_radius_top_left = 4
-	s.corner_radius_top_right = 4
-	s.corner_radius_bottom_left = 4
-	s.corner_radius_bottom_right = 4
-	s.shadow_color = shadow_col
-	s.shadow_size = 12
-	s.content_margin_left = PANEL_PADDING_H
-	s.content_margin_right = PANEL_PADDING_H
-	s.content_margin_top = PANEL_PADDING_V
-	s.content_margin_bottom = PANEL_PADDING_V
-	_panel_container.add_theme_stylebox_override("panel", s)
-
 
 # ---------------------------------------------------------------------------
 # Button signals
