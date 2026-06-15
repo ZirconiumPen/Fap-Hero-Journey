@@ -5,10 +5,6 @@ extends Control
 # resets on app restart ("first startup").
 static var _intro_played: bool = false
 
-# True once the entrance animation has finished — gates the tagline blink and
-# button hover effects so they don't fight the intro tweens.
-var _intro_done: bool = false
-
 @onready var _title_section: VBoxContainer = %TitleSection
 @onready var _buttons: Container = %ButtonContainer
 @onready var _tagline: Label = %TaglineLabel
@@ -116,27 +112,19 @@ func _open_update_modal() -> void:
 	add_child(modal)
 
 
-# ---------------------------------------------------------------------------
-# Entrance animation + hover
-# ---------------------------------------------------------------------------
-
-
 # Staged entrance: the title section pops in, the buttons cascade up one at a
 # time, then the tagline fades in. Buttons are locked until it finishes.
 func _play_intro() -> void:
 	if _intro_played:
-		# Already played this session — show the menu fully formed.
-		_intro_done = true
 		return
 	_intro_played = true
 	var btns: Array[Button] = []
 	for b: Button in _buttons.get_children():
 		btns.append(b)
+		b.modulate.a = 0.0
+		b.disabled = true
 	_title_section.modulate.a = 0.0
 	_tagline.modulate.a = 0.0
-	for btn: Button in btns:
-		btn.modulate.a = 0.0
-		btn.disabled = true
 
 	# Let layout settle (for scale pivots) and the scene transition clear.
 	await get_tree().process_frame
@@ -159,24 +147,22 @@ func _play_intro() -> void:
 	for i: int in btns.size():
 		var b: Button = btns[i]
 		b.pivot_offset = b.size / 2.0
-		b.scale = Vector2(0.9, 0.9)
 		var bt: Tween = create_tween().set_parallel()
 		bt.tween_property(b, "modulate:a", 1.0, 0.25).set_delay(i * 0.07)
 		(
 			bt
 			. tween_property(b, "scale", Vector2.ONE, 0.30)
+			. from(Vector2.ONE * 0.9)
 			. set_delay(i * 0.07)
 			. set_ease(Tween.EASE_OUT)
 			. set_trans(Tween.TRANS_BACK)
 		)
 	await get_tree().create_timer(0.30 + btns.size() * 0.07).timeout
 
-	# Tagline.
 	create_tween().tween_property(_tagline, "modulate:a", 1.0, 0.30)
 
 	for btn: Button in btns:
 		btn.disabled = false
-	_intro_done = true
 
 
 func _on_start_button_pressed() -> void:
