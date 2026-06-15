@@ -1,0 +1,21 @@
+[gd_resource type="Theme" format=3 uid="uid://bsjjoikpwaqc1"]
+
+[ext_resource type="StyleBox" uid="uid://c63ha5w3sse3s" path="res://theming/purple_box_mid.tres" id="1_qsb4m"]
+[ext_resource type="StyleBox" uid="uid://c4a7jrtdykrg4" path="res://theming/purple_box_bright.tres" id="2_23jfu"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_08lqv"]
+bg_color = Color(0.1764706, 0.023529412, 0.25882354, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.69803923, 0.11764706, 1, 1)
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_et8uc"]
+color = Color(0.698, 0.118, 1, 0.5)
+
+[resource]
+Button/styles/hover = ExtResource("1_qsb4m")
+Button/styles/normal = SubResource("StyleBoxFlat_08lqv")
+Button/styles/pressed = ExtResource("2_23jfu")
+HSeparator/styles/separator = SubResource("StyleBoxLine_et8uc")

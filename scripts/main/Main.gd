@@ -6,8 +6,6 @@ extends Control
 # neon-sign glowing border that occasionally flickers.
 # ---------------------------------------------------------------------------
 
-const FONT_SIZE_BUTTON: int = 17
-
 const PANEL_PADDING_H: int = 48
 const PANEL_PADDING_V: int = 40
 const BORDER_WIDTH: int = 3
@@ -39,7 +37,6 @@ var _border_alpha: float = 1.0
 
 @onready var _panel_container: PanelContainer = %PanelContainer
 @onready var _title_section: VBoxContainer = %TitleSection
-@onready var _divider: HSeparator = %TitleDivider
 @onready var _start_btn: Button = %StartButton
 @onready var _options_btn: Button = %OptionsButton
 @onready var _build_btn: Button = %BuildButton
@@ -50,7 +47,7 @@ var _border_alpha: float = 1.0
 func _ready() -> void:
 	MusicService.play()
 	_flicker_next = randf_range(FLICKER_INTERVAL_MIN, FLICKER_INTERVAL_MAX)
-	_apply_theme()
+	_update_panel_border()
 	_connect_buttons()
 	_setup_version_label()
 	_check_for_update()
@@ -232,7 +229,6 @@ func _open_update_modal() -> void:
 	for b: Button in [dl_btn, notes_btn, close_btn]:
 		b.focus_mode = Control.FOCUS_NONE
 		b.custom_minimum_size = Vector2(150, 0)
-		_style_button(b, UITheme.MAGENTA)
 		btn_row.add_child(b)
 
 	notes_btn.pressed.connect(func() -> void: OS.shell_open(UpdateService.release_url()))
@@ -293,21 +289,6 @@ func _open_update_modal() -> void:
 # ---------------------------------------------------------------------------
 
 
-func _apply_theme() -> void:
-	_update_panel_border()
-
-	var sep: StyleBoxFlat = StyleBoxFlat.new()
-	sep.bg_color = UITheme.SEPARATOR
-	sep.content_margin_top = 1
-	sep.content_margin_bottom = 1
-	_divider.add_theme_stylebox_override("separator", sep)
-
-	_style_button(_start_btn, UITheme.PURPLE_BRIGHT)
-	_style_button(_options_btn, UITheme.MAGENTA)
-	_style_button(_build_btn, UITheme.PURPLE_MID)
-	_style_button(_quit_btn, UITheme.PURPLE_MID)
-
-
 func _update_panel_border() -> void:
 	var border_col: Color = Color(
 		UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, _border_alpha
@@ -334,38 +315,6 @@ func _update_panel_border() -> void:
 	s.content_margin_top = PANEL_PADDING_V
 	s.content_margin_bottom = PANEL_PADDING_V
 	_panel_container.add_theme_stylebox_override("panel", s)
-
-
-func _style_button(btn: Button, accent: Color) -> void:
-	btn.add_theme_color_override("font_color", accent)
-	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
-	btn.add_theme_font_size_override("font_size", FONT_SIZE_BUTTON)
-	btn.text = btn.text.to_upper()
-
-	btn.add_theme_stylebox_override("normal", _make_btn_style(accent, UITheme.PURPLE_DARK))
-	btn.add_theme_stylebox_override("hover", _make_btn_style(accent, UITheme.PURPLE_MID))
-	btn.add_theme_stylebox_override("pressed", _make_btn_style(accent, accent))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-
-func _make_btn_style(border_color: Color, fill_color: Color) -> StyleBoxFlat:
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = fill_color
-	s.border_color = border_color
-	s.border_width_left = 2
-	s.border_width_right = 2
-	#s.border_width_top    = 2
-	s.border_width_bottom = 2
-	s.corner_radius_top_left = 0
-	s.corner_radius_top_right = 0
-	s.corner_radius_bottom_left = 0
-	s.corner_radius_bottom_right = 0
-	s.content_margin_left = 20
-	s.content_margin_right = 20
-	s.content_margin_top = 12
-	s.content_margin_bottom = 12
-	return s
 
 
 # ---------------------------------------------------------------------------
