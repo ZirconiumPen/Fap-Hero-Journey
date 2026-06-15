@@ -1,45 +1,46 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bfwcahrvwihup"]
 
-[ext_resource type="Script" path="res://scripts/storyboard_screen/StoryboardScreen.gd" id="1_sb"]
+[ext_resource type="Script" uid="uid://cemtddreh5388" path="res://scripts/storyboard_screen/StoryboardScreen.gd" id="1_sb"]
 
-[node name="StoryboardScreen" type="Control"]
+[node name="StoryboardScreen" type="Control" unique_id=108325271]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_sb")
 
-[node name="Backdrop" type="ColorRect" parent="."]
+[node name="Backdrop" type="ColorRect" parent="." unique_id=1233548953]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0, 0, 0, 1)
 mouse_filter = 2
+color = Color(0, 0, 0, 1)
 
-[node name="BgImage" type="TextureRect" parent="."]
+[node name="BgImage" type="TextureRect" parent="." unique_id=902250422]
 layout_mode = 0
 
-[node name="VNBar" type="PanelContainer" parent="."]
+[node name="VNBar" type="PanelContainer" parent="." unique_id=205279233]
 layout_mode = 0
 
-[node name="Inner" type="MarginContainer" parent="VNBar"]
+[node name="Inner" type="MarginContainer" parent="VNBar" unique_id=780163712]
 layout_mode = 2
 
-[node name="VBox" type="VBoxContainer" parent="VNBar/Inner"]
+[node name="VBox" type="VBoxContainer" parent="VNBar/Inner" unique_id=1810850758]
 layout_mode = 2
 
-[node name="Speaker" type="Label" parent="VNBar/Inner/VBox"]
+[node name="Speaker" type="Label" parent="VNBar/Inner/VBox" unique_id=1543922237]
 layout_mode = 2
 text = "SPEAKER"
 
-[node name="DialogueLine" type="Label" parent="VNBar/Inner/VBox"]
+[node name="DialogueLine" type="Label" parent="VNBar/Inner/VBox" unique_id=325749870]
 layout_mode = 2
-text = ""
 
-[node name="ContinueHint" type="Label" parent="VNBar/Inner/VBox"]
+[node name="ContinueHint" type="Label" parent="VNBar/Inner/VBox" unique_id=1440133527]
 layout_mode = 2
 text = "▶ CLICK OR PRESS SPACE TO CONTINUE"
 
-[node name="FadeOverlay" type="ColorRect" parent="."]
+[node name="FadeOverlay" type="ColorRect" parent="." unique_id=558077363]
 layout_mode = 0
 color = Color(0, 0, 0, 1)

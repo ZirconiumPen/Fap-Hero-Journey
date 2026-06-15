@@ -1,16 +1,18 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://begsn28d5klod"]
 
-[ext_resource type="Script" path="res://scripts/graph_view/GraphView.gd" id="1_gv"]
-[ext_resource type="Script" path="res://scripts/graph_view/GraphCanvas.gd" id="2_gc"]
+[ext_resource type="Script" uid="uid://di3u6vr43nq37" path="res://scripts/graph_view/GraphView.gd" id="1_gv"]
+[ext_resource type="Script" uid="uid://6shy0t77ocfw" path="res://scripts/graph_view/GraphCanvas.gd" id="2_gc"]
 
-[node name="GraphView" type="Control"]
+[node name="GraphView" type="Control" unique_id=420460646]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_gv")
 
-[node name="Canvas" type="Control" parent="."]
-layout_mode = 0
+[node name="Canvas" type="Control" parent="." unique_id=1227939156]
+anchors_preset = 0
 mouse_filter = 2
 script = ExtResource("2_gc")

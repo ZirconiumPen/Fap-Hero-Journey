@@ -82,8 +82,8 @@ layout_mode = 0
 layout_mode = 2
 
 [node name="CoverImage" type="TextureRect" parent="DetailModal/ModalPanel/ModalLayout" unique_id=2068707350]
-layout_mode = 2
 clip_contents = true
+layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 

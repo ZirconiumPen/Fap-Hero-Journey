@@ -1,9 +1,9 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://d03rk7wg2s5b2"]
 
-[ext_resource type="Script" path="res://scripts/end_screen/EndScreen.gd" id="1_es"]
-[ext_resource type="Script" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
+[ext_resource type="Script" uid="uid://t207ewvht7q3" path="res://scripts/end_screen/EndScreen.gd" id="1_es"]
+[ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
 
-[node name="root" type="Control"]
+[node name="root" type="Control" unique_id=1619231828]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,80 +12,79 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_es")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=195991042]
 layout_mode = 0
 color = Color(0, 0, 0, 1)
 
-[node name="AnimatedBackground" type="Control" parent="."]
-layout_mode = 0
+[node name="AnimatedBackground" type="Control" parent="." unique_id=2063710927]
+anchors_preset = 0
 script = ExtResource("2_abg")
 
-[node name="Panel" type="PanelContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="." unique_id=254198848]
 layout_mode = 0
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
+[node name="VBox" type="VBoxContainer" parent="Panel" unique_id=175184766]
 layout_mode = 2
 
-[node name="TitleLabel" type="Label" parent="Panel/VBox"]
+[node name="TitleLabel" type="Label" parent="Panel/VBox" unique_id=741738684]
 layout_mode = 2
-horizontal_alignment = 1
 text = "JOURNEY COMPLETE"
+horizontal_alignment = 1
 
-[node name="JourneyLabel" type="Label" parent="Panel/VBox"]
+[node name="JourneyLabel" type="Label" parent="Panel/VBox" unique_id=755639117]
 layout_mode = 2
 horizontal_alignment = 1
-text = ""
 
-[node name="StatsDivider" type="HSeparator" parent="Panel/VBox"]
+[node name="StatsDivider" type="HSeparator" parent="Panel/VBox" unique_id=820791626]
 layout_mode = 2
 
-[node name="StatsRow" type="HBoxContainer" parent="Panel/VBox"]
+[node name="StatsRow" type="HBoxContainer" parent="Panel/VBox" unique_id=1033928283]
 layout_mode = 2
 
-[node name="StatRounds" type="Label" parent="Panel/VBox/StatsRow"]
+[node name="StatRounds" type="Label" parent="Panel/VBox/StatsRow" unique_id=591499633]
 layout_mode = 2
 size_flags_horizontal = 3
-horizontal_alignment = 1
 text = "0 ROUNDS"
+horizontal_alignment = 1
 
-[node name="StatActions" type="Label" parent="Panel/VBox/StatsRow"]
+[node name="StatActions" type="Label" parent="Panel/VBox/StatsRow" unique_id=506562001]
 layout_mode = 2
 size_flags_horizontal = 3
-horizontal_alignment = 1
 text = "0 ACTIONS"
+horizontal_alignment = 1
 
-[node name="StatTime" type="Label" parent="Panel/VBox/StatsRow"]
+[node name="StatTime" type="Label" parent="Panel/VBox/StatsRow" unique_id=1096483334]
 layout_mode = 2
 size_flags_horizontal = 3
-horizontal_alignment = 1
 text = "0:00"
-
-[node name="ScoreDivider" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="ScoreSection" type="VBoxContainer" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="ScoreTitle" type="Label" parent="Panel/VBox/ScoreSection"]
-layout_mode = 2
 horizontal_alignment = 1
+
+[node name="ScoreDivider" type="HSeparator" parent="Panel/VBox" unique_id=1864886540]
+layout_mode = 2
+
+[node name="ScoreSection" type="VBoxContainer" parent="Panel/VBox" unique_id=1662093113]
+layout_mode = 2
+
+[node name="ScoreTitle" type="Label" parent="Panel/VBox/ScoreSection" unique_id=1886079657]
+layout_mode = 2
 text = "SCORE"
+horizontal_alignment = 1
 
-[node name="RoundBreakdownContainer" type="VBoxContainer" parent="Panel/VBox/ScoreSection"]
+[node name="RoundBreakdownContainer" type="VBoxContainer" parent="Panel/VBox/ScoreSection" unique_id=400030258]
 layout_mode = 2
 
-[node name="TotalScoreRow" type="HBoxContainer" parent="Panel/VBox/ScoreSection"]
+[node name="TotalScoreRow" type="HBoxContainer" parent="Panel/VBox/ScoreSection" unique_id=948771053]
 layout_mode = 2
 
-[node name="TotalScoreLabel" type="Label" parent="Panel/VBox/ScoreSection/TotalScoreRow"]
+[node name="TotalScoreLabel" type="Label" parent="Panel/VBox/ScoreSection/TotalScoreRow" unique_id=1565936253]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "TOTAL"
 
-[node name="TotalScoreValue" type="Label" parent="Panel/VBox/ScoreSection/TotalScoreRow"]
+[node name="TotalScoreValue" type="Label" parent="Panel/VBox/ScoreSection/TotalScoreRow" unique_id=236672201]
 layout_mode = 2
 text = "0 PTS"
 
-[node name="BackButton" type="Button" parent="Panel/VBox"]
+[node name="BackButton" type="Button" parent="Panel/VBox" unique_id=1019576989]
 layout_mode = 2
 text = "> RETURN TO CATALOGUE"

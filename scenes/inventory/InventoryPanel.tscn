@@ -1,49 +1,51 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://crx72d8yyp8gv"]
 
-[ext_resource type="Script" path="res://scripts/inventory/InventoryPanel.gd" id="1_inv"]
+[ext_resource type="Script" uid="uid://2bnlrwwu8by8" path="res://scripts/inventory/InventoryPanel.gd" id="1_inv"]
 
-[node name="root" type="Control"]
+[node name="root" type="Control" unique_id=1830338422]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_inv")
 
-[node name="Backdrop" type="ColorRect" parent="."]
+[node name="Backdrop" type="ColorRect" parent="." unique_id=878614266]
 layout_mode = 0
 color = Color(0, 0, 0, 0.45)
 
-[node name="Panel" type="PanelContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="." unique_id=1137232948]
 layout_mode = 0
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
+[node name="VBox" type="VBoxContainer" parent="Panel" unique_id=174644229]
 layout_mode = 2
 
-[node name="HeaderRow" type="HBoxContainer" parent="Panel/VBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="Panel/VBox" unique_id=835907745]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="Panel/VBox/HeaderRow"]
+[node name="Title" type="Label" parent="Panel/VBox/HeaderRow" unique_id=1206892600]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "INVENTORY"
 
-[node name="CloseButton" type="Button" parent="Panel/VBox/HeaderRow"]
+[node name="CloseButton" type="Button" parent="Panel/VBox/HeaderRow" unique_id=86928722]
 layout_mode = 2
 text = "✕"
 
-[node name="Subtitle" type="Label" parent="Panel/VBox"]
+[node name="Subtitle" type="Label" parent="Panel/VBox" unique_id=606986354]
 layout_mode = 2
 text = "CLICK AN ITEM TO ACTIVATE"
 
-[node name="EmptyLabel" type="Label" parent="Panel/VBox"]
+[node name="EmptyLabel" type="Label" parent="Panel/VBox" unique_id=87627417]
 visible = false
 layout_mode = 2
 text = "// INVENTORY EMPTY //"
 
-[node name="Scroll" type="ScrollContainer" parent="Panel/VBox"]
+[node name="Scroll" type="ScrollContainer" parent="Panel/VBox" unique_id=965088277]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ItemList" type="VBoxContainer" parent="Panel/VBox/Scroll"]
+[node name="ItemList" type="VBoxContainer" parent="Panel/VBox/Scroll" unique_id=2033798664]
 layout_mode = 2
 size_flags_horizontal = 3

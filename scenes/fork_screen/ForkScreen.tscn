@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://fork_screen_001"]
+[gd_scene format=3 uid="uid://ttmdoof13yx4"]
 
-[ext_resource type="Script" uid="uid://fork_screen_gd01" path="res://scripts/fork_screen/ForkScreen.gd" id="1_fscr"]
+[ext_resource type="Script" uid="uid://cwwqtfpswu8er" path="res://scripts/fork_screen/ForkScreen.gd" id="1_fscr"]
 
 [node name="root" type="Control" unique_id=1000000001]
 layout_mode = 3

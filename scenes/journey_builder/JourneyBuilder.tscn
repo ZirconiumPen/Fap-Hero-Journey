@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c4jbuilder001"]
 
-[ext_resource type="Script" path="res://scripts/journey_builder/JourneyBuilder.gd" id="1_jb"]
+[ext_resource type="Script" uid="uid://jcjxk5vxhr8q" path="res://scripts/journey_builder/JourneyBuilder.gd" id="1_jb"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
 
-[node name="JourneyBuilder" type="Control"]
+[node name="JourneyBuilder" type="Control" unique_id=73713061]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,49 +12,49 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_jb")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1814788341]
 layout_mode = 0
 color = Color(0, 0, 0, 1)
 
-[node name="AnimatedBackground" type="Control" parent="."]
+[node name="AnimatedBackground" type="Control" parent="." unique_id=1625692785]
 anchors_preset = 0
 script = ExtResource("2_abg")
 
-[node name="TopBar" type="HBoxContainer" parent="."]
+[node name="TopBar" type="HBoxContainer" parent="." unique_id=631698973]
 layout_mode = 0
 
-[node name="BackButton" type="Button" parent="TopBar"]
+[node name="BackButton" type="Button" parent="TopBar" unique_id=1076906751]
 layout_mode = 2
 text = "< BACK"
 
-[node name="TitleLabel" type="Label" parent="TopBar"]
+[node name="TitleLabel" type="Label" parent="TopBar" unique_id=1567863863]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "JOURNEY BUILDER"
 horizontal_alignment = 1
 
-[node name="StatusLabel" type="Label" parent="TopBar"]
-layout_mode = 2
+[node name="StatusLabel" type="Label" parent="TopBar" unique_id=440533068]
 visible = false
+layout_mode = 2
 
-[node name="SaveButton" type="Button" parent="TopBar"]
+[node name="SaveButton" type="Button" parent="TopBar" unique_id=1693368659]
 layout_mode = 2
 text = "SAVE JOURNEY"
 
-[node name="MainLayout" type="HBoxContainer" parent="."]
+[node name="MainLayout" type="HBoxContainer" parent="." unique_id=1165072444]
 layout_mode = 0
 
-[node name="GraphHost" type="Control" parent="MainLayout"]
+[node name="GraphHost" type="Control" parent="MainLayout" unique_id=1266396542]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="SidePanel" type="PanelContainer" parent="MainLayout"]
+[node name="SidePanel" type="PanelContainer" parent="MainLayout" unique_id=451126288]
 layout_mode = 2
 
-[node name="SideScroll" type="ScrollContainer" parent="MainLayout/SidePanel"]
+[node name="SideScroll" type="ScrollContainer" parent="MainLayout/SidePanel" unique_id=298206651]
 layout_mode = 2
 
-[node name="SideVBox" type="VBoxContainer" parent="MainLayout/SidePanel/SideScroll"]
+[node name="SideVBox" type="VBoxContainer" parent="MainLayout/SidePanel/SideScroll" unique_id=1371009329]
 layout_mode = 2
 size_flags_horizontal = 3
