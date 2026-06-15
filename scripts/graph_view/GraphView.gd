@@ -20,39 +20,39 @@ signal insert_requested(parent_arr: Array, idx: int, screen_pos: Vector2)
 # insertion target so new/pasted items land at the top of the path.
 signal branch_selected(path: Dictionary)
 
-const NODE_WIDTH:  float = 200.0
+const NODE_WIDTH: float = 200.0
 const NODE_HEIGHT: float = 64.0
-const V_GAP:       float = 40.0
-const H_GAP:       float = 36.0
+const V_GAP: float = 40.0
+const H_GAP: float = 36.0
 const PATH_LABEL_HEIGHT: float = 32.0
 const INSERT_BTN_SIZE: float = 22.0
-const ZOOM_MIN:    float = 0.15
-const ZOOM_MAX:    float = 4.0
-const ZOOM_STEP:   float = 0.1
+const ZOOM_MIN: float = 0.15
+const ZOOM_MAX: float = 4.0
+const ZOOM_STEP: float = 0.1
 # Screen-space top margin when framing the graph at the top-center of the view.
 const VIEW_TOP_MARGIN: float = 40.0
 # Padding kept around the content when fit-to-view frames the whole graph.
-const FIT_PADDING:     float = 60.0
+const FIT_PADDING: float = 60.0
 # Minimum canvas extent, and extra margin added around the laid-out content. The
 # canvas is grown to fit tall/wide journeys so its draw (the edges) is never
 # culled — see _resize_canvas_to_content.
-const CANVAS_MIN_SIZE:       float = 8000.0
+const CANVAS_MIN_SIZE: float = 8000.0
 const CANVAS_CONTENT_MARGIN: float = 600.0
 
-var _items:           Array      = []
+var _items: Array = []
 # Multi-selection: the selected item dicts (by reference) plus the single parent
 # array they all belong to (same-branch constraint). Empty = nothing selected;
 # size 1 = single selection (drives the per-node editor).
-var _selected_items:  Array      = []
-var _selected_arr:    Array      = []
+var _selected_items: Array = []
+var _selected_arr: Array = []
 # The selected fork-branch path dict (mutually exclusive with node selection),
 # or {} when no branch is selected. Drives the path-label highlight.
-var _selected_path:   Dictionary = {}
+var _selected_path: Dictionary = {}
 
 # Range-select anchor: the last single/ctrl-clicked node, used as the fixed end
 # of a Shift+click range. {} when there's no anchor.
-var _anchor_item:     Dictionary = {}
-var _anchor_arr:      Array      = []
+var _anchor_item: Dictionary = {}
+var _anchor_arr: Array = []
 
 # Optional callback (set by the builder) that, given an item dict, returns a
 # short problem summary String ("" when the item is fine). Drives the warning
@@ -61,20 +61,20 @@ var _anchor_arr:      Array      = []
 var validity_fn: Callable = Callable()
 # Items that end the run (no items follow them anywhere in the flow).
 # Rebuilt on every refresh() so the set is always current.
-var _terminal_items:  Array      = []
+var _terminal_items: Array = []
 
 # Pan / zoom state
 var _pan_offset: Vector2 = Vector2(40, 40)
-var _zoom:       float   = 1.0
-var _panning:    bool    = false
+var _zoom: float = 1.0
+var _panning: bool = false
 var _last_mouse: Vector2 = Vector2.ZERO
 var _has_initial_center: bool = false
 
 # Marquee (drag-select) state. Coordinates are in GraphView-local (screen) space.
-var _marquee_active:   bool    = false
-var _marquee_additive: bool    = false   # Ctrl held at drag start → add to selection
-var _marquee_start:    Vector2 = Vector2.ZERO
-var _marquee_end:      Vector2 = Vector2.ZERO
+var _marquee_active: bool = false
+var _marquee_additive: bool = false  # Ctrl held at drag start → add to selection
+var _marquee_start: Vector2 = Vector2.ZERO
+var _marquee_end: Vector2 = Vector2.ZERO
 const MARQUEE_DRAG_THRESHOLD: float = 6.0
 
 # Auto-layout artefacts (rebuilt on refresh).
@@ -104,12 +104,14 @@ func _ready() -> void:
 	_empty_hint = Label.new()
 	_empty_hint.text = "Drop videos or a whole folder here to auto-create rounds —\nor click  +  to add your first item."
 	_empty_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_empty_hint.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_empty_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_empty_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_empty_hint.anchor_right  = 1.0
+	_empty_hint.anchor_right = 1.0
 	_empty_hint.anchor_bottom = 1.0
-	_empty_hint.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	_empty_hint.add_theme_color_override("font_color", Color(UITheme.PURPLE_MID.r, UITheme.PURPLE_MID.g, UITheme.PURPLE_MID.b, 0.75))
+	_empty_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_empty_hint.add_theme_color_override(
+		"font_color", Color(UITheme.PURPLE_MID.r, UITheme.PURPLE_MID.g, UITheme.PURPLE_MID.b, 0.75)
+	)
 	_empty_hint.add_theme_font_size_override("font_size", 16)
 	_empty_hint.visible = false
 	add_child(_empty_hint)
@@ -183,9 +185,9 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 	# open_ends: Controls whose bottom port awaits an outgoing edge.
 	# After a fork, this holds the last node of each path so merge arrows can
 	# be drawn to whatever comes next at this level.
-	var open_ends: Array  = []
+	var open_ends: Array = []
 	# Whether open_ends came from fork paths (drives edge colour for merges).
-	var from_fork: bool   = false
+	var from_fork: bool = false
 
 	# Insert button before the first item (idx=0). Sits in the gap above y.
 	_place_insert_btn(items, 0, x_center, y - V_GAP * 0.5)
@@ -205,8 +207,11 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 			_canvas.add_child(fork_node)
 			# Connect whatever preceded this fork to the fork node.
 			for oe in open_ends:
-				_add_edge(_node_bottom(oe), _node_top(fork_node),
-					UITheme.FORK_EDGE if from_fork else UITheme.EDGE)
+				_add_edge(
+					_node_bottom(oe),
+					_node_top(fork_node),
+					UITheme.FORK_EDGE if from_fork else UITheme.EDGE
+				)
 			cur_y += NODE_HEIGHT + V_GAP
 
 			# Compute path widths (recursive measure).
@@ -223,14 +228,14 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 			max_w = max(max_w, total_w)
 
 			# Place each path column, collecting each path's final nodes.
-			var col_x: float  = x_center - total_w * 0.5
+			var col_x: float = x_center - total_w * 0.5
 			var max_branch_y: float = cur_y
 			var all_path_ends: Array = []
 
 			for pi in paths.size():
-				var path: Dictionary     = paths[pi]
-				var pw: float            = path_widths[pi]
-				var path_cx: float       = col_x + pw * 0.5
+				var path: Dictionary = paths[pi]
+				var pw: float = path_widths[pi]
+				var path_cx: float = col_x + pw * 0.5
 
 				var label_node: Control = _make_path_label(path, paths, pi)
 				label_node.position = Vector2(path_cx - NODE_WIDTH * 0.5, cur_y)
@@ -238,18 +243,24 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 				_add_edge(_node_bottom(fork_node), _node_top(label_node), UITheme.FORK_EDGE)
 
 				var path_items: Array = path.get("items", [])
-				var sub: Dictionary   = _layout_items(path_items, path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP)
+				var sub: Dictionary = _layout_items(
+					path_items, path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP
+				)
 
 				if not path_items.is_empty():
-					var first_item_node: Control = _find_first_node_at_x(path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP)
+					var first_item_node: Control = _find_first_node_at_x(
+						path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP
+					)
 					if first_item_node != null:
-						_add_edge(_node_bottom(label_node), _node_top(first_item_node), UITheme.EDGE)
+						_add_edge(
+							_node_bottom(label_node), _node_top(first_item_node), UITheme.EDGE
+						)
 
 				max_branch_y = max(max_branch_y, sub["size"].y)
 				all_path_ends.append_array(sub["last_nodes"])
 				col_x += pw + H_GAP
 
-			cur_y     = max_branch_y
+			cur_y = max_branch_y
 			# Path ends become the new open ends — the next item at this level
 			# receives merge arrows from all of them.
 			open_ends = all_path_ends
@@ -257,14 +268,19 @@ func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
 
 		else:
 			# ── Non-fork node ────────────────────────────────────────────────
-			var is_term: bool  = _terminal_items.any(func(ti: Dictionary) -> bool: return is_same(item, ti))
-			var node: Control  = _make_node(item, items, i, is_term)
+			var is_term: bool = _terminal_items.any(
+				func(ti: Dictionary) -> bool: return is_same(item, ti)
+			)
+			var node: Control = _make_node(item, items, i, is_term)
 			node.position = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
 			_canvas.add_child(node)
 			# Draw edge(s) from all open ends into this node.
 			for oe in open_ends:
-				_add_edge(_node_bottom(oe), _node_top(node),
-					UITheme.FORK_EDGE if from_fork else UITheme.EDGE)
+				_add_edge(
+					_node_bottom(oe),
+					_node_top(node),
+					UITheme.FORK_EDGE if from_fork else UITheme.EDGE
+				)
 			open_ends = [node]
 			from_fork = false
 			cur_y += NODE_HEIGHT + V_GAP
@@ -335,26 +351,32 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 	btn.position = Vector2(x_center - INSERT_BTN_SIZE * 0.5, mid_y - INSERT_BTN_SIZE * 0.5)
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.add_theme_color_override("font_color",         UITheme.PURPLE_MID)
-	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_color", UITheme.PURPLE_MID)
+	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
 	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
 	btn.add_theme_font_size_override("font_size", 16)
 
 	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = Color(0.02, 0.0, 0.04, 0.95)
 	s.border_color = UITheme.PURPLE_MID
-	s.border_width_left   = 1; s.border_width_right  = 1
-	s.border_width_top    = 1; s.border_width_bottom = 1
-	s.corner_radius_top_left     = 11
-	s.corner_radius_top_right    = 11
-	s.corner_radius_bottom_left  = 11
+	s.border_width_left = 1
+	s.border_width_right = 1
+	s.border_width_top = 1
+	s.border_width_bottom = 1
+	s.corner_radius_top_left = 11
+	s.corner_radius_top_right = 11
+	s.corner_radius_bottom_left = 11
 	s.corner_radius_bottom_right = 11
-	s.content_margin_left   = 0; s.content_margin_right  = 0
-	s.content_margin_top    = 0; s.content_margin_bottom = 0
+	s.content_margin_left = 0
+	s.content_margin_right = 0
+	s.content_margin_top = 0
+	s.content_margin_bottom = 0
 	btn.add_theme_stylebox_override("normal", s)
 
 	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.35)
+	s_hover.bg_color = Color(
+		UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.35
+	)
 	s_hover.border_color = UITheme.PURPLE_BRIGHT
 	btn.add_theme_stylebox_override("hover", s_hover)
 
@@ -363,10 +385,11 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 	btn.add_theme_stylebox_override("pressed", s_pressed)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
-	btn.pressed.connect(func() -> void:
-		# Report the button's screen-space position so the popup appears near it.
-		var screen_pos: Vector2 = btn.get_global_rect().position + Vector2(INSERT_BTN_SIZE, 0)
-		emit_signal("insert_requested", arr, idx, screen_pos)
+	btn.pressed.connect(
+		func() -> void:
+			# Report the button's screen-space position so the popup appears near it.
+			var screen_pos: Vector2 = btn.get_global_rect().position + Vector2(INSERT_BTN_SIZE, 0)
+			emit_signal("insert_requested", arr, idx, screen_pos)
 	)
 
 	_canvas.add_child(btn)
@@ -375,6 +398,7 @@ func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> v
 # ---------------------------------------------------------------------------
 # Node makers
 # ---------------------------------------------------------------------------
+
 
 # is_terminal: true when this node ends the run (no path leads beyond it).
 func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = false) -> Control:
@@ -391,10 +415,18 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 	elif round_type == "cursed":
 		accent = Color(0.45, 0.95, 0.30)  # toxic green
 	elif round_type == "blessed":
-		accent = Color(1.0, 0.84, 0.30)   # gold
+		accent = Color(1.0, 0.84, 0.30)  # gold
 	else:
 		accent = _type_color(item_type)
-	var icon: String = "⚔" if is_boss else ("☠" if round_type == "cursed" else ("✦" if round_type == "blessed" else _type_icon(item_type)))
+	var icon: String = (
+		"⚔"
+		if is_boss
+		else (
+			"☠"
+			if round_type == "cursed"
+			else ("✦" if round_type == "blessed" else _type_icon(item_type))
+		)
+	)
 	var primary: String = _type_label(item)
 	var secondary: String = _type_sublabel(item)
 	if is_terminal:
@@ -414,7 +446,7 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 	# Stash the model link so marquee hit-testing can map a node back to its
 	# (item, parent array) without re-walking the tree.
 	panel.set_meta("graph_item", item)
-	panel.set_meta("graph_arr",  arr)
+	panel.set_meta("graph_arr", arr)
 
 	# Live validation: a non-empty summary means this node has a problem the
 	# author would otherwise only discover at save time.
@@ -425,9 +457,9 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 		panel.tooltip_text = issue
 
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   10)
-	margin.add_theme_constant_override("margin_right",  10)
-	margin.add_theme_constant_override("margin_top",    6)
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 6)
 	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(margin)
@@ -484,17 +516,18 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 	# Click selection. Shift+click selects the range from the anchor; Ctrl+click
 	# toggles membership; a plain click selects just this node (and sets the
 	# anchor for a subsequent shift+click).
-	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			var mb := event as InputEventMouseButton
-			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-				if mb.shift_pressed:
-					_range_select(item, arr)
-				elif mb.ctrl_pressed:
-					_toggle_selection(item, arr)
-				else:
-					_select_single(item, arr)
-				accept_event()
+	panel.gui_input.connect(
+		func(event: InputEvent) -> void:
+			if event is InputEventMouseButton:
+				var mb := event as InputEventMouseButton
+				if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+					if mb.shift_pressed:
+						_range_select(item, arr)
+					elif mb.ctrl_pressed:
+						_toggle_selection(item, arr)
+					else:
+						_select_single(item, arr)
+					accept_event()
 	)
 
 	return panel
@@ -508,24 +541,26 @@ func _make_path_label(path: Dictionary, paths_arr: Array, path_idx: int) -> Cont
 
 	var selected: bool = is_same(path, _selected_path)
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.22 if selected else 0.10)
+	s.bg_color = Color(
+		UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.22 if selected else 0.10
+	)
 	s.border_color = UITheme.MAGENTA
 	var bw: int = 3 if selected else 1
-	s.border_width_left   = bw
-	s.border_width_right  = bw
-	s.border_width_top    = bw
+	s.border_width_left = bw
+	s.border_width_right = bw
+	s.border_width_top = bw
 	s.border_width_bottom = bw
-	s.corner_radius_top_left     = 14
-	s.corner_radius_top_right    = 14
-	s.corner_radius_bottom_left  = 14
+	s.corner_radius_top_left = 14
+	s.corner_radius_top_right = 14
+	s.corner_radius_bottom_left = 14
 	s.corner_radius_bottom_right = 14
-	s.content_margin_left   = 12
-	s.content_margin_right  = 12
-	s.content_margin_top    = 4
+	s.content_margin_left = 12
+	s.content_margin_right = 12
+	s.content_margin_top = 4
 	s.content_margin_bottom = 4
 	if selected:
 		s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.50)
-		s.shadow_size  = 8
+		s.shadow_size = 8
 	panel.add_theme_stylebox_override("panel", s)
 
 	var name_text: String = path.get("name", "Path %d" % (path_idx + 1))
@@ -542,12 +577,13 @@ func _make_path_label(path: Dictionary, paths_arr: Array, path_idx: int) -> Cont
 
 	# Click selects this branch as an insertion target (new/pasted items go to
 	# the top of the path).
-	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			var mb := event as InputEventMouseButton
-			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-				_select_branch(path)
-				accept_event()
+	panel.gui_input.connect(
+		func(event: InputEvent) -> void:
+			if event is InputEventMouseButton:
+				var mb := event as InputEventMouseButton
+				if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+					_select_branch(path)
+					accept_event()
 	)
 
 	return panel
@@ -559,39 +595,47 @@ func _node_stylebox(accent: Color, selected: bool, terminal: bool = false) -> St
 	s.border_color = accent
 	# Border: thicker when selected; slightly heavier than default when terminal.
 	var w: int = 3 if selected else (2 if terminal else 1)
-	s.border_width_left   = w
-	s.border_width_right  = w
-	s.border_width_top    = w
+	s.border_width_left = w
+	s.border_width_right = w
+	s.border_width_top = w
 	s.border_width_bottom = w
-	s.corner_radius_top_left     = 6
-	s.corner_radius_top_right    = 6
-	s.corner_radius_bottom_left  = 6
+	s.corner_radius_top_left = 6
+	s.corner_radius_top_right = 6
+	s.corner_radius_bottom_left = 6
 	s.corner_radius_bottom_right = 6
 	if selected:
 		s.shadow_color = Color(accent.r, accent.g, accent.b, 0.50)
-		s.shadow_size  = 8
+		s.shadow_size = 8
 	elif terminal:
 		# Warm amber glow to signal "this is where the run ends".
 		s.shadow_color = Color(accent.r, accent.g, accent.b, 0.55)
-		s.shadow_size  = 14
+		s.shadow_size = 14
 	return s
 
 
 func _type_color(item_type: String) -> Color:
 	match item_type:
-		"round":      return UITheme.PURPLE_BRIGHT
-		"shop":       return UITheme.AMBER
-		"storyboard": return UITheme.CYAN
-		"fork":       return UITheme.MAGENTA
+		"round":
+			return UITheme.PURPLE_BRIGHT
+		"shop":
+			return UITheme.AMBER
+		"storyboard":
+			return UITheme.CYAN
+		"fork":
+			return UITheme.MAGENTA
 	return UITheme.PURPLE_MID
 
 
 func _type_icon(item_type: String) -> String:
 	match item_type:
-		"round":      return "▶"
-		"shop":       return "◆"
-		"storyboard": return "◈"
-		"fork":       return "⑂"
+		"round":
+			return "▶"
+		"shop":
+			return "◆"
+		"storyboard":
+			return "◈"
+		"fork":
+			return "⑂"
 	return "•"
 
 
@@ -624,9 +668,12 @@ func _type_sublabel(item: Dictionary) -> String:
 			var rt: String = item.get("round_type", "normal")
 			var rlabel: String = "ROUND"
 			match rt:
-				"boss":    rlabel = "BOSS ROUND"
-				"cursed":  rlabel = "☠ CURSED ROUND"
-				"blessed": rlabel = "✦ BLESSED ROUND"
+				"boss":
+					rlabel = "BOSS ROUND"
+				"cursed":
+					rlabel = "☠ CURSED ROUND"
+				"blessed":
+					rlabel = "✦ BLESSED ROUND"
 			# Checkpoint marker — author-set save point, honoured on every round
 			# type (the banner shows before a boss round's intro card).
 			if item.get("is_checkpoint", false):
@@ -647,7 +694,9 @@ func _type_sublabel(item: Dictionary) -> String:
 			return sub
 		"fork":
 			var paths: Array = item.get("paths", [])
-			return "%s   %d PATHS" % [_fork_type_label(item.get("resolution", "choice")), paths.size()]
+			return (
+				"%s   %d PATHS" % [_fork_type_label(item.get("resolution", "choice")), paths.size()]
+			)
 	return ""
 
 
@@ -655,15 +704,19 @@ func _type_sublabel(item: Dictionary) -> String:
 # "CONDITIONAL FORK", "SACRIFICE FORK".
 func _fork_type_label(resolution: String) -> String:
 	match resolution:
-		"random":      return "RANDOM FORK"
-		"conditional": return "CONDITIONAL FORK"
-		"sacrifice":   return "SACRIFICE FORK"
+		"random":
+			return "RANDOM FORK"
+		"conditional":
+			return "CONDITIONAL FORK"
+		"sacrifice":
+			return "SACRIFICE FORK"
 	return "FORK"
 
 
 # ---------------------------------------------------------------------------
 # Edges
 # ---------------------------------------------------------------------------
+
 
 func _add_edge(from: Vector2, to: Vector2, color: Color) -> void:
 	_edges.append({"from": from, "to": to, "color": color})
@@ -681,6 +734,7 @@ func _node_bottom(node: Control) -> Vector2:
 # Selection
 # ---------------------------------------------------------------------------
 
+
 func _is_selected(item: Dictionary) -> bool:
 	for s: Dictionary in _selected_items:
 		if is_same(item, s):
@@ -695,10 +749,10 @@ func _emit_selection() -> void:
 # Replaces the selection with a single node (plain click / programmatic select).
 func _select_single(item: Dictionary, arr: Array) -> void:
 	_selected_items = [item]
-	_selected_arr   = arr
-	_selected_path  = {}
-	_anchor_item    = item   # becomes the fixed end of a later Shift+click range
-	_anchor_arr     = arr
+	_selected_arr = arr
+	_selected_path = {}
+	_anchor_item = item  # becomes the fixed end of a later Shift+click range
+	_anchor_arr = arr
 	_emit_selection()
 	refresh()
 
@@ -728,8 +782,8 @@ func _range_select(item: Dictionary, arr: Array) -> void:
 	for i in range(lo, hi + 1):
 		items.append(arr[i])
 	_selected_items = items
-	_selected_arr   = arr
-	_selected_path  = {}
+	_selected_arr = arr
+	_selected_path = {}
 	# Anchor stays put so the range can be re-stretched with another Shift+click.
 	_emit_selection()
 	refresh()
@@ -739,8 +793,8 @@ func _range_select(item: Dictionary, arr: Array) -> void:
 # the top of the path. Mutually exclusive with node selection.
 func _select_branch(path: Dictionary) -> void:
 	_selected_items = []
-	_selected_arr   = []
-	_selected_path  = path
+	_selected_arr = []
+	_selected_path = path
 	emit_signal("branch_selected", path)
 	refresh()
 
@@ -765,8 +819,8 @@ func _toggle_selection(item: Dictionary, arr: Array) -> void:
 		_selected_items.append(item)
 		_selected_arr = arr
 	_selected_path = {}
-	_anchor_item   = item   # extend a future Shift+click range from here
-	_anchor_arr    = arr
+	_anchor_item = item  # extend a future Shift+click range from here
+	_anchor_arr = arr
 	_emit_selection()
 	refresh()
 
@@ -775,8 +829,8 @@ func _toggle_selection(item: Dictionary, arr: Array) -> void:
 # Used by the builder after group move/paste to re-highlight the same items.
 func set_selection(items: Array, arr: Array) -> void:
 	_selected_items = items.duplicate()
-	_selected_arr   = arr if not items.is_empty() else []
-	_selected_path  = {}
+	_selected_arr = arr if not items.is_empty() else []
+	_selected_path = {}
 	_emit_selection()
 	refresh()
 
@@ -796,10 +850,10 @@ func clear_selection() -> void:
 		_emit_selection()
 		return
 	_selected_items = []
-	_selected_arr   = []
-	_selected_path  = {}
-	_anchor_item    = {}
-	_anchor_arr     = []
+	_selected_arr = []
+	_selected_path = {}
+	_anchor_item = {}
+	_anchor_arr = []
 	_emit_selection()
 	refresh()
 
@@ -807,6 +861,7 @@ func clear_selection() -> void:
 # ---------------------------------------------------------------------------
 # Pan + zoom
 # ---------------------------------------------------------------------------
+
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -825,10 +880,10 @@ func _gui_input(event: InputEvent) -> void:
 			# Left press reaching GraphView (not a node) starts a marquee drag.
 			# A press+release without movement collapses to "clear selection".
 			if mb.pressed:
-				_marquee_active   = true
+				_marquee_active = true
 				_marquee_additive = mb.ctrl_pressed
-				_marquee_start    = mb.position
-				_marquee_end      = mb.position
+				_marquee_start = mb.position
+				_marquee_end = mb.position
 				accept_event()
 			elif _marquee_active:
 				_finish_marquee()
@@ -870,7 +925,7 @@ func _finish_marquee() -> void:
 		return
 
 	var hit_items: Array = []
-	var hit_arrs:  Array = []
+	var hit_arrs: Array = []
 	for c: Node in _canvas.get_children():
 		if not (c is Control) or not c.has_meta("graph_item"):
 			continue
@@ -901,8 +956,8 @@ func _finish_marquee() -> void:
 				items.append(hit_items[i])
 
 	_selected_items = items
-	_selected_arr   = target_arr
-	_selected_path  = {}
+	_selected_arr = target_arr
+	_selected_path = {}
 	_emit_selection()
 	refresh()
 
@@ -920,7 +975,7 @@ func _zoom_at(focus: Vector2, new_zoom: float) -> void:
 
 func _apply_transform() -> void:
 	_canvas.position = _pan_offset
-	_canvas.scale    = Vector2(_zoom, _zoom)
+	_canvas.scale = Vector2(_zoom, _zoom)
 	# Re-invoke _draw() — pan/zoom changes don't automatically invalidate the
 	# CanvasItem's drawn primitives, so without this the edges flicker out.
 	_canvas.queue_redraw()
@@ -965,5 +1020,3 @@ func reset_view() -> void:
 	_zoom = 1.0
 	_pan_offset = Vector2(size.x * 0.5, VIEW_TOP_MARGIN)
 	_apply_transform()
-
-

@@ -22,9 +22,9 @@ extends RefCounted
 
 const DIFFICULTIES: Array = ["Easy", "Medium", "Hard", "Very Hard", "Extreme", "Insane"]
 
-const VIDEO_EXTENSIONS:     Array[String] = ["mp4", "m4v", "mkv", "avi", "mov", "wmv", "webm"]
+const VIDEO_EXTENSIONS: Array[String] = ["mp4", "m4v", "mkv", "avi", "mov", "wmv", "webm"]
 const FUNSCRIPT_EXTENSIONS: Array[String] = ["funscript", "json"]
-const IMAGE_EXTENSIONS:     Array[String] = ["png", "jpg", "jpeg", "webp"]
+const IMAGE_EXTENSIONS: Array[String] = ["png", "jpg", "jpeg", "webp"]
 
 # Secondary T-code axes supported for serial devices (L0 = main stroke, handled separately).
 const EXTRA_AXES: Array[String] = ["L1", "L2", "R0", "R1", "R2"]
@@ -37,16 +37,43 @@ const EXTRA_AXES: Array[String] = ["L1", "L2", "R0", "R1", "R2"]
 # by FunscriptPlayer; the rest (coin_penalty/toll/hud_hide/no_pause) by GameLoop.
 # "name" is the unique id used to select.
 const CURSE_CATALOG: Array = [
-	{"kind": "scale",        "factor": 0.6,        "name": "Shrunken", "desc": "Strokes shortened to 60% of their length."},
-	{"kind": "clamp",        "min": 40, "max": 60, "name": "Choked",   "desc": "Strokes confined to the middle of the range."},
-	{"kind": "clamp",        "min": 0,  "max": 45, "name": "Sunken",   "desc": "Strokes confined to the bottom of the range."},
-	{"kind": "reverse",                            "name": "Inverted", "desc": "Up and down are flipped."},
-	{"kind": "block",                              "name": "Numbed",   "desc": "The device ignores the script entirely."},
-	{"kind": "coin_penalty", "factor": 0.5,        "name": "Greed",    "desc": "Coins earned this round are halved."},
-	{"kind": "coin_penalty", "factor": 0.0,        "name": "Pauper",   "desc": "No coins are earned this round."},
-	{"kind": "toll",                               "name": "Toll",     "desc": "Lose 40 coins immediately."},
-	{"kind": "hud_hide",                           "name": "Fog",      "desc": "The HUD is hidden for the whole round."},
-	{"kind": "no_pause",                           "name": "Restless", "desc": "You can't pause this round."},
+	{
+		"kind": "scale",
+		"factor": 0.6,
+		"name": "Shrunken",
+		"desc": "Strokes shortened to 60% of their length."
+	},
+	{
+		"kind": "clamp",
+		"min": 40,
+		"max": 60,
+		"name": "Choked",
+		"desc": "Strokes confined to the middle of the range."
+	},
+	{
+		"kind": "clamp",
+		"min": 0,
+		"max": 45,
+		"name": "Sunken",
+		"desc": "Strokes confined to the bottom of the range."
+	},
+	{"kind": "reverse", "name": "Inverted", "desc": "Up and down are flipped."},
+	{"kind": "block", "name": "Numbed", "desc": "The device ignores the script entirely."},
+	{
+		"kind": "coin_penalty",
+		"factor": 0.5,
+		"name": "Greed",
+		"desc": "Coins earned this round are halved."
+	},
+	{
+		"kind": "coin_penalty",
+		"factor": 0.0,
+		"name": "Pauper",
+		"desc": "No coins are earned this round."
+	},
+	{"kind": "toll", "name": "Toll", "desc": "Lose 40 coins immediately."},
+	{"kind": "hud_hide", "name": "Fog", "desc": "The HUD is hidden for the whole round."},
+	{"kind": "no_pause", "name": "Restless", "desc": "You can't pause this round."},
 ]
 
 # Non-gameplay (sensory) modifiers — purely visual/audio; they don't touch the
@@ -62,31 +89,175 @@ const CURSE_CATALOG: Array = [
 # (Blinded, Silence) carry no intensity fields → no slider.
 const SENSORY_CATALOG: Array = [
 	# Visibility / audio deniers.
-	{"kind": "blackout",  "name": "Blinded",  "desc": "The video is hidden — the device plays on in the dark."},
-	{"kind": "murk",      "name": "Murk",     "desc": "The screen is dimmed.", "imin": 0.40, "imax": 0.95, "idef": 0.58},
-	{"kind": "tunnel",    "name": "Tunnel",   "desc": "Vision closes to a narrow tunnel.", "imin": 0.60, "imax": 0.20, "idef": 0.38},
-	{"kind": "strobe",    "name": "Strobe",   "desc": "The screen fades to black and back every few seconds.", "imin": 5.0, "imax": 1.0, "idef": 0.50},
-	{"kind": "mute",      "name": "Silence",  "desc": "The audio is muted."},
+	{
+		"kind": "blackout",
+		"name": "Blinded",
+		"desc": "The video is hidden — the device plays on in the dark."
+	},
+	{
+		"kind": "murk",
+		"name": "Murk",
+		"desc": "The screen is dimmed.",
+		"imin": 0.40,
+		"imax": 0.95,
+		"idef": 0.58
+	},
+	{
+		"kind": "tunnel",
+		"name": "Tunnel",
+		"desc": "Vision closes to a narrow tunnel.",
+		"imin": 0.60,
+		"imax": 0.20,
+		"idef": 0.38
+	},
+	{
+		"kind": "strobe",
+		"name": "Strobe",
+		"desc": "The screen fades to black and back every few seconds.",
+		"imin": 5.0,
+		"imax": 1.0,
+		"idef": 0.50
+	},
+	{"kind": "mute", "name": "Silence", "desc": "The audio is muted."},
 	# Per-pixel video effects (one composable shader on the video).
-	{"kind": "grayscale", "name": "Drained",  "desc": "Color is drained from the video.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
-	{"kind": "blur",      "name": "Bleary",   "desc": "The video blurs out of focus.", "imin": 1.0, "imax": 6.0, "idef": 0.30},
-	{"kind": "pixelate",  "name": "Censored", "desc": "The video is pixelated.", "imin": 160.0, "imax": 30.0, "idef": 0.54},
-	{"kind": "invert",    "name": "Negative", "desc": "The video's colors are inverted.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
-	{"kind": "sepia",     "name": "Faded",    "desc": "The video washes out to sepia.", "imin": 0.40, "imax": 1.00, "idef": 1.00},
-	{"kind": "posterize", "name": "Banded",   "desc": "The video's colors crush into harsh bands.", "imin": 10.0, "imax": 3.0, "idef": 0.71},
-	{"kind": "saturate",  "name": "Feverish", "desc": "The video's colors run hot and oversaturated.", "imin": 1.4, "imax": 3.5, "idef": 0.38},
-	{"kind": "chromatic", "name": "Fracture", "desc": "The video's colors split apart.", "imin": 0.002, "imax": 0.020, "idef": 0.22},
-	{"kind": "wave",      "name": "Swoon",    "desc": "The video ripples and sways.", "imin": 0.003, "imax": 0.020, "idef": 0.29},
+	{
+		"kind": "grayscale",
+		"name": "Drained",
+		"desc": "Color is drained from the video.",
+		"imin": 0.40,
+		"imax": 1.00,
+		"idef": 1.00
+	},
+	{
+		"kind": "blur",
+		"name": "Bleary",
+		"desc": "The video blurs out of focus.",
+		"imin": 1.0,
+		"imax": 6.0,
+		"idef": 0.30
+	},
+	{
+		"kind": "pixelate",
+		"name": "Censored",
+		"desc": "The video is pixelated.",
+		"imin": 160.0,
+		"imax": 30.0,
+		"idef": 0.54
+	},
+	{
+		"kind": "invert",
+		"name": "Negative",
+		"desc": "The video's colors are inverted.",
+		"imin": 0.40,
+		"imax": 1.00,
+		"idef": 1.00
+	},
+	{
+		"kind": "sepia",
+		"name": "Faded",
+		"desc": "The video washes out to sepia.",
+		"imin": 0.40,
+		"imax": 1.00,
+		"idef": 1.00
+	},
+	{
+		"kind": "posterize",
+		"name": "Banded",
+		"desc": "The video's colors crush into harsh bands.",
+		"imin": 10.0,
+		"imax": 3.0,
+		"idef": 0.71
+	},
+	{
+		"kind": "saturate",
+		"name": "Feverish",
+		"desc": "The video's colors run hot and oversaturated.",
+		"imin": 1.4,
+		"imax": 3.5,
+		"idef": 0.38
+	},
+	{
+		"kind": "chromatic",
+		"name": "Fracture",
+		"desc": "The video's colors split apart.",
+		"imin": 0.002,
+		"imax": 0.020,
+		"idef": 0.22
+	},
+	{
+		"kind": "wave",
+		"name": "Swoon",
+		"desc": "The video ripples and sways.",
+		"imin": 0.003,
+		"imax": 0.020,
+		"idef": 0.29
+	},
 	# Overlay-node visual effects.
-	{"kind": "bloodshot", "name": "Bloodshot",   "desc": "A red haze pulses over the screen.", "imin": 0.50, "imax": 1.00, "idef": 1.00},
-	{"kind": "static",    "name": "Interference","desc": "Static crawls across the screen.", "imin": 0.12, "imax": 0.50, "idef": 0.47},
-	{"kind": "flicker",   "name": "Flicker",  "desc": "The screen flickers erratically.", "imin": 0.50, "imax": 1.20, "idef": 0.71},
-	{"kind": "tremor",    "name": "Tremor",   "desc": "The screen shakes.", "imin": 3.0, "imax": 18.0, "idef": 0.40},
+	{
+		"kind": "bloodshot",
+		"name": "Bloodshot",
+		"desc": "A red haze pulses over the screen.",
+		"imin": 0.50,
+		"imax": 1.00,
+		"idef": 1.00
+	},
+	{
+		"kind": "static",
+		"name": "Interference",
+		"desc": "Static crawls across the screen.",
+		"imin": 0.12,
+		"imax": 0.50,
+		"idef": 0.47
+	},
+	{
+		"kind": "flicker",
+		"name": "Flicker",
+		"desc": "The screen flickers erratically.",
+		"imin": 0.50,
+		"imax": 1.20,
+		"idef": 0.71
+	},
+	{
+		"kind": "tremor",
+		"name": "Tremor",
+		"desc": "The screen shakes.",
+		"imin": 3.0,
+		"imax": 18.0,
+		"idef": 0.40
+	},
 	# Audio-bus effects.
-	{"kind": "lowpass",   "name": "Muffled",  "desc": "The audio is muffled, as if underwater.", "imin": 2200.0, "imax": 300.0, "idef": 0.79},
-	{"kind": "reverb",    "name": "Cavern",   "desc": "The audio echoes in a vast space.", "imin": 0.30, "imax": 0.90, "idef": 0.50},
-	{"kind": "distort",   "name": "Distorted","desc": "The audio is distorted and harsh.", "imin": 0.20, "imax": 0.90, "idef": 0.43},
-	{"kind": "volwobble", "name": "Faltering","desc": "The audio swells and fades.", "imin": -10.0, "imax": -40.0, "idef": 0.47},
+	{
+		"kind": "lowpass",
+		"name": "Muffled",
+		"desc": "The audio is muffled, as if underwater.",
+		"imin": 2200.0,
+		"imax": 300.0,
+		"idef": 0.79
+	},
+	{
+		"kind": "reverb",
+		"name": "Cavern",
+		"desc": "The audio echoes in a vast space.",
+		"imin": 0.30,
+		"imax": 0.90,
+		"idef": 0.50
+	},
+	{
+		"kind": "distort",
+		"name": "Distorted",
+		"desc": "The audio is distorted and harsh.",
+		"imin": 0.20,
+		"imax": 0.90,
+		"idef": 0.43
+	},
+	{
+		"kind": "volwobble",
+		"name": "Faltering",
+		"desc": "The audio swells and fades.",
+		"imin": -10.0,
+		"imax": -40.0,
+		"idef": 0.47
+	},
 ]
 
 # The SENSORY_CATALOG kinds that are audio (everything else is visual). Used to
@@ -97,17 +268,31 @@ const AUDIO_SENSORY_KINDS: Array = ["mute", "lowpass", "reverb", "distort", "vol
 # positive. score_multiplier/coin_jackpot/scale ride existing effect kinds;
 # gift/ward/lingering/interest are applied by GameLoop.
 const BLESSING_CATALOG: Array = [
-	{"kind": "score_multiplier", "factor": 2.0,    "name": "Fervor",    "desc": "Double score this round."},
-	{"kind": "coin_jackpot",     "factor": 2.0,    "name": "Fortune",   "desc": "Double the coins earned this round."},
-	{"kind": "scale",            "factor": 1.35,   "name": "Surge",     "desc": "Stronger, longer strokes."},
-	{"kind": "gift",                               "name": "Gift",      "desc": "Start the round holding a free item."},
-	{"kind": "ward",                               "name": "Ward",      "desc": "The next curse is repelled automatically."},
-	{"kind": "lingering",                          "name": "Lingering", "desc": "Your active item effects don't run out this round."},
-	{"kind": "interest",                           "name": "Interest",  "desc": "Gain coins equal to 25% of your balance."},
+	{
+		"kind": "score_multiplier",
+		"factor": 2.0,
+		"name": "Fervor",
+		"desc": "Double score this round."
+	},
+	{
+		"kind": "coin_jackpot",
+		"factor": 2.0,
+		"name": "Fortune",
+		"desc": "Double the coins earned this round."
+	},
+	{"kind": "scale", "factor": 1.35, "name": "Surge", "desc": "Stronger, longer strokes."},
+	{"kind": "gift", "name": "Gift", "desc": "Start the round holding a free item."},
+	{"kind": "ward", "name": "Ward", "desc": "The next curse is repelled automatically."},
+	{
+		"kind": "lingering",
+		"name": "Lingering",
+		"desc": "Your active item effects don't run out this round."
+	},
+	{"kind": "interest", "name": "Interest", "desc": "Gain coins equal to 25% of your balance."},
 ]
 
-
 # ── Round serialization ──────────────────────────────────────────────────────
+
 
 # The authored (non-media) journey.json fields for a round, derived purely from
 # the builder item model — the gameplay config shared by top-level and fork-path
@@ -117,32 +302,36 @@ const BLESSING_CATALOG: Array = [
 # boss key set; JourneyScanner.parse_journey reads these keys back.
 static func round_to_json(item: Dictionary) -> Dictionary:
 	return {
-		"CoinsAwarded":     int(item.get("coins", 0)),
-		"RoundType":        round_type_label(item.get("round_type", "normal")),
-		"IsCheckpoint":     bool(item.get("is_checkpoint", false)),
-		"CurseReward":      int(item.get("curse_reward", 0)),
-		"CleanseCost":      int(item.get("cleanse_cost", 50)),
-		"CurseRandom":      bool(item.get("curse_random", true)),
-		"Curses":           item.get("curses", []),
-		"BoonRandom":       bool(item.get("boon_random", true)),
-		"Boons":            item.get("boons", []),
-		"GiftItem":         item.get("gift_item", ""),
-		"BossTagline":      item.get("boss_tagline", ""),
-		"BossModifiers":    boss_modifiers_json(item.get("boss_modifiers", [])),
-		"Sensory":          item.get("sensory", []),
-		"SensoryInPool":    bool(item.get("sensory_in_pool", false)),
+		"CoinsAwarded": int(item.get("coins", 0)),
+		"RoundType": round_type_label(item.get("round_type", "normal")),
+		"IsCheckpoint": bool(item.get("is_checkpoint", false)),
+		"CurseReward": int(item.get("curse_reward", 0)),
+		"CleanseCost": int(item.get("cleanse_cost", 50)),
+		"CurseRandom": bool(item.get("curse_random", true)),
+		"Curses": item.get("curses", []),
+		"BoonRandom": bool(item.get("boon_random", true)),
+		"Boons": item.get("boons", []),
+		"GiftItem": item.get("gift_item", ""),
+		"BossTagline": item.get("boss_tagline", ""),
+		"BossModifiers": boss_modifiers_json(item.get("boss_modifiers", [])),
+		"Sensory": item.get("sensory", []),
+		"SensoryInPool": bool(item.get("sensory_in_pool", false)),
 		"SensoryIntensity": item.get("sensory_intensity", {}),
-		"ShowReveal":       bool(item.get("show_reveal", true)),
+		"ShowReveal": bool(item.get("show_reveal", true)),
 	}
 
 
 # Internal round_type → journey.json label. JourneyScanner lowercases on parse.
 static func round_type_label(round_type: String) -> String:
 	match round_type:
-		"boss":    return "Boss"
-		"cursed":  return "Cursed"
-		"blessed": return "Blessed"
-		_:         return "Normal"
+		"boss":
+			return "Boss"
+		"cursed":
+			return "Cursed"
+		"blessed":
+			return "Blessed"
+		_:
+			return "Normal"
 
 
 # Internal boss modifiers ({kind, factor?/min?/max?}) → journey.json form
@@ -165,13 +354,21 @@ static func boss_modifiers_json(modifiers: Array) -> Array:
 
 # ── Item templates ───────────────────────────────────────────────────────────
 
+
 # Returns a fresh default item dict for a builder node of the given type. Single
 # source of truth for the empty-item shape, used by the insert menu, the quick-
 # add buttons, and the Ctrl+1–4 shortcuts.
 static func new_item(type: String) -> Dictionary:
 	match type:
 		"round":
-			return {"type": "round", "name": "", "funscript_path": "", "video_path": "", "coins": 0, "axis_scripts": {}}
+			return {
+				"type": "round",
+				"name": "",
+				"funscript_path": "",
+				"video_path": "",
+				"coins": 0,
+				"axis_scripts": {}
+			}
 		"shop":
 			return {"type": "shop", "title": ""}
 		"storyboard":
@@ -185,16 +382,42 @@ static func new_item(type: String) -> Dictionary:
 			#   weight (random) · threshold (conditional score/coins) ·
 			#   required_item (conditional item check, OR sacrifice — consumed) ·
 			#   cost (sacrifice — coins spent). required_item "" = none/free.
-			return {"type": "fork", "title": "", "description": "",
-				"resolution": "choice", "cond_metric": "score", "default_path": 0,
-				"paths": [
-					{"name": "Path A", "description": "", "image_path": "", "items": [], "weight": 1, "threshold": 0, "required_item": "", "cost": 0},
-					{"name": "Path B", "description": "", "image_path": "", "items": [], "weight": 1, "threshold": 0, "required_item": "", "cost": 0},
-				]}
+			return {
+				"type": "fork",
+				"title": "",
+				"description": "",
+				"resolution": "choice",
+				"cond_metric": "score",
+				"default_path": 0,
+				"paths":
+				[
+					{
+						"name": "Path A",
+						"description": "",
+						"image_path": "",
+						"items": [],
+						"weight": 1,
+						"threshold": 0,
+						"required_item": "",
+						"cost": 0
+					},
+					{
+						"name": "Path B",
+						"description": "",
+						"image_path": "",
+						"items": [],
+						"weight": 1,
+						"threshold": 0,
+						"required_item": "",
+						"cost": 0
+					},
+				]
+			}
 	return {"type": type}
 
 
 # ── Parse ───────────────────────────────────────────────────────────────────
+
 
 # Takes a journey dict as parsed by JourneySelect._parse_journey() and
 # returns the builder model:
@@ -207,11 +430,11 @@ static func new_item(type: String) -> Dictionary:
 #     "items":          Array[Dictionary],
 #   }
 static func parse_journey(journey: Dictionary) -> Dictionary:
-	var name: String        = journey.get("title", "")
-	var author: String      = journey.get("author", "")
+	var name: String = journey.get("title", "")
+	var author: String = journey.get("author", "")
 	var description: String = journey.get("description", "")
 
-	var diff: String  = journey.get("difficulty", "Easy")
+	var diff: String = journey.get("difficulty", "Easy")
 	var diff_idx: int = DIFFICULTIES.find(diff)
 	if diff_idx < 0:
 		diff_idx = 0
@@ -219,81 +442,107 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 	var cover_path: String = journey.get("cover_path", "")
 
 	var rounds: Array = (journey.get("rounds", []) as Array).duplicate()
-	rounds.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return (a.get("order", 0) as int) < (b.get("order", 0) as int)
+	rounds.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (a.get("order", 0) as int) < (b.get("order", 0) as int)
 	)
-	var forks:       Array = (journey.get("forks",       []) as Array).duplicate()
-	var shops:       Array = (journey.get("shops",       []) as Array).duplicate()
+	var forks: Array = (journey.get("forks", []) as Array).duplicate()
+	var shops: Array = (journey.get("shops", []) as Array).duplicate()
 	var storyboards: Array = (journey.get("storyboards", []) as Array).duplicate()
 
 	# Interleave by the same key scheme as GameState.BuildSequence so authoring
 	# order is preserved after a round-trip through disk.
 	var seq: Array = []
 	for r: Dictionary in rounds:
-		seq.append({
-			"key":  (r.get("order", 0) as int) * 3,
-			"data": {
-				"type":            "round",
-				"name":            r.get("name", ""),
-				"funscript_path":  r.get("funscript_path", ""),
-				"axis_scripts":    r.get("axis_scripts", {}),
-				"vib_scripts":     r.get("vib_scripts", {}),
-				"round_type":      r.get("round_type", "normal"),
-				"is_checkpoint":   bool(r.get("is_checkpoint", false)),
-				"curse_reward":    int(r.get("curse_reward", 0)),
-				"cleanse_cost":    int(r.get("cleanse_cost", 50)),
-				"curse_random":    bool(r.get("curse_random", true)),
-				"curses":          (r.get("curses", []) as Array).duplicate(),
-				"boon_random":     bool(r.get("boon_random", true)),
-				"boons":           (r.get("boons", []) as Array).duplicate(),
-				"gift_item":       r.get("gift_item", ""),
-				"boss_image":      r.get("boss_image", ""),
-				"boss_tagline":    r.get("boss_tagline", ""),
-				"boss_modifiers":  r.get("boss_modifiers", []),
-				"sensory":         (r.get("sensory", []) as Array).duplicate(),
-				"sensory_in_pool": bool(r.get("sensory_in_pool", false)),
-				"sensory_intensity": (r.get("sensory_intensity", {}) as Dictionary).duplicate(),
-				"show_reveal":     bool(r.get("show_reveal", true)),
-				"video_path":      find_video_in_round(r.get("folder", "")),
-				"coins":           r.get("coins", 0),
-				"original_folder": r.get("folder", ""),
-			},
-		})
+		(
+			seq
+			. append(
+				{
+					"key": (r.get("order", 0) as int) * 3,
+					"data":
+					{
+						"type": "round",
+						"name": r.get("name", ""),
+						"funscript_path": r.get("funscript_path", ""),
+						"axis_scripts": r.get("axis_scripts", {}),
+						"vib_scripts": r.get("vib_scripts", {}),
+						"round_type": r.get("round_type", "normal"),
+						"is_checkpoint": bool(r.get("is_checkpoint", false)),
+						"curse_reward": int(r.get("curse_reward", 0)),
+						"cleanse_cost": int(r.get("cleanse_cost", 50)),
+						"curse_random": bool(r.get("curse_random", true)),
+						"curses": (r.get("curses", []) as Array).duplicate(),
+						"boon_random": bool(r.get("boon_random", true)),
+						"boons": (r.get("boons", []) as Array).duplicate(),
+						"gift_item": r.get("gift_item", ""),
+						"boss_image": r.get("boss_image", ""),
+						"boss_tagline": r.get("boss_tagline", ""),
+						"boss_modifiers": r.get("boss_modifiers", []),
+						"sensory": (r.get("sensory", []) as Array).duplicate(),
+						"sensory_in_pool": bool(r.get("sensory_in_pool", false)),
+						"sensory_intensity":
+						(r.get("sensory_intensity", {}) as Dictionary).duplicate(),
+						"show_reveal": bool(r.get("show_reveal", true)),
+						"video_path": find_video_in_round(r.get("folder", "")),
+						"coins": r.get("coins", 0),
+						"original_folder": r.get("folder", ""),
+					},
+				}
+			)
+		)
 	for sb: Dictionary in storyboards:
-		seq.append({
-			"key":  (sb.get("order", 0) as int) * 3,
-			"data": {
-				"type":  "storyboard",
-				"coins": sb.get("coins", 0),
-				"item":  sb.get("item", ""),
-				"image": sb.get("image", ""),
-				"lines": sb.get("lines", []),
-			},
-		})
+		(
+			seq
+			. append(
+				{
+					"key": (sb.get("order", 0) as int) * 3,
+					"data":
+					{
+						"type": "storyboard",
+						"coins": sb.get("coins", 0),
+						"item": sb.get("item", ""),
+						"image": sb.get("image", ""),
+						"lines": sb.get("lines", []),
+					},
+				}
+			)
+		)
 	for sh: Dictionary in shops:
-		seq.append({
-			"key":  (sh.get("after_order", 0) as int) * 3 + 1,
-			"data": _build_shop_item(sh),
-		})
+		(
+			seq
+			. append(
+				{
+					"key": (sh.get("after_order", 0) as int) * 3 + 1,
+					"data": _build_shop_item(sh),
+				}
+			)
+		)
 	for f: Dictionary in forks:
-		seq.append({
-			"key":  (f.get("after_order", 0) as int) * 3 + 2,
-			"data": _build_fork_item(f),
-		})
-	seq.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["key"] as int) < (b["key"] as int))
+		(
+			seq
+			. append(
+				{
+					"key": (f.get("after_order", 0) as int) * 3 + 2,
+					"data": _build_fork_item(f),
+				}
+			)
+		)
+	seq.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return (a["key"] as int) < (b["key"] as int)
+	)
 
 	var items: Array = []
 	for s in seq:
 		items.append(s["data"])
 
 	return {
-		"name":           name,
-		"author":         author,
-		"description":    description,
+		"name": name,
+		"author": author,
+		"description": description,
 		"difficulty_idx": diff_idx,
-		"cover_path":     cover_path,
-		"tags":           journey.get("tags", []),
-		"items":          items,
+		"cover_path": cover_path,
+		"tags": journey.get("tags", []),
+		"items": items,
 	}
 
 
@@ -303,11 +552,11 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 # Inflates a scanned shop dict into the builder's shop item model.
 static func _build_shop_item(sh: Dictionary) -> Dictionary:
 	return {
-		"type":             "shop",
-		"title":            sh.get("title", ""),
-		"mode":             sh.get("mode", "pool"),
-		"count":            int(sh.get("count", 3)),
-		"items":            (sh.get("items", []) as Array).duplicate(),
+		"type": "shop",
+		"title": sh.get("title", ""),
+		"mode": sh.get("mode", "pool"),
+		"count": int(sh.get("count", 3)),
+		"items": (sh.get("items", []) as Array).duplicate(),
 		"price_multiplier": float(sh.get("price_multiplier", 1.0)),
 	}
 
@@ -315,24 +564,29 @@ static func _build_shop_item(sh: Dictionary) -> Dictionary:
 static func _build_fork_item(f: Dictionary) -> Dictionary:
 	var paths_out: Array = []
 	for p: Dictionary in f.get("paths", []):
-		paths_out.append({
-			"name":          p.get("name", ""),
-			"description":   p.get("description", ""),
-			"image_path":    p.get("image_path", ""),
-			"items":         _build_path_items(p),
-			"weight":        int(p.get("weight", 1)),
-			"threshold":     int(p.get("threshold", 0)),
-			"required_item": str(p.get("required_item", "")),
-			"cost":          int(p.get("cost", 0)),
-		})
+		(
+			paths_out
+			. append(
+				{
+					"name": p.get("name", ""),
+					"description": p.get("description", ""),
+					"image_path": p.get("image_path", ""),
+					"items": _build_path_items(p),
+					"weight": int(p.get("weight", 1)),
+					"threshold": int(p.get("threshold", 0)),
+					"required_item": str(p.get("required_item", "")),
+					"cost": int(p.get("cost", 0)),
+				}
+			)
+		)
 	return {
-		"type":         "fork",
-		"title":        f.get("title", ""),
-		"description":  f.get("description", ""),
-		"resolution":   str(f.get("resolution", "choice")),
-		"cond_metric":  str(f.get("cond_metric", "score")),
+		"type": "fork",
+		"title": f.get("title", ""),
+		"description": f.get("description", ""),
+		"resolution": str(f.get("resolution", "choice")),
+		"cond_metric": str(f.get("cond_metric", "score")),
 		"default_path": int(f.get("default_path", 0)),
-		"paths":        paths_out,
+		"paths": paths_out,
 	}
 
 
@@ -341,57 +595,82 @@ static func _build_fork_item(f: Dictionary) -> Dictionary:
 static func _build_path_items(p: Dictionary) -> Array:
 	var sub: Array = []
 	for pr: Dictionary in p.get("rounds", []):
-		sub.append({
-			"key":  (pr.get("order", 0) as int) * 3,
-			"data": {
-				"type":            "round",
-				"name":            pr.get("name", ""),
-				"funscript_path":  pr.get("funscript_path", ""),
-				"axis_scripts":    pr.get("axis_scripts", {}),
-				"vib_scripts":     pr.get("vib_scripts", {}),
-				"round_type":      pr.get("round_type", "normal"),
-				"is_checkpoint":   bool(pr.get("is_checkpoint", false)),
-				"curse_reward":    int(pr.get("curse_reward", 0)),
-				"cleanse_cost":    int(pr.get("cleanse_cost", 50)),
-				"curse_random":    bool(pr.get("curse_random", true)),
-				"curses":          (pr.get("curses", []) as Array).duplicate(),
-				"boon_random":     bool(pr.get("boon_random", true)),
-				"boons":           (pr.get("boons", []) as Array).duplicate(),
-				"gift_item":       pr.get("gift_item", ""),
-				"boss_image":      pr.get("boss_image", ""),
-				"boss_tagline":    pr.get("boss_tagline", ""),
-				"boss_modifiers":  pr.get("boss_modifiers", []),
-				"sensory":         (pr.get("sensory", []) as Array).duplicate(),
-				"sensory_in_pool": bool(pr.get("sensory_in_pool", false)),
-				"sensory_intensity": (pr.get("sensory_intensity", {}) as Dictionary).duplicate(),
-				"show_reveal":     bool(pr.get("show_reveal", true)),
-				"video_path":      find_video_in_round(pr.get("folder", "")),
-				"coins":           pr.get("coins", 0),
-				"original_folder": pr.get("folder", ""),
-			},
-		})
+		(
+			sub
+			. append(
+				{
+					"key": (pr.get("order", 0) as int) * 3,
+					"data":
+					{
+						"type": "round",
+						"name": pr.get("name", ""),
+						"funscript_path": pr.get("funscript_path", ""),
+						"axis_scripts": pr.get("axis_scripts", {}),
+						"vib_scripts": pr.get("vib_scripts", {}),
+						"round_type": pr.get("round_type", "normal"),
+						"is_checkpoint": bool(pr.get("is_checkpoint", false)),
+						"curse_reward": int(pr.get("curse_reward", 0)),
+						"cleanse_cost": int(pr.get("cleanse_cost", 50)),
+						"curse_random": bool(pr.get("curse_random", true)),
+						"curses": (pr.get("curses", []) as Array).duplicate(),
+						"boon_random": bool(pr.get("boon_random", true)),
+						"boons": (pr.get("boons", []) as Array).duplicate(),
+						"gift_item": pr.get("gift_item", ""),
+						"boss_image": pr.get("boss_image", ""),
+						"boss_tagline": pr.get("boss_tagline", ""),
+						"boss_modifiers": pr.get("boss_modifiers", []),
+						"sensory": (pr.get("sensory", []) as Array).duplicate(),
+						"sensory_in_pool": bool(pr.get("sensory_in_pool", false)),
+						"sensory_intensity":
+						(pr.get("sensory_intensity", {}) as Dictionary).duplicate(),
+						"show_reveal": bool(pr.get("show_reveal", true)),
+						"video_path": find_video_in_round(pr.get("folder", "")),
+						"coins": pr.get("coins", 0),
+						"original_folder": pr.get("folder", ""),
+					},
+				}
+			)
+		)
 	for psb: Dictionary in p.get("storyboards", []):
-		sub.append({
-			"key":  (psb.get("order", 0) as int) * 3,
-			"data": {
-				"type":  "storyboard",
-				"coins": psb.get("coins", 0),
-				"item":  psb.get("item", ""),
-				"image": psb.get("image", ""),
-				"lines": psb.get("lines", []),
-			},
-		})
+		(
+			sub
+			. append(
+				{
+					"key": (psb.get("order", 0) as int) * 3,
+					"data":
+					{
+						"type": "storyboard",
+						"coins": psb.get("coins", 0),
+						"item": psb.get("item", ""),
+						"image": psb.get("image", ""),
+						"lines": psb.get("lines", []),
+					},
+				}
+			)
+		)
 	for ps: Dictionary in p.get("shops", []):
-		sub.append({
-			"key":  (ps.get("after_order", 0) as int) * 3 + 1,
-			"data": _build_shop_item(ps),
-		})
+		(
+			sub
+			. append(
+				{
+					"key": (ps.get("after_order", 0) as int) * 3 + 1,
+					"data": _build_shop_item(ps),
+				}
+			)
+		)
 	for nf: Dictionary in p.get("forks", []):
-		sub.append({
-			"key":  (nf.get("after_order", 0) as int) * 3 + 2,
-			"data": _build_fork_item(nf),
-		})
-	sub.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["key"] as int) < (b["key"] as int))
+		(
+			sub
+			. append(
+				{
+					"key": (nf.get("after_order", 0) as int) * 3 + 2,
+					"data": _build_fork_item(nf),
+				}
+			)
+		)
+	sub.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return (a["key"] as int) < (b["key"] as int)
+	)
 	var items: Array = []
 	for s in sub:
 		items.append(s["data"])
@@ -399,6 +678,7 @@ static func _build_path_items(p: Dictionary) -> Array:
 
 
 # ── Validate ────────────────────────────────────────────────────────────────
+
 
 # Returns "" if the model is valid for saving, otherwise a user-facing message
 # describing the first problem encountered.
@@ -409,7 +689,8 @@ static func validate(items: Array, journey_name: String) -> String:
 	var top_round_count: int = items.reduce(
 		func(acc: int, it: Dictionary) -> int:
 			return acc + (1 if it.get("type", "round") == "round" else 0),
-		0)
+		0
+	)
 	if top_round_count == 0:
 		return "Please add at least one round before saving."
 
@@ -422,7 +703,7 @@ static func validate(items: Array, journey_name: String) -> String:
 				if (item.get("name", "") as String).strip_edges() == "":
 					return "Round %d needs a name." % round_idx_global
 				if item.get("funscript_path", "") == "":
-					return "Round \"%s\" needs a funscript." % item.get("name", "?")
+					return 'Round "%s" needs a funscript.' % item.get("name", "?")
 			"fork":
 				var context_label: String = "fork after round %d" % round_idx_global
 				var fork_error: String = validate_fork(item, context_label)
@@ -451,25 +732,32 @@ static func validate_fork(fork_item: Dictionary, context_label: String) -> Strin
 		var pr_count: int = pi_list.reduce(
 			func(acc: int, x: Dictionary) -> int:
 				return acc + (1 if x.get("type", "round") == "round" else 0),
-			0)
+			0
+		)
 		if pr_count == 0:
-			return "Path \"%s\" (in %s) needs at least one round." % [pname, context_label]
+			return 'Path "%s" (in %s) needs at least one round.' % [pname, context_label]
 		for pi_item: Dictionary in pi_list:
 			var pi_t: String = pi_item.get("type", "round")
 			match pi_t:
 				"round":
 					if (pi_item.get("name", "") as String).strip_edges() == "":
-						return "A round in path \"%s\" needs a name." % pname
+						return 'A round in path "%s" needs a name.' % pname
 					if pi_item.get("funscript_path", "") == "":
-						return "Round \"%s\" in path \"%s\" needs a funscript." % [pi_item.get("name", "?"), pname]
+						return (
+							'Round "%s" in path "%s" needs a funscript.'
+							% [pi_item.get("name", "?"), pname]
+						)
 				"fork":
-					var nested_err: String = validate_fork(pi_item, "nested fork in path \"%s\"" % pname)
+					var nested_err: String = validate_fork(
+						pi_item, 'nested fork in path "%s"' % pname
+					)
 					if nested_err != "":
 						return nested_err
 	return ""
 
 
 # ── Filesystem helpers ──────────────────────────────────────────────────────
+
 
 # Returns the path to the first video file in `folder`, or "" if none.
 static func find_video_in_round(folder: String) -> String:
@@ -527,12 +815,27 @@ static func load_image_smart(user_path: String) -> Image:
 	var img: Image = Image.new()
 	var err: Error
 
-	if bytes.size() >= 4 and bytes[0] == 0x89 and bytes[1] == 0x50 and bytes[2] == 0x4E and bytes[3] == 0x47:
+	if (
+		bytes.size() >= 4
+		and bytes[0] == 0x89
+		and bytes[1] == 0x50
+		and bytes[2] == 0x4E
+		and bytes[3] == 0x47
+	):
 		err = img.load_png_from_buffer(bytes)
 	elif bytes.size() >= 3 and bytes[0] == 0xFF and bytes[1] == 0xD8 and bytes[2] == 0xFF:
 		err = img.load_jpg_from_buffer(bytes)
-	elif bytes.size() >= 12 and bytes[0] == 0x52 and bytes[1] == 0x49 and bytes[2] == 0x46 and bytes[3] == 0x46 \
-			and bytes[8] == 0x57 and bytes[9] == 0x45 and bytes[10] == 0x42 and bytes[11] == 0x50:
+	elif (
+		bytes.size() >= 12
+		and bytes[0] == 0x52
+		and bytes[1] == 0x49
+		and bytes[2] == 0x46
+		and bytes[3] == 0x46
+		and bytes[8] == 0x57
+		and bytes[9] == 0x45
+		and bytes[10] == 0x42
+		and bytes[11] == 0x50
+	):
 		err = img.load_webp_from_buffer(bytes)
 	else:
 		err = img.load_jpg_from_buffer(bytes)
@@ -603,12 +906,10 @@ static func items_have_any_video(items: Array) -> bool:
 # Sanitize an arbitrary string into a filesystem-safe folder name.
 # (Moved from JourneyBuilder.gd — used by the save flow.)
 static func sanitize_folder_name(name: String) -> String:
-	const INVALID: String = "\\/:*?\"<>|"
+	const INVALID: String = '\\/:*?"<>|'
 	var result: String = ""
 	for ch: String in name:
 		if ch in INVALID:
 			continue
 		result += "_" if ch == " " else ch
 	return result if result != "" else "Journey"
-
-

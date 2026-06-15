@@ -2,19 +2,19 @@ extends Control
 
 signal path_chosen(index: int)
 
-@onready var _backdrop:   ColorRect    = $Backdrop
+@onready var _backdrop: ColorRect = $Backdrop
 @onready var _center_box: VBoxContainer = $CenterBox
-@onready var _fork_title: Label        = $CenterBox/ForkTitle
-@onready var _fork_sub:   Label        = $CenterBox/ForkSubtitle
-@onready var _cards_row:  HBoxContainer = $CenterBox/CardsRow
+@onready var _fork_title: Label = $CenterBox/ForkTitle
+@onready var _fork_sub: Label = $CenterBox/ForkSubtitle
+@onready var _cards_row: HBoxContainer = $CenterBox/CardsRow
 
 # Tracked for the auto-resolve reveal animation (random / conditional forks).
-var _cards:          Array = []  # Array[Control] — one per path, in order
+var _cards: Array = []  # Array[Control] — one per path, in order
 var _choose_buttons: Array = []  # Array[Button]  — the "> CHOOSE" buttons
-var _paths:          Array = []  # the fork's path data dicts
-var _resolution:     String = "choice"  # how this fork resolves
-var _cond_metric:    String = "score"   # conditional metric (score/coins/item)
-var _default_path:   int    = 0          # conditional fallback path index
+var _paths: Array = []  # the fork's path data dicts
+var _resolution: String = "choice"  # how this fork resolves
+var _cond_metric: String = "score"  # conditional metric (score/coins/item)
+var _default_path: int = 0  # conditional fallback path index
 
 
 func _ready() -> void:
@@ -28,7 +28,7 @@ func setup(fork_data: Dictionary) -> void:
 		_fork_title.text = title.to_upper()
 
 	var desc: String = fork_data.get("description", "")
-	_fork_sub.text    = desc if desc != "" else "Choose your path"
+	_fork_sub.text = desc if desc != "" else "Choose your path"
 	_fork_sub.visible = true
 
 	_resolution = fork_data.get("resolution", "choice")
@@ -44,10 +44,10 @@ func setup(fork_data: Dictionary) -> void:
 
 func _make_card(index: int, path_data: Dictionary) -> Control:
 	var card: Control = Control.new()
-	card.custom_minimum_size   = Vector2(220, 360)
+	card.custom_minimum_size = Vector2(220, 360)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	card.clip_contents         = true
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.clip_contents = true
 
 	# Layer 1 — solid bg (always present; shows through when no image)
 	var bg: ColorRect = ColorRect.new()
@@ -61,8 +61,8 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 		var img: Image = _load_image(image_path)
 		if img:
 			var img_rect: TextureRect = TextureRect.new()
-			img_rect.texture      = ImageTexture.create_from_image(img)
-			img_rect.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+			img_rect.texture = ImageTexture.create_from_image(img)
+			img_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			img_rect.stretch_mode = TextureRect.STRETCH_SCALE
 			_fill(img_rect)
 			card.add_child(img_rect)
@@ -72,11 +72,11 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	grad.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
 	grad.set_color(1, Color(0.0, 0.0, 0.0, 0.90))
 	var grad_tex: GradientTexture2D = GradientTexture2D.new()
-	grad_tex.gradient  = grad
+	grad_tex.gradient = grad
 	grad_tex.fill_from = Vector2(0.0, 0.0)
-	grad_tex.fill_to   = Vector2(0.0, 1.0)
+	grad_tex.fill_to = Vector2(0.0, 1.0)
 	var grad_rect: TextureRect = TextureRect.new()
-	grad_rect.texture     = grad_tex
+	grad_rect.texture = grad_tex
 	grad_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_fill(grad_rect)
 	card.add_child(grad_rect)
@@ -84,11 +84,11 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 	# Layer 4 — border (transparent fill, just the outline on top of everything)
 	var border: Panel = Panel.new()
 	var border_style: StyleBoxFlat = StyleBoxFlat.new()
-	border_style.bg_color            = Color(0, 0, 0, 0)
-	border_style.border_color        = UITheme.PURPLE_MID
-	border_style.border_width_left   = 1
-	border_style.border_width_right  = 1
-	border_style.border_width_top    = 1
+	border_style.bg_color = Color(0, 0, 0, 0)
+	border_style.border_color = UITheme.PURPLE_MID
+	border_style.border_width_left = 1
+	border_style.border_width_right = 1
+	border_style.border_width_top = 1
 	border_style.border_width_bottom = 1
 	border.add_theme_stylebox_override("panel", border_style)
 	_fill(border)
@@ -96,16 +96,16 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 
 	# Layer 5 — content pinned to the bottom
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   20)
-	margin.add_theme_constant_override("margin_right",  20)
-	margin.add_theme_constant_override("margin_top",    20)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
 	margin.add_theme_constant_override("margin_bottom", 20)
 	_fill(margin)
 	card.add_child(margin)
 
 	var col: VBoxContainer = VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
 	margin.add_child(col)
 
@@ -116,28 +116,28 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 
 	var path_name: String = path_data.get("name", "PATH %d" % (index + 1))
 	var name_lbl: Label = Label.new()
-	name_lbl.text                 = path_name.to_upper()
+	name_lbl.text = path_name.to_upper()
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	name_lbl.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	name_lbl.add_theme_font_size_override("font_size", 22)
 	col.add_child(name_lbl)
 
 	var desc: String = path_data.get("description", "")
 	if desc != "":
 		var desc_lbl: Label = Label.new()
-		desc_lbl.text                 = desc
+		desc_lbl.text = desc
 		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		desc_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-		desc_lbl.add_theme_color_override("font_color",    UITheme.DARK_TEXT)
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_lbl.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 		desc_lbl.add_theme_font_size_override("font_size", 13)
 		col.add_child(desc_lbl)
 
 	var rounds: Array = path_data.get("rounds", [])
 	var rounds_lbl: Label = Label.new()
-	rounds_lbl.text                 = "%d ROUND%s" % [rounds.size(), "S" if rounds.size() != 1 else ""]
+	rounds_lbl.text = "%d ROUND%s" % [rounds.size(), "S" if rounds.size() != 1 else ""]
 	rounds_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rounds_lbl.add_theme_color_override("font_color",    UITheme.PURPLE_BRIGHT)
+	rounds_lbl.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
 	rounds_lbl.add_theme_font_size_override("font_size", 13)
 	col.add_child(rounds_lbl)
 
@@ -167,7 +167,9 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 			cost_lbl.add_theme_color_override("font_color", UITheme.SUCCESS)
 		else:
 			cost_lbl.text = _cost_text(sac_cost, sac_req)
-			cost_lbl.add_theme_color_override("font_color", UITheme.AMBER if sac_affordable else UITheme.ERROR_SOFT)
+			cost_lbl.add_theme_color_override(
+				"font_color", UITheme.AMBER if sac_affordable else UITheme.ERROR_SOFT
+			)
 		col.add_child(cost_lbl)
 
 	var btn: Button = Button.new()
@@ -186,19 +188,22 @@ func _make_card(index: int, path_data: Dictionary) -> Control:
 
 # Anchors a control to fill its parent completely.
 func _fill(c: Control) -> void:
-	c.anchor_right  = 1.0
+	c.anchor_right = 1.0
 	c.anchor_bottom = 1.0
-	c.offset_left   = 0
-	c.offset_top    = 0
-	c.offset_right  = 0
+	c.offset_left = 0
+	c.offset_top = 0
+	c.offset_right = 0
 	c.offset_bottom = 0
 
 
 static func _load_image(path: String) -> Image:
 	if path == "":
 		return null
-	var abs_path: String = ProjectSettings.globalize_path(path) \
-		if (path.begins_with("user://") or path.begins_with("res://")) else path
+	var abs_path: String = (
+		ProjectSettings.globalize_path(path)
+		if (path.begins_with("user://") or path.begins_with("res://"))
+		else path
+	)
 	if not FileAccess.file_exists(abs_path):
 		return null
 	var f: FileAccess = FileAccess.open(abs_path, FileAccess.READ)
@@ -214,7 +219,13 @@ static func _load_image(path: String) -> Image:
 		err = img.load_png_from_buffer(bytes)
 	elif bytes.size() >= 3 and bytes[0] == 0xFF and bytes[1] == 0xD8:
 		err = img.load_jpg_from_buffer(bytes)
-	elif bytes.size() >= 12 and bytes[8] == 0x57 and bytes[9] == 0x45 and bytes[10] == 0x42 and bytes[11] == 0x50:
+	elif (
+		bytes.size() >= 12
+		and bytes[8] == 0x57
+		and bytes[9] == 0x45
+		and bytes[10] == 0x42
+		and bytes[11] == 0x50
+	):
 		err = img.load_webp_from_buffer(bytes)
 	else:
 		err = img.load_jpg_from_buffer(bytes)
@@ -245,7 +256,9 @@ func _on_path_chosen(index: int) -> void:
 # Gating logic is shared with the resolver (pure, tested); here we feed it the
 # live coin balance and ownership.
 func _can_afford(cost: int, required_item: String) -> bool:
-	return ForkResolver.path_affordable(cost, required_item, CoinService.Balance, Callable(InventoryService, "OwnsItem"))
+	return ForkResolver.path_affordable(
+		cost, required_item, CoinService.Balance, Callable(InventoryService, "OwnsItem")
+	)
 
 
 # Requirement text for a conditional path's card, e.g. "SCORE ≥ 100" or
@@ -261,7 +274,12 @@ func _conditional_req_text(index: int, path_data: Dictionary) -> String:
 		"item":
 			var req: String = str(path_data.get("required_item", ""))
 			if req != "":
-				parts.append("REQUIRES %s" % str(InventoryService.GetItemData(req).get("name", req)).to_upper())
+				parts.append(
+					(
+						"REQUIRES %s"
+						% str(InventoryService.GetItemData(req).get("name", req)).to_upper()
+					)
+				)
 	if index == _default_path:
 		parts.append("DEFAULT")
 	return "   ·   ".join(parts)
@@ -284,7 +302,7 @@ func reveal(index: int, caption: String = "FATE DECIDES…") -> void:
 	# Lock out manual choice.
 	for b: Button in _choose_buttons:
 		b.disabled = true
-		b.visible  = false
+		b.visible = false
 	_fork_sub.text = caption
 
 	var n: int = _cards.size()
@@ -326,13 +344,13 @@ func _set_card_state(j: int, state: String) -> void:
 	match state:
 		"active":
 			c.modulate = Color(1, 1, 1, 1)
-			c.scale    = Vector2(1.06, 1.06)
+			c.scale = Vector2(1.06, 1.06)
 		"dim":
 			c.modulate = Color(1, 1, 1, 0.35)
-			c.scale    = Vector2(1, 1)
+			c.scale = Vector2(1, 1)
 		_:
 			c.modulate = Color(1, 1, 1, 1)
-			c.scale    = Vector2(1, 1)
+			c.scale = Vector2(1, 1)
 
 
 func _path_display_name(index: int) -> String:
@@ -344,23 +362,23 @@ func _path_display_name(index: int) -> String:
 
 
 func _apply_layout() -> void:
-	anchor_right  = 1.0
+	anchor_right = 1.0
 	anchor_bottom = 1.0
 
-	_backdrop.anchor_right  = 1.0
+	_backdrop.anchor_right = 1.0
 	_backdrop.anchor_bottom = 1.0
-	_backdrop.offset_left   = 0
-	_backdrop.offset_top    = 0
-	_backdrop.offset_right  = 0
+	_backdrop.offset_left = 0
+	_backdrop.offset_top = 0
+	_backdrop.offset_right = 0
 	_backdrop.offset_bottom = 0
 
-	_center_box.anchor_left   = 0.1
-	_center_box.anchor_right  = 0.9
-	_center_box.anchor_top    = 0.1
+	_center_box.anchor_left = 0.1
+	_center_box.anchor_right = 0.9
+	_center_box.anchor_top = 0.1
 	_center_box.anchor_bottom = 0.9
-	_center_box.offset_left   = 0
-	_center_box.offset_top    = 0
-	_center_box.offset_right  = 0
+	_center_box.offset_left = 0
+	_center_box.offset_top = 0
+	_center_box.offset_right = 0
 	_center_box.offset_bottom = 0
 	_center_box.add_theme_constant_override("separation", 24)
 
@@ -369,36 +387,36 @@ func _apply_layout() -> void:
 
 
 func _apply_base_theme() -> void:
-	_fork_title.add_theme_color_override("font_color",    UITheme.WHITE_SOFT)
+	_fork_title.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	_fork_title.add_theme_font_size_override("font_size", 32)
 	_fork_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fork_title.uppercase = true
 
-	_fork_sub.add_theme_color_override("font_color",    UITheme.DARK_TEXT)
+	_fork_sub.add_theme_color_override("font_color", UITheme.DARK_TEXT)
 	_fork_sub.add_theme_font_size_override("font_size", 15)
 	_fork_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _style_button(btn: Button, accent: Color) -> void:
-	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
+	btn.add_theme_color_override("font_color", accent)
+	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
 	btn.add_theme_color_override("font_pressed_color", UITheme.BG_ZERO)
 	btn.add_theme_font_size_override("font_size", 14)
 
 	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color              = Color(accent.r, accent.g, accent.b, 0.12)
-	s.border_color          = accent
-	s.border_width_left     = 1
-	s.border_width_right    = 1
-	s.border_width_top      = 1
-	s.border_width_bottom   = 1
-	s.content_margin_left   = 14
-	s.content_margin_right  = 14
-	s.content_margin_top    = 10
+	s.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
+	s.border_color = accent
+	s.border_width_left = 1
+	s.border_width_right = 1
+	s.border_width_top = 1
+	s.border_width_bottom = 1
+	s.content_margin_left = 14
+	s.content_margin_right = 14
+	s.content_margin_top = 10
 	s.content_margin_bottom = 10
-	s.corner_radius_top_left     = 4
-	s.corner_radius_top_right    = 4
-	s.corner_radius_bottom_left  = 4
+	s.corner_radius_top_left = 4
+	s.corner_radius_top_right = 4
+	s.corner_radius_bottom_left = 4
 	s.corner_radius_bottom_right = 4
 	btn.add_theme_stylebox_override("normal", s)
 
