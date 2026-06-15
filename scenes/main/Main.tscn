@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d288w124lrltr" path="res://scripts/main/Main.gd" id="1_u1xfj"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_nha0i"]
+[ext_resource type="PackedScene" uid="uid://dk87out6m1h2h" path="res://components/blinker.tscn" id="3_gyg6b"]
 [ext_resource type="Script" uid="uid://cnfaeqf83ubro" path="res://scenes/main/version_label.gd" id="3_q24mn"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_q24mn"]
@@ -135,6 +136,12 @@ label_settings = SubResource("LabelSettings_dc040")
 horizontal_alignment = 1
 uppercase = true
 
+[node name="Blinker" parent="PanelContainer/CenterContainer/TaglineLabel" unique_id=208758677 node_paths=PackedStringArray("target") instance=ExtResource("3_gyg6b")]
+target = NodePath("..")
+enabled = false
+show_time = 0.85
+hide_time = 0.85
+
 [node name="VersionLabel" type="Label" parent="." unique_id=943340438]
 layout_mode = 1
 anchors_preset = 3
@@ -154,3 +161,8 @@ horizontal_alignment = 2
 vertical_alignment = 2
 script = ExtResource("3_q24mn")
 metadata/_custom_type_script = "uid://cnfaeqf83ubro"
+
+[connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/StartButton" to="." method="_on_start_button_pressed"]
+[connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/BuildButton" to="." method="_on_build_button_pressed"]
+[connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/OptionsButton" to="." method="_on_options_button_pressed"]
+[connection signal="pressed" from="PanelContainer/CenterContainer/ButtonContainer/QuitButton" to="." method="_on_quit_button_pressed"]

@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://dk87out6m1h2h"]
+
+[ext_resource type="Script" uid="uid://dt8owgsqpbwbh" path="res://components/blinker.gd" id="1_kp03o"]
+
+[node name="Blinker" type="Node" unique_id=208758677]
+script = ExtResource("1_kp03o")
+enabled = null
+show_time = null
+hide_time = null
+
+[node name="ShowTimer" type="Timer" parent="." unique_id=363381887]
+one_shot = true
+
+[node name="HideTimer" type="Timer" parent="." unique_id=1483006248]
+one_shot = true
+
+[connection signal="timeout" from="ShowTimer" to="." method="_on_show_timer_timeout"]
+[connection signal="timeout" from="HideTimer" to="." method="_on_hide_timer_timeout"]

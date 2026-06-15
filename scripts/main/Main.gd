@@ -1,7 +1,5 @@
 extends Control
 
-const BLINK_INTERVAL: float = 0.85
-
 # Plays the entrance animation only once per app session — replaying it on every
 # return to the menu gets tiresome. Static, so it survives scene reloads but
 # resets on app restart ("first startup").
@@ -12,9 +10,6 @@ static var _intro_played: bool = false
 var _intro_done: bool = false
 # Per-button hover scale tween, so a fast re-hover replaces rather than stacks.
 var _btn_tweens: Dictionary = {}
-
-var _blink_timer: float = 0.0
-var _blink_visible: bool = true
 
 @onready var _title_section: VBoxContainer = %TitleSection
 @onready var _start_btn: Button = %StartButton
@@ -29,19 +24,7 @@ func _ready() -> void:
 	_connect_buttons()
 	_check_for_update()
 	_play_intro()
-
-
-func _process(delta: float) -> void:
-	# Tagline blink — held off until the entrance animation finishes (the intro
-	# owns the tagline's alpha until then).
-	if _intro_done:
-		_blink_timer += delta
-		if _blink_timer >= BLINK_INTERVAL:
-			_blink_timer = 0.0
-			_blink_visible = not _blink_visible
-			var c: Color = _tagline.modulate
-			c.a = 1.0 if _blink_visible else 0.0
-			_tagline.modulate = c
+	_tagline.get_node("Blinker").enabled = true
 
 
 # ---------------------------------------------------------------------------
