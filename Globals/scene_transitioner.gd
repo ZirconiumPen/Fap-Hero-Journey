@@ -14,13 +14,18 @@ func change_scene(path: String) -> void:
 	if is_inside_tree():
 		push_error("Tried to scene transition while already transitioning")
 		return
+	if not ResourceLoader.exists(path):
+		push_error("Scene not found: %s" % path)
+		return
+
+	ResourceLoader.load_threaded_request(path)
+
 	_root_window.add_child(self)
 
 	_animation_player.play("fade_to_black")
 	await _animation_player.animation_finished
 
-	# TODO: asynchronous loading
-	get_tree().change_scene_to_file(path)
+	get_tree().change_scene_to_packed(ResourceLoader.load_threaded_get(path))
 
 	_animation_player.play_backwards("fade_to_black")
 	await _animation_player.animation_finished
