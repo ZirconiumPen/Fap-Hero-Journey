@@ -78,7 +78,11 @@ func _open_update_modal() -> void:
 		drop_progress.call()
 		bar.value = 100
 		status.text = (
-			"Update ready — its folder has been opened:\n%s\n\nClose this app and run the new version there, then delete the old folder."
+			"""
+			Update ready — its folder has been opened:
+			%s
+			Close this app and run the new version there, then delete the old folder.
+			"""
 			% folder
 		)
 		dl_btn.visible = false
