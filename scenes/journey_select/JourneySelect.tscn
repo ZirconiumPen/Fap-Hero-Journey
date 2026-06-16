@@ -3,7 +3,25 @@
 [ext_resource type="Script" uid="uid://886lbtll1qkr" path="res://scripts/journey_select/JourneySelect.gd" id="1_jsel"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
 
-[node name="root" type="Control" unique_id=261649514]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_npvrh"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.05490196, 0.007843138, 0.08627451, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.69803923, 0.11764706, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0.992716, 0.0008598077, 0.99936384, 0.5019608)
+shadow_size = 12
+
+[node name="JourneySelect" type="Control" unique_id=261649514]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,76 +31,180 @@ grow_vertical = 2
 script = ExtResource("1_jsel")
 
 [node name="Background" type="ColorRect" parent="." unique_id=744543218]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0, 0, 0, 1)
 
 [node name="AnimatedBackground" type="Control" parent="." unique_id=1577566533]
-anchors_preset = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("2_abg")
 
-[node name="TopBar" type="HBoxContainer" parent="." unique_id=2122763902]
-layout_mode = 0
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=778506588]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="BackButton" type="Button" parent="TopBar" unique_id=305315822]
+[node name="TopPanel" type="PanelContainer" parent="VBoxContainer" unique_id=1643779984]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_npvrh")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/TopPanel" unique_id=1011635051]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/TopPanel/VBoxContainer" unique_id=1545726905]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="VBoxContainer/TopPanel/VBoxContainer/HBoxContainer" unique_id=305315822]
+unique_name_in_owner = true
 layout_mode = 2
 text = "< BACK"
 
-[node name="TitleLabel" type="Label" parent="TopBar" unique_id=1336843015]
+[node name="TitleLabel" type="Label" parent="VBoxContainer/TopPanel/VBoxContainer/HBoxContainer" unique_id=1336843015]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "SELECT JOURNEY"
 horizontal_alignment = 1
 
-[node name="SortContainer" type="HBoxContainer" parent="TopBar" unique_id=1806383860]
+[node name="CountLabel" type="Label" parent="VBoxContainer/TopPanel/VBoxContainer/HBoxContainer" unique_id=151385009]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="SearchBar" type="HBoxContainer" parent="VBoxContainer/TopPanel/VBoxContainer" unique_id=2122763902]
 layout_mode = 2
 
-[node name="SortLabel" type="Label" parent="TopBar/SortContainer" unique_id=2043804583]
+[node name="SearchField" type="LineEdit" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar" unique_id=2079813988]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Search..."
+
+[node name="DifficultyFilter" type="OptionButton" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar" unique_id=570777202]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(172, 0)
+layout_mode = 2
+item_count = 1
+popup/item_0/text = "ALL DIFFICULTIES"
+popup/item_0/id = 0
+
+[node name="TagFilter" type="OptionButton" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar" unique_id=1414085710]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+item_count = 1
+popup/item_0/text = "ALL TAGS"
+popup/item_0/id = 0
+
+[node name="SortContainer" type="HBoxContainer" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar" unique_id=1806383860]
+layout_mode = 2
+
+[node name="SortLabel" type="Label" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar/SortContainer" unique_id=2043804583]
+unique_name_in_owner = true
 layout_mode = 2
 text = "SORT:"
 
-[node name="SortNameBtn" type="Button" parent="TopBar/SortContainer" unique_id=2109000964]
+[node name="SortNameBtn" type="Button" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar/SortContainer" unique_id=2109000964]
+unique_name_in_owner = true
 layout_mode = 2
 text = "NAME ▲"
 
-[node name="SortDurationBtn" type="Button" parent="TopBar/SortContainer" unique_id=1369415173]
+[node name="SortDurationBtn" type="Button" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar/SortContainer" unique_id=1369415173]
+unique_name_in_owner = true
 layout_mode = 2
 text = "DURATION"
 
-[node name="SortActionsBtn" type="Button" parent="TopBar/SortContainer" unique_id=1045823711]
+[node name="SortActionsBtn" type="Button" parent="VBoxContainer/TopPanel/VBoxContainer/SearchBar/SortContainer" unique_id=1045823711]
+unique_name_in_owner = true
 layout_mode = 2
 text = "ACTIONS"
 
-[node name="ScrollContainer" type="ScrollContainer" parent="." unique_id=1889195361]
-layout_mode = 0
+[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer" unique_id=2017648696]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 40
 
-[node name="Grid" type="GridContainer" parent="ScrollContainer" unique_id=144870130]
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer" unique_id=1889195361]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer/MarginContainer/ScrollContainer" unique_id=474002806]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
-[node name="EmptyLabel" type="Label" parent="." unique_id=1091445135]
-visible = false
-layout_mode = 0
-text = "NO JOURNEYS FOUND
-Drop a journey folder into your journeys directory to get started."
-horizontal_alignment = 1
-vertical_alignment = 1
+[node name="Grid" type="GridContainer" parent="VBoxContainer/MarginContainer/ScrollContainer/MarginContainer" unique_id=144870130]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 24
+theme_override_constants/v_separation = 24
+
+[node name="EmptyLabel" type="Label" parent="VBoxContainer/MarginContainer" unique_id=1603054221]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
 
 [node name="DetailModal" type="Control" parent="." unique_id=1352392677]
 visible = false
-anchors_preset = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Backdrop" type="ColorRect" parent="DetailModal" unique_id=1159284983]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0, 0, 0, 0.85)
 
 [node name="ModalPanel" type="PanelContainer" parent="DetailModal" unique_id=1722092656]
-layout_mode = 0
+custom_minimum_size = Vector2(980, 600)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -311.5
+offset_top = -162.5
+offset_right = 311.5
+offset_bottom = 162.5
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="ModalLayout" type="HBoxContainer" parent="DetailModal/ModalPanel" unique_id=574345327]
 layout_mode = 2
+theme_override_constants/separation = 20
 
 [node name="CoverImage" type="TextureRect" parent="DetailModal/ModalPanel/ModalLayout" unique_id=2068707350]
 clip_contents = true
+custom_minimum_size = Vector2(280, 0)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
@@ -91,6 +213,7 @@ stretch_mode = 5
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+theme_override_constants/separation = 10
 
 [node name="ModalTitle" type="Label" parent="DetailModal/ModalPanel/ModalLayout/DetailsColumn" unique_id=36367279]
 layout_mode = 2
@@ -140,7 +263,13 @@ text = "ROUNDS"
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="RoundList" type="VBoxContainer" parent="DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundListScroll" unique_id=642006535]
+[node name="MarginContainer" type="MarginContainer" parent="DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundListScroll" unique_id=827614498]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 12
+
+[node name="RoundList" type="VBoxContainer" parent="DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundListScroll/MarginContainer" unique_id=642006535]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
