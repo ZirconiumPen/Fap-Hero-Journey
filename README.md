@@ -275,7 +275,7 @@ Redistribution, resale, or modification without explicit written permission is p
 
 This application uses the following open-source components:
 
-- **Godot Engine** — MIT License — https://godotengine.org
-- **EIRTeam.FFmpeg** — MIT License — https://github.com/EIRTeam/EIRTeam.FFmpeg
-- **FFmpeg** — LGPL 2.1 — https://ffmpeg.org
-- **Buttplug.io** — BSD 2-Clause — https://buttplug.io
+- **[Godot Engine](https://godotengine.org)** (MIT License)
+- **[EIRTeam.FFmpeg](https://github.com/EIRTeam/EIRTeam.FFmpeg)** (MIT License)
+- **[FFmpeg](https://ffmpeg.org)** (LGPL 2.1)
+- **[Buttplug.io](https://buttplug.io)** (BSD 2-Clause)
