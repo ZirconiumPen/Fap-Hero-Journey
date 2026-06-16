@@ -865,7 +865,7 @@ func _item_type_label(item: Dictionary) -> String:
 
 
 func _on_back_pressed() -> void:
-	Transition.change_scene("res://scenes/main/Main.tscn")
+	SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
 
 
 # Absolute path of this journey's folder on disk, or "" if it hasn't been saved
@@ -1546,7 +1546,7 @@ func _launch_test_play(paths: Dictionary) -> void:
 	GameState.set_meta("_test_return_journey", journey)
 	GameState.set_meta("_test_seed_score", _test_seed_score)
 	GameState.set_meta("_test_seed_coins", _test_seed_coins)
-	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
+	SceneTransitioner.change_scene("res://scenes/game_loop/GameLoop.tscn")
 
 
 # Drives GameState from a fresh StartJourney to the located node. For each fork
@@ -2141,7 +2141,7 @@ func _finalize_save_success() -> void:
 		message = "Journey saved! Existing player save reset. Returning to catalogue..."
 	_show_status(message, false)
 	await get_tree().create_timer(1.5).timeout
-	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_select/JourneySelect.tscn")
 
 
 # Recursively serializes a fork item to JSON. Calls _save_path for each path.

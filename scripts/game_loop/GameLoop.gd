@@ -1527,7 +1527,7 @@ func _go_to_menu() -> void:
 	# this run (completed it, or left via Save & Quit to resume later).
 	if not _run_accounted:
 		_record_run(false)
-	Transition.change_scene("res://scenes/main/Main.tscn")
+	SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
 
 
 # Called from every "journey finished" exit site. Wipes the save file so the
@@ -1542,7 +1542,7 @@ func _transition_to_end_screen() -> void:
 		return
 	_record_run(true)  # completed run → scoreboard
 	JourneySaveService.delete_save(GameState.Journey.get("folder_name", ""))
-	Transition.change_scene("res://scenes/end_screen/EndScreen.tscn")
+	SceneTransitioner.change_scene("res://scenes/end_screen/EndScreen.tscn")
 
 
 # Records this run's outcome to the journey's local scoreboard. `completed` is
@@ -1580,7 +1580,7 @@ func _exit_test_to_builder() -> void:
 	_video.stop()
 	FunscriptPlayer.Stop()
 	JourneyBuilder.edit_journey = _test_return_journey
-	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
 
 
 # Top-center "TEST MODE" indicator shown for the duration of a test play, so the

@@ -170,15 +170,15 @@ func _play_intro() -> void:
 
 
 func _on_start_button_pressed() -> void:
-	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_select/JourneySelect.tscn")
 
 
 func _on_build_button_pressed() -> void:
-	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
 
 
 func _on_options_button_pressed() -> void:
-	Transition.change_scene("res://scenes/options/Options.tscn")
+	SceneTransitioner.change_scene("res://scenes/options/Options.tscn")
 
 
 func _on_quit_button_pressed() -> void:

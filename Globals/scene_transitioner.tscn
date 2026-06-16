@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://dxog266ds2oru"]
+
+[ext_resource type="Script" uid="uid://b2y3bfjyfdjjw" path="res://Globals/scene_transitioner.gd" id="1_fphp1"]
+[ext_resource type="Script" uid="uid://dd2x1jki6wlt0" path="res://components/spinner.gd" id="2_245e1"]
+
+[sub_resource type="Animation" id="Animation_245e1"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Overlay:color")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(0, 0, 0, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_fphp1"]
+resource_name = "fade_to_black"
+length = 0.35
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Overlay:modulate")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.35),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_245e1"]
+_data = {
+&"RESET": SubResource("Animation_245e1"),
+&"fade_to_black": SubResource("Animation_fphp1")
+}
+
+[node name="SceneTransitioner" type="CanvasLayer" unique_id=1402722440]
+process_mode = 3
+layer = 5
+script = ExtResource("1_fphp1")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1894748519]
+libraries/ = SubResource("AnimationLibrary_245e1")
+
+[node name="Overlay" type="ColorRect" parent="." unique_id=1947800772]
+modulate = Color(1, 1, 1, 0.020781338)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Spinner" type="Control" parent="Overlay" unique_id=265545937]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_245e1")
+metadata/_custom_type_script = "uid://dd2x1jki6wlt0"

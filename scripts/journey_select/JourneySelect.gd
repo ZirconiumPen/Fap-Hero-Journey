@@ -449,7 +449,7 @@ func _on_sort_pressed(field: String) -> void:
 
 
 func _on_back_pressed() -> void:
-	Transition.change_scene("res://scenes/main/Main.tscn")
+	SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
 
 
 func _on_backdrop_input(event: InputEvent) -> void:
@@ -488,7 +488,7 @@ func _on_edit_pressed() -> void:
 	if _current_journey.is_empty():
 		return
 	JourneyBuilder.edit_journey = _current_journey
-	Transition.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_builder/JourneyBuilder.tscn")
 
 
 func _on_delete_pressed() -> void:
@@ -1027,7 +1027,7 @@ func _on_resume_pressed() -> void:
 	# the scene change as a fresh start and Reset() each service, wiping
 	# all the state we just restored from the save record.
 	GameState.set_meta("_resuming", true)
-	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
+	SceneTransitioner.change_scene("res://scenes/game_loop/GameLoop.tscn")
 
 
 # Internal: starts a fresh journey without any save-overwrite check. Used by
@@ -1036,7 +1036,7 @@ func _on_resume_pressed() -> void:
 func _on_play_pressed_unguarded() -> void:
 	JourneySaveService.delete_save(_current_journey.get("folder_name", ""))
 	GameState.StartJourney(_current_journey)
-	Transition.change_scene("res://scenes/game_loop/GameLoop.tscn")
+	SceneTransitioner.change_scene("res://scenes/game_loop/GameLoop.tscn")
 
 
 # ---------------------------------------------------------------------------

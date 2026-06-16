@@ -27,11 +27,15 @@ ScoreService="*res://Globals/ScoreService.cs"
 CoinService="*res://Globals/CoinService.cs"
 InventoryService="*res://Globals/InventoryService.cs"
 FunscriptPlayer="*uid://20dnrtc866mq"
-Transition="*uid://b2y3bfjyfdjjw"
 MusicService="*res://Globals/MusicService.gd"
 JourneySaveService="*res://Globals/JourneySaveService.gd"
 ScoreboardService="*res://Globals/ScoreboardService.gd"
 UpdateService="*res://Globals/UpdateService.gd"
+SceneTransitioner="*uid://dxog266ds2oru"
+
+[debug]
+
+gdscript/warnings/integer_division=0
 
 [display]
 

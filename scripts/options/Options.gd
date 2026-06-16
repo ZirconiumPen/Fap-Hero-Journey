@@ -1850,7 +1850,7 @@ func _on_back_pressed() -> void:
 	if overlay_mode:
 		queue_free()
 	else:
-		Transition.change_scene("res://scenes/main/Main.tscn")
+		SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
 
 
 func _on_volume_changed(value: float) -> void:

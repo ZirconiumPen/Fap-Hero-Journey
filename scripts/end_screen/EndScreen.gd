@@ -361,7 +361,7 @@ func _fmt(total_seconds: int) -> String:
 
 
 func _on_back_pressed() -> void:
-	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
+	SceneTransitioner.change_scene("res://scenes/journey_select/JourneySelect.tscn")
 
 
 # ---------------------------------------------------------------------------
