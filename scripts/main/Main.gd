@@ -13,6 +13,7 @@ static var _intro_played: bool = false
 func _ready() -> void:
 	MusicService.play()
 	_play_intro()
+	_open_update_modal()
 	_tagline.get_node("Blinker").enabled = true
 
 
@@ -20,12 +21,9 @@ func _ready() -> void:
 # folder, and reveal it. The running app is never overwritten — the user launches
 # the new folder and deletes the old one.
 func _open_update_modal() -> void:
-	var parts: Dictionary = UITheme.build_centered_modal(
-		"UPDATE  —  v%s" % UpdateService.available_version, UITheme.MAGENTA, Vector2i(580, 400)
+	var modal := Modal.generate(
+		"UPDATE  —  v%s" % UpdateService.available_version, Vector2i(580, 400)
 	)
-	var modal: Control = parts["modal"]
-	var vbox: VBoxContainer = parts["vbox"]
-	vbox.add_theme_constant_override("separation", 16)
 
 	var status: Label = Label.new()
 	status.text = "A newer version is available. It'll download and extract into a new folder next to your current install — then close this and run the new one."
@@ -33,7 +31,7 @@ func _open_update_modal() -> void:
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	status.add_theme_font_size_override("font_size", 13)
-	vbox.add_child(status)
+	modal.content.add_child(status)
 
 	var bar: ProgressBar = ProgressBar.new()
 	bar.custom_minimum_size = Vector2(0, 16)
@@ -41,12 +39,12 @@ func _open_update_modal() -> void:
 	bar.max_value = 100
 	bar.value = 0
 	bar.visible = false
-	vbox.add_child(bar)
+	modal.content.add_child(bar)
 
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 14)
-	vbox.add_child(btn_row)
+	modal.content.add_child(btn_row)
 
 	var dl_btn: Button = Button.new()
 	dl_btn.text = "⬇  DOWNLOAD"

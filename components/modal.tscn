@@ -1,0 +1,57 @@
+[gd_scene format=3 uid="uid://c6jif1ka1bf81"]
+
+[ext_resource type="Script" uid="uid://cti8pggi0jxad" path="res://components/modal.gd" id="1_irbis"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_0iuq0"]
+
+[node name="Modal" type="Control" unique_id=660204350]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_irbis")
+
+[node name="Backdrop" type="ColorRect" parent="." unique_id=1820539664]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.85)
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=456917526]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(720, 520)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -44.0
+offset_top = -44.0
+offset_right = 44.0
+offset_bottom = 44.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer" unique_id=1927266743]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/VBoxContainer" unique_id=1864414906]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TITLE"
+label_settings = SubResource("LabelSettings_0iuq0")
+horizontal_alignment = 1
+
+[node name="Content" type="VBoxContainer" parent="PanelContainer/VBoxContainer" unique_id=1694776630]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
