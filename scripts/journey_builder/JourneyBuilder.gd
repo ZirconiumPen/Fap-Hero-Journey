@@ -164,14 +164,11 @@ var _pooled_fs_stats: Dictionary = {}
 # catalogue. Reset in _reset_save_state.
 var _invalidated_save_count: int = 0
 
-# Location of the node to test-play from after this save, or {} for a normal
-# save (which returns to the catalogue instead of launching a preview). Shape:
-#   {"chain": Array[[fork_local_idx, path_idx]], "final": int}
-# An empty chain means a top-level node ("final" is its _items index); each chain
-# entry descends into a fork path, so nodes nested inside forks are reachable.
+# The node to test-play from after this save: {"node_id": <id>}, or {} for a normal
+# save (which returns to the catalogue instead of launching a preview). The id is the
+# selected node's stable node_id; the save persists it as NodeId, parse_graph keys the
+# runtime graph by it, and _launch_test_play seeks GameState there.
 # Set by _save_and_test_from, reset in _reset_save_state.
-# NOTE (graph cutover): currently computed but NOT consumed — test play starts from the
-# journey beginning. Phase 3 maps this to a graph node id so "Test from here" jumps again.
 var _pending_test_location: Dictionary = {}
 
 # Starting score / coin balance for a test play, applied by GameLoop before the
@@ -916,10 +913,14 @@ func _paste_clipboard_into(arr: Array, idx: int) -> void:
 	_push_undo()
 	for i in _clipboard_items.size():
 		arr.insert(idx + i, _clipboard_items[i].duplicate(true))
-	_refresh_graph()
 	var pasted: Array = []
 	for i in _clipboard_items.size():
 		pasted.append(arr[idx + i])
+	# Pasted nodes are new logical nodes — mint fresh ids (recursing into fork
+	# paths) so they don't collide with the originals still in the tree, or with
+	# a second paste of the same clipboard.
+	_ensure_node_ids(pasted, true)
+	_refresh_graph()
 	_graph.call_deferred("set_selection", pasted, arr)
 
 
@@ -928,6 +929,21 @@ func _paste_clipboard_into(arr: Array, idx: int) -> void:
 func _paste_clipboard_after_selection() -> void:
 	var target: Dictionary = _insertion_target()
 	_paste_clipboard_into(target["arr"], target["at"])
+
+
+# Guarantees every item in `items` — and, recursively, every item nested in a fork
+# path — carries a stable node_id. force=false backfills only items that lack one
+# (legacy load, or an item built without an id); force=true re-mints every id
+# (paste/duplicate: the clipboard holds the originals' ids, and reusing them would
+# collide in the graph, silently dropping a node). The id is what build_graph keys
+# nodes by and what redirect edges / Test-From-Here reference.
+func _ensure_node_ids(items: Array, force: bool) -> void:
+	for item: Dictionary in items:
+		if force or str(item.get("node_id", "")) == "":
+			item["node_id"] = JourneyData.new_node_id()
+		if item.get("type", "") == "fork":
+			for path: Dictionary in item.get("paths", []):
+				_ensure_node_ids(path.get("items", []), force)
 
 
 # Records the current journey structure so the next mutation can be undone.
@@ -1161,6 +1177,7 @@ func _bulk_import_rounds(files: PackedStringArray) -> bool:
 			"coins":          0,
 			"axis_scripts":   g["axis"],
 			"vib_scripts":    g["vib"],
+			"node_id":        JourneyData.new_node_id(),
 		}
 		# Fill any slots the drop didn't include (e.g. axes left on disk) from
 		# same-named siblings next to whichever file the group does have.
@@ -1463,6 +1480,9 @@ func _load_journey(journey: Dictionary) -> void:
 	_items.clear()
 	for item in parsed["items"]:
 		_items.append(item)
+	# Legacy journeys (and any item created without one) get stable ids here, so
+	# every node carries a persistent NodeId before the first save / Test-From-Here.
+	_ensure_node_ids(_items, false)
 	_refresh_items()
 
 
@@ -1500,77 +1520,34 @@ func _on_save_pressed() -> void:
 # "Save & Test from here" entry point. Runs the exact same save pipeline as a
 # normal save (so the preview plays the real, transcoded on-disk journey), then
 # — instead of returning to the catalogue — launches GameLoop in test mode at
-# the selected node. `item`/`arr` identify the node (arr is its containing array:
-# _items for a top-level node, or a fork path's `items` for a nested one).
+# the selected node, identified by its stable node_id. We backfill ids across the
+# tree first (so a never-saved item still has one), capture the selected node's,
+# persist it in the save, and seek to it after reload (see _launch_test_play).
+# `_arr` (the node's containing array) is no longer needed to locate it.
 # _reset_save_state clears the pending location, so it's set *after* the reset.
-func _save_and_test_from(item: Dictionary, arr: Array) -> void:
-	var location: Dictionary = _locate_node_for_test(arr, item)
-	if location.is_empty():
-		_show_status("Test play: couldn't locate that node in the journey.", true)
+func _save_and_test_from(item: Dictionary, _arr: Array) -> void:
+	_ensure_node_ids(_items, false)
+	var node_id: String = str(item.get("node_id", ""))
+	if node_id == "":
+		_show_status("Test play: couldn't identify that node.", true)
 		return
 	_save_btn.disabled = true
 	_reset_save_state()
-	_pending_test_location = location
+	_pending_test_location = {"node_id": node_id}
 	if not await _do_save():
 		_save_btn.disabled = false
 		_pending_test_location = {}
-
-
-# Resolves a selected node to a test-play location: a chain of fork decisions
-# from the top level down to the node's containing array, plus the node's
-# position within that array. Returns {} if the node can't be found.
-#
-# Positions are plain ARRAY INDICES. The save writes every item with a unique,
-# strictly-increasing position in array order (see _save_all_items / _save_path:
-# `pos`/`pr_pos` += 1 per item, key = pos*3 [+1 shop / +2 fork]), and
-# GameState.BuildSequence sorts by that exact key scheme — so the runtime
-# sequence preserves authoring order 1:1 and an item's runtime position IS its
-# array index. (Previously this used a separate "anchor shops/forks to the
-# previous round" ranking that diverged from the monotonic save — it skipped a
-# fork that was immediately followed by a shop, so Test-From-Here inside that
-# fork's path seeked past the fork to the step after the join.)
-func _locate_node_for_test(target_arr: Array, target_item: Dictionary) -> Dictionary:
-	var raw_final: int = _index_in_arr(target_arr, target_item)
-	if raw_final < 0:
-		return {}
-	if is_same(target_arr, _items):
-		return {"chain": [], "final": raw_final}
-	var chain: Array = []
-	if _find_arr_chain(_items, target_arr, chain):
-		return {"chain": chain, "final": raw_final}
-	return {}
-
-
-# Depth-first search for `target_arr` among the fork paths reachable from
-# `level_items`. On success, `chain` is filled (outermost first) with
-# [fork_array_idx, path_idx] entries describing the descent and returns true.
-# A fork's runtime-sequence position equals its array index (the monotonic save
-# preserves authoring order 1:1 — see _locate_node_for_test), so the loop index
-# `li` is exactly the seek position the fork lands at.
-func _find_arr_chain(level_items: Array, target_arr: Array, chain: Array) -> bool:
-	for li in level_items.size():
-		var it: Dictionary = level_items[li]
-		if it.get("type", "") != "fork":
-			continue
-		var paths: Array = it.get("paths", [])
-		for p in paths.size():
-			var path_items: Array = (paths[p] as Dictionary).get("items", [])
-			if is_same(path_items, target_arr) or _find_arr_chain(path_items, target_arr, chain):
-				chain.push_front([li, p])
-				return true
-	return false
 
 
 # Parses the just-saved journey into the runtime GRAPH, starts it in GameState, and
 # hands off to GameLoop in test mode. Called from _do_save after the staging swap, so
 # the on-disk journey is final and complete.
 #
-# Phase-2 graph cutover: test play starts from the BEGINNING. The old "from here" seek
-# walked the linear sequence index, which the graph runtime no longer exposes; restoring
-# a mid-journey start (seek to the selected node's id) lands with the Phase 3 builder/
-# graph authoring, which owns node ids. _locate_node_for_test still runs in
-# _save_and_test_from, so the seam is in place — its result is just not consumed yet.
+# Test "from here": _save_and_test_from stashed the selected node's stable id in
+# _pending_test_location. Now that the journey is on disk with persistent NodeIds,
+# parse_graph keys the runtime graph by those ids, so we seek straight to it.
 func _launch_test_play(paths: Dictionary) -> void:
+	var seek_node: String = str(_pending_test_location.get("node_id", ""))
 	_pending_test_location = {}
 
 	var folder_name: String   = (paths["final_abs_dir"] as String).get_file()
@@ -1582,6 +1559,10 @@ func _launch_test_play(paths: Dictionary) -> void:
 		return
 
 	GameState.StartJourney(journey)
+	# Seek the walker to the selected node (no-op fallback to the start if its id
+	# isn't in the graph). The DAG lets us jump without replaying fork decisions.
+	if seek_node != "":
+		GameState.SeekToNode(seek_node)
 
 	# Handshake metas read (and cleared) by GameLoop._ready. The return journey is the
 	# combined dict the builder reloads when the test exits — it still carries the nested
@@ -1838,6 +1819,7 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 		if item_type == "shop":
 			shops_json.append({
 				"AfterOrder":      pos,
+				"NodeId":          item.get("node_id", ""),
 				"Title":           item.get("title",""),
 				"Mode":            item.get("mode", "pool"),
 				"Count":           item.get("count", 3),
@@ -1870,6 +1852,7 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 				})
 			storyboards_json.append({
 				"Order":        pos,
+				"NodeId":       item.get("node_id", ""),
 				"CoinsAwarded": item.get("coins", 0) as int,
 				"Item":         item.get("item", ""),
 				"Image":        sb_img_fname,
@@ -1984,6 +1967,7 @@ func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
 			var round_json: Dictionary = JourneyData.round_to_json(item)
 			round_json["Name"]          = round_name
 			round_json["FolderName"]    = round_slug
+			round_json["NodeId"]        = item.get("node_id", "")
 			round_json["Order"]         = pos
 			round_json["BossImage"]     = boss_image_rel
 			round_json["FunscriptPath"] = funscript_rel
@@ -2116,6 +2100,7 @@ func _finalize_save_success() -> void:
 func _save_fork(fork_item: Dictionary, abs_dir: String, abs_media_dir: String, after_order: int, slug_prefix: String, copied_images: Dictionary, modal: Control) -> Dictionary:
 	var fork_entry: Dictionary = {
 		"AfterOrder":  after_order,
+		"NodeId":      fork_item.get("node_id", ""),
 		"Title":       fork_item.get("title",""),
 		"Description": fork_item.get("description",""),
 		"Resolution":  fork_item.get("resolution", "choice"),
@@ -2174,6 +2159,7 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 			"shop":
 				path_entry["Shops"].append({
 					"AfterOrder":      pr_pos,
+					"NodeId":          pi_item.get("node_id", ""),
 					"Title":           pi_item.get("title",""),
 					"Mode":            pi_item.get("mode", "pool"),
 					"Count":           pi_item.get("count", 3),
@@ -2205,6 +2191,7 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 					})
 				path_entry["Storyboards"].append({
 					"Order":        pr_pos,
+					"NodeId":       pi_item.get("node_id", ""),
 					"CoinsAwarded": pi_item.get("coins",0) as int,
 					"Item":         pi_item.get("item", ""),
 					"Image":        psb_img_fname,
@@ -2303,6 +2290,7 @@ func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, s
 				var pr_json: Dictionary = JourneyData.round_to_json(pi_item)
 				pr_json["Name"]          = pr_name
 				pr_json["FolderName"]    = pr_slug
+				pr_json["NodeId"]        = pi_item.get("node_id", "")
 				pr_json["Order"]         = pr_pos
 				pr_json["BossImage"]     = pr_boss_image_rel
 				pr_json["FunscriptPath"] = pr_funscript_rel

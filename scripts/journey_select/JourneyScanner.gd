@@ -111,6 +111,7 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 			})
 		journey["storyboards"].append({
 			"order":  raw_sb.get("Order",        raw_sb.get("order",        0)),
+			"node_id": raw_sb.get("NodeId", raw_sb.get("node_id", "")),
 			"coins":  raw_sb.get("CoinsAwarded", raw_sb.get("coins",        0)),
 			"item":   raw_sb.get("Item",         raw_sb.get("item",         "")),
 			"image":  (path + "/" + sb_img_file) if sb_img_file != "" else "",
@@ -173,6 +174,7 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 		var round_data: Dictionary = {
 			"name":           round_name,
 			"folder":         round_folder,
+			"node_id":        raw.get("NodeId", raw.get("node_id", "")),
 			"video_path":     video_path,
 			"funscript_path": funscript_stats["path"],
 			"axis_scripts":   axis_scripts,
@@ -307,6 +309,7 @@ static func _graph_node_totals(graph: Dictionary) -> Dictionary:
 static func parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary:
 	var fork_entry: Dictionary = {
 		"after_order":  raw_fork.get("AfterOrder", raw_fork.get("after_order", 0)),
+		"node_id":      raw_fork.get("NodeId",     raw_fork.get("node_id",     "")),
 		"title":        raw_fork.get("Title",       raw_fork.get("title",       "")),
 		"description":  raw_fork.get("Description", raw_fork.get("description", "")),
 		# Fork resolution config (defaults keep legacy journeys as player-choice).
@@ -369,6 +372,7 @@ static func parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary
 			path_entry["rounds"].append({
 				"name":           pr_name,
 				"folder":         pr_folder,
+				"node_id":        raw_pr.get("NodeId", raw_pr.get("node_id", "")),
 				"video_path":     pr_video_path,
 				"funscript_path": pr_fs["path"],
 				"axis_scripts":   pr_axis_scripts,
@@ -418,6 +422,7 @@ static func parse_fork(raw_fork: Dictionary, journey_path: String) -> Dictionary
 				})
 			path_entry["storyboards"].append({
 				"order":  raw_psb.get("Order",        raw_psb.get("order",        0)),
+				"node_id": raw_psb.get("NodeId", raw_psb.get("node_id", "")),
 				"coins":  raw_psb.get("CoinsAwarded", raw_psb.get("coins",        0)),
 				"item":   raw_psb.get("Item",         raw_psb.get("item",         "")),
 				"image":  (journey_path + "/" + psb_img_file) if psb_img_file != "" else "",
@@ -443,6 +448,7 @@ static func _parse_shop(raw: Dictionary) -> Dictionary:
 		items.append(str(it))
 	return {
 		"after_order":      raw.get("AfterOrder", raw.get("after_order", 0)),
+		"node_id":          raw.get("NodeId", raw.get("node_id", "")),
 		"title":            raw.get("Title",      raw.get("title",       "")),
 		"mode":             raw.get("Mode",       raw.get("mode",        "pool")),
 		"count":            int(raw.get("Count",  raw.get("count",       3))),

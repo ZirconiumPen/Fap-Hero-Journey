@@ -59,9 +59,20 @@ static func _flatten_level(rounds: Array, shops: Array, storyboards: Array, fork
 		return continue_to
 
 	# Pre-allocate an id per item so each node can forward-reference the next.
+	# Prefer the item's stable node_id (authored, persisted as "NodeId") so graph ids
+	# survive a save — the anchor for redirect edges and Test-From-Here. A legacy item
+	# with no node_id (or a stray duplicate from a corrupt save) falls back to a unique
+	# positional mint, so a collision can never silently drop a node from `nodes`.
 	var ids: Array = []
-	for _i in ordered.size():
-		ids.append(_next_id(counter))
+	var used: Dictionary = {}
+	for i in ordered.size():
+		var id: String = str((ordered[i]["data"] as Dictionary).get("node_id", ""))
+		if id == "" or used.has(id):
+			id = _next_id(counter)
+			while used.has(id):
+				id = _next_id(counter)
+		used[id] = true
+		ids.append(id)
 
 	for i in ordered.size():
 		var item: Dictionary = ordered[i]

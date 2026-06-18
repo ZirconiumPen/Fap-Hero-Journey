@@ -205,3 +205,59 @@ func test_node_depth_tracks_nesting() -> void:
 	assert_int(_depth_of(g, "A")).is_equal(0)   # top level
 	assert_int(_depth_of(g, "X")).is_equal(1)   # inside outer's path
 	assert_int(_depth_of(g, "M")).is_equal(2)   # inside inner's path
+
+
+# ── Stable node ids (Phase 3 step 1) ────────────────────────────────────────
+# An item's persistent node_id (authored, saved as "NodeId") becomes its graph node
+# key, so ids survive a save — the anchor that lets redirect edges and Test-From-Here
+# reference a node. Legacy items with none fall back to a positional mint.
+
+# A round carrying a node_id keeps that exact id as its node key; edges still wire it.
+func test_build_graph_honors_stored_node_id() -> void:
+	var g := JourneyGraph.build_graph({
+		"rounds": [{"order": 0, "name": "A", "node_id": "n_a"}, {"order": 1, "name": "B", "node_id": "n_b"}],
+		"shops": [], "storyboards": [], "forks": [],
+	})
+	assert_bool(g["nodes"].has("n_a")).is_true()
+	assert_bool(g["nodes"].has("n_b")).is_true()
+	assert_str(g["start"]).is_equal("n_a")
+	assert_str(g["nodes"]["n_a"]["out"][0]["to"]).is_equal("n_b")
+	assert_array(_walk(g, [])).is_equal(["round:A", "round:B"])   # wiring intact
+
+
+# A fork and the rounds inside its paths all keep their stored ids.
+func test_build_graph_honors_stored_ids_through_fork() -> void:
+	var fork := _fork(0, "F", [
+		{"name": "P0", "rounds": [{"order": 0, "name": "X", "node_id": "n_x"}], "shops": [], "storyboards": [], "forks": []},
+		{"name": "P1", "rounds": [{"order": 0, "name": "Z", "node_id": "n_z"}], "shops": [], "storyboards": [], "forks": []},
+	])
+	fork["node_id"] = "n_f"
+	var g := JourneyGraph.build_graph({
+		"rounds": [{"order": 0, "name": "A", "node_id": "n_a"}], "shops": [], "storyboards": [], "forks": [fork],
+	})
+	assert_str(g["nodes"]["n_f"]["type"]).is_equal(JourneyGraph.FORK_TYPE)
+	assert_bool(g["nodes"].has("n_x")).is_true()
+	assert_bool(g["nodes"].has("n_z")).is_true()
+	# Edges wire by the stored ids — walking each path lands on the right round.
+	assert_array(_walk(g, [0])).is_equal(["round:A", "fork:F", "round:X"])
+	assert_array(_walk(g, [1])).is_equal(["round:A", "fork:F", "round:Z"])
+
+
+# A legacy item with no node_id still gets a non-empty (positional) id, so migration
+# of journeys not yet re-saved keeps working unchanged.
+func test_build_graph_mints_fallback_when_missing() -> void:
+	var g := JourneyGraph.build_graph(_fork_journey())   # fixtures carry no node_id
+	for id: String in g["nodes"]:
+		assert_str(id).is_not_equal("")
+	assert_array(_walk(g, [0])).is_equal(["round:A", "fork:F", "round:X", "round:Y", "round:B"])
+
+
+# A corrupt save with a DUPLICATE stored id must not collapse two nodes into one —
+# the collision falls back to a fresh id so neither round is lost.
+func test_build_graph_guards_duplicate_ids() -> void:
+	var g := JourneyGraph.build_graph({
+		"rounds": [{"order": 0, "name": "A", "node_id": "dup"}, {"order": 1, "name": "B", "node_id": "dup"}],
+		"shops": [], "storyboards": [], "forks": [],
+	})
+	assert_int((g["nodes"] as Dictionary).size()).is_equal(2)   # both survived
+	assert_array(_walk(g, [])).is_equal(["round:A", "round:B"])

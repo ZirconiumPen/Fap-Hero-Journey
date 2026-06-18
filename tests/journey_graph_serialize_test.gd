@@ -140,6 +140,34 @@ func test_parse_graph_migrates_legacy() -> void:
 	assert_array(_walk(graph, [1])).is_equal(["round:A", "fork:F", "round:Z", "round:B"])
 
 
+# A NodeId in a (legacy) journey.json survives the scanner → build_graph migration as
+# the graph node key — the full read path for stable ids. Rounds, the fork, and the
+# fork's path rounds all keep their authored ids, and edges wire by them.
+func test_parse_graph_preserves_node_ids() -> void:
+	_write_journey({
+		"Name": "Ids",
+		"Rounds": [
+			{"Name": "A", "NodeId": "n_a", "FolderName": "r001", "ActionCount": 1, "LengthMs": 100, "Order": 0},
+			{"Name": "B", "NodeId": "n_b", "FolderName": "r002", "ActionCount": 1, "LengthMs": 100, "Order": 1},
+		],
+		"Forks": [{"AfterOrder": 0, "Title": "F", "NodeId": "n_f", "Resolution": "choice", "Paths": [
+			{"Name": "P0", "Rounds": [{"Name": "X", "NodeId": "n_x", "FolderName": "fx", "ActionCount": 1, "LengthMs": 100, "Order": 0}], "Shops": [], "Storyboards": [], "Forks": []},
+		]}],
+		"Shops": [], "Storyboards": [],
+	})
+	var graph := JourneyScanner.parse_graph(_jdir(), JOURNEY)
+	var nodes: Dictionary = graph["nodes"]
+	assert_bool(nodes.has("n_a")).is_true()
+	assert_bool(nodes.has("n_b")).is_true()
+	assert_bool(nodes.has("n_f")).is_true()
+	assert_bool(nodes.has("n_x")).is_true()
+	assert_str(graph["start"]).is_equal("n_a")
+	assert_str(nodes["n_f"]["type"]).is_equal(JourneyGraph.FORK_TYPE)
+	# Edges wire by the stable ids: A → F (interleaved after A), F's lone path → X.
+	assert_str(nodes["n_a"]["out"][0]["to"]).is_equal("n_f")
+	assert_str(nodes["n_f"]["out"][0]["to"]).is_equal("n_x")
+
+
 # New-format parse_graph carries journey meta + a DAG total alongside the graph.
 func test_parse_graph_carries_meta_new_format() -> void:
 	var jj := JourneyGraph.to_json(JourneyGraph.build_graph(_fork_journey()))

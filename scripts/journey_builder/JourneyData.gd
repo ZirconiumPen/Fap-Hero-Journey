@@ -184,18 +184,27 @@ static func boss_modifiers_json(modifiers: Array) -> Array:
 
 # ── Item templates ───────────────────────────────────────────────────────────
 
+# A stable per-node id, minted when an item is created and persisted to journey.json
+# as "NodeId". JourneyGraph.build_graph uses it as the graph node key, so ids survive
+# saves — the anchor that lets redirect edges (skip/converge) and Test-From-Here seeks
+# reference a node. Random rather than a counter so copy/paste (across items, paths, or
+# journeys) can't collide; build_graph also guards against a stray duplicate.
+static func new_node_id() -> String:
+	return "n_%08x%08x" % [randi(), randi()]
+
+
 # Returns a fresh default item dict for a builder node of the given type. Single
 # source of truth for the empty-item shape, used by the insert menu, the quick-
 # add buttons, and the Ctrl+1–4 shortcuts.
 static func new_item(type: String) -> Dictionary:
 	match type:
 		"round":
-			return {"type": "round", "name": "", "funscript_path": "", "video_path": "", "coins": 0, "axis_scripts": {}}
+			return {"type": "round", "name": "", "funscript_path": "", "video_path": "", "coins": 0, "axis_scripts": {}, "node_id": new_node_id()}
 		"shop":
-			return {"type": "shop", "title": ""}
+			return {"type": "shop", "title": "", "node_id": new_node_id()}
 		"storyboard":
 			# coins / item: optional reward granted when the storyboard is finished.
-			return {"type": "storyboard", "coins": 0, "item": "", "image": "", "lines": []}
+			return {"type": "storyboard", "coins": 0, "item": "", "image": "", "lines": [], "node_id": new_node_id()}
 		"fork":
 			# resolution: "choice" | "random" | "conditional" | "sacrifice"
 			# cond_metric (conditional only): "score" | "coins" | "item"
@@ -204,7 +213,7 @@ static func new_item(type: String) -> Dictionary:
 			#   weight (random) · threshold (conditional score/coins) ·
 			#   required_item (conditional item check, OR sacrifice — consumed) ·
 			#   cost (sacrifice — coins spent). required_item "" = none/free.
-			return {"type": "fork", "title": "", "description": "",
+			return {"type": "fork", "node_id": new_node_id(), "title": "", "description": "",
 				"resolution": "choice", "cond_metric": "score", "default_path": 0,
 				"paths": [
 					{"name": "Path A", "description": "", "image_path": "", "items": [], "weight": 1, "threshold": 0, "required_item": "", "cost": 0},
@@ -276,6 +285,7 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 				"video_path":      _round_video(r),
 				"coins":           r.get("coins", 0),
 				"original_folder": r.get("folder", ""),
+				"node_id":         r.get("node_id", ""),
 				"_map_key":        map_key("round", r.get("folder", "")),
 			},
 		})
@@ -288,6 +298,7 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 				"item":  sb.get("item", ""),
 				"image": sb.get("image", ""),
 				"lines": sb.get("lines", []),
+				"node_id": sb.get("node_id", ""),
 				"_map_key": map_key("storyboard", sb.get("order", 0)),
 			},
 		})
@@ -341,6 +352,7 @@ static func _build_shop_item(sh: Dictionary) -> Dictionary:
 		"count":            int(sh.get("count", 3)),
 		"items":            (sh.get("items", []) as Array).duplicate(),
 		"price_multiplier": float(sh.get("price_multiplier", 1.0)),
+		"node_id":          sh.get("node_id", ""),
 		"_map_key":         map_key("shop", sh.get("after_order", 0)),
 	}
 
@@ -366,6 +378,7 @@ static func _build_fork_item(f: Dictionary) -> Dictionary:
 		"cond_metric":  str(f.get("cond_metric", "score")),
 		"default_path": int(f.get("default_path", 0)),
 		"paths":        paths_out,
+		"node_id":      f.get("node_id", ""),
 		"_map_key":     map_key("fork", f.get("after_order", 0)),
 	}
 
@@ -402,6 +415,7 @@ static func _build_path_items(p: Dictionary) -> Array:
 				"video_path":      _round_video(pr),
 				"coins":           pr.get("coins", 0),
 				"original_folder": pr.get("folder", ""),
+				"node_id":         pr.get("node_id", ""),
 				"_map_key":        map_key("round", pr.get("folder", "")),
 			},
 		})
@@ -414,6 +428,7 @@ static func _build_path_items(p: Dictionary) -> Array:
 				"item":  psb.get("item", ""),
 				"image": psb.get("image", ""),
 				"lines": psb.get("lines", []),
+				"node_id": psb.get("node_id", ""),
 				"_map_key": map_key("storyboard", psb.get("order", 0)),
 			},
 		})

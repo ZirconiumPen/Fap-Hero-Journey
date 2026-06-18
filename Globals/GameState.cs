@@ -40,6 +40,21 @@ public partial class GameState : Node
 		CountIfRound();
 	}
 
+	// Test-play "from here": teleport the walker to a node id (the DAG lets us jump
+	// without replaying fork decisions — we just set the current node and recount).
+	// Returns false, leaving the position at the journey start, when the id isn't in
+	// the graph (e.g. a stale selection). RoundNumber restarts from this node.
+	public bool SeekToNode(string nodeId)
+	{
+		if (nodeId == "" || !_nodes.ContainsKey(nodeId))
+			return false;
+		_currentId = nodeId;
+		_roundsEntered = 0;
+		_playLog.Clear();
+		CountIfRound();
+		return true;
+	}
+
 	// ---------------------------------------------------------------------------
 	// Walking
 	// ---------------------------------------------------------------------------
