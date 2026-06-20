@@ -18,8 +18,8 @@ fill_from = Vector2(0.794872, 0)
 fill_to = Vector2(0, 0)
 
 [node name="GdUnitUpdate" type="MarginContainer" unique_id=1579178331]
-clip_contents = true
 custom_minimum_size = Vector2(0, 80)
+clip_contents = true
 anchors_preset = 10
 anchor_right = 1.0
 offset_bottom = 80.0
@@ -57,8 +57,8 @@ size_flags_vertical = 3
 [node name="progress" type="TextureProgressBar" parent="VBoxContainer/Panel2" unique_id=1377864716]
 unique_name_in_owner = true
 auto_translate_mode = 2
-clip_contents = true
 custom_minimum_size = Vector2(0, 20)
+clip_contents = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

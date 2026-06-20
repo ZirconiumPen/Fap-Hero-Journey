@@ -203,8 +203,8 @@ layout_mode = 2
 theme_override_constants/separation = 20
 
 [node name="CoverImage" type="TextureRect" parent="DetailModal/ModalPanel/ModalLayout" unique_id=2068707350]
-clip_contents = true
 custom_minimum_size = Vector2(280, 0)
+clip_contents = true
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5

@@ -17,7 +17,7 @@ script = ExtResource("1_gki1u")
 
 [node name="Label" type="Label" parent="." unique_id=520814848]
 unique_name_in_owner = true
-self_modulate = Color(0.37473008, 0.37473008, 0.37473008, 0.4463484)
+self_modulate = Color(0.5595031, 0.5595031, 0.5595031, 0.5508557)
 top_level = true
 layout_mode = 1
 anchors_preset = 8
