@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" uid="uid://t207ewvht7q3" path="res://scripts/end_screen/EndScreen.gd" id="1_es"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
+[ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="3_fjo8k"]
+[ext_resource type="LabelSettings" uid="uid://hqlp8oc3ukng" path="res://theming/text_label.tres" id="4_2n8ot"]
+[ext_resource type="PackedScene" uid="uid://b4hhba2foxea4" path="res://scenes/end_screen/confetti.tscn" id="5_ddmf0"]
 
 [node name="root" type="Control" unique_id=1619231828]
 layout_mode = 3
@@ -13,15 +16,33 @@ grow_vertical = 2
 script = ExtResource("1_es")
 
 [node name="Background" type="ColorRect" parent="." unique_id=195991042]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0, 0, 0, 1)
 
 [node name="AnimatedBackground" type="Control" parent="." unique_id=2063710927]
-anchors_preset = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("2_abg")
 
 [node name="Panel" type="PanelContainer" parent="." unique_id=254198848]
-layout_mode = 0
+custom_minimum_size = Vector2(880, 0)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.08
+anchor_top = 0.04
+anchor_right = 0.92
+anchor_bottom = 0.96
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="VBox" type="VBoxContainer" parent="Panel" unique_id=175184766]
 layout_mode = 2
@@ -29,11 +50,15 @@ layout_mode = 2
 [node name="TitleLabel" type="Label" parent="Panel/VBox" unique_id=741738684]
 layout_mode = 2
 text = "JOURNEY COMPLETE"
+label_settings = ExtResource("3_fjo8k")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="JourneyLabel" type="Label" parent="Panel/VBox" unique_id=755639117]
 layout_mode = 2
+label_settings = ExtResource("3_fjo8k")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="StatsDivider" type="HSeparator" parent="Panel/VBox" unique_id=820791626]
 layout_mode = 2
@@ -45,19 +70,25 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "0 ROUNDS"
+label_settings = ExtResource("4_2n8ot")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="StatActions" type="Label" parent="Panel/VBox/StatsRow" unique_id=506562001]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "0 ACTIONS"
+label_settings = ExtResource("4_2n8ot")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="StatTime" type="Label" parent="Panel/VBox/StatsRow" unique_id=1096483334]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "0:00"
+label_settings = ExtResource("4_2n8ot")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="ScoreDivider" type="HSeparator" parent="Panel/VBox" unique_id=1864886540]
 layout_mode = 2
@@ -67,8 +98,10 @@ layout_mode = 2
 
 [node name="ScoreTitle" type="Label" parent="Panel/VBox/ScoreSection" unique_id=1886079657]
 layout_mode = 2
-text = "SCORE"
+text = "ROUND BREAKDOWN"
+label_settings = ExtResource("3_fjo8k")
 horizontal_alignment = 1
+uppercase = true
 
 [node name="RoundBreakdownContainer" type="VBoxContainer" parent="Panel/VBox/ScoreSection" unique_id=400030258]
 layout_mode = 2
@@ -88,3 +121,7 @@ text = "0 PTS"
 [node name="BackButton" type="Button" parent="Panel/VBox" unique_id=1019576989]
 layout_mode = 2
 text = "> RETURN TO CATALOGUE"
+
+[node name="Confetti" parent="." unique_id=407372805 instance=ExtResource("5_ddmf0")]
+
+[connection signal="pressed" from="Panel/VBox/BackButton" to="." method="_on_back_button_pressed"]

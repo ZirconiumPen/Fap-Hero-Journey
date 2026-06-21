@@ -7,12 +7,9 @@ extends Control
 # burst), stats tally, and the per-round breakdown cascades in.
 # ---------------------------------------------------------------------------
 
-const PANEL_HALF_W: int = 440
 const BORDER_WIDTH: int = 3
 const LOG_INDENT_PX: int = 14  # pixels of left indent per fork-nesting depth
 
-@onready var _bg: ColorRect = $Background
-@onready var _panel: PanelContainer = $Panel
 @onready var _vbox: VBoxContainer = $Panel/VBox
 @onready var _title_lbl: Label = $Panel/VBox/TitleLabel
 @onready var _journey_lbl: Label = $Panel/VBox/JourneyLabel
@@ -26,11 +23,10 @@ const LOG_INDENT_PX: int = 14  # pixels of left indent per fork-nesting depth
 @onready var _round_breakdown: VBoxContainer = $Panel/VBox/ScoreSection/RoundBreakdownContainer
 @onready var _total_score_val: Label = $Panel/VBox/ScoreSection/TotalScoreRow/TotalScoreValue
 @onready var _back_btn: Button = $Panel/VBox/BackButton
+@onready var _confetti: Confetti = $Confetti
 
-# Built in code: the hero score block + the confetti burst.
 var _hero_box: VBoxContainer = null
 var _hero_score: Label = null
-var _confetti: CPUParticles2D = null
 
 # Reveal targets — the final values the count-up animations climb to.
 var _score_target: int = 0
@@ -41,10 +37,7 @@ var _time_target: int = 0  # seconds
 
 func _ready() -> void:
 	_apply_layout()
-	_apply_theme()
-	_build_confetti()
 	_populate()
-	_back_btn.pressed.connect(_on_back_pressed)
 	_play_reveal()
 
 
@@ -169,7 +162,7 @@ func _populate_score() -> void:
 
 				var time_lbl: Label = Label.new()
 				var secs: int = (entry.get("length_ms", 0) as int) / 1000
-				time_lbl.text = _fmt(secs)
+				time_lbl.text = Utils.format_duration(secs)
 				time_lbl.add_theme_color_override("font_color", UITheme.PURPLE_MID)
 				time_lbl.add_theme_font_size_override("font_size", 15)
 
@@ -263,7 +256,6 @@ func _play_reveal() -> void:
 	await t3.finished
 	_hero_score.text = "%d PTS" % _score_target
 
-	# Confetti + a punchy pop on the final number.
 	_confetti.restart()
 	_hero_score.pivot_offset = _hero_score.size / 2.0
 	var t3b: Tween = create_tween()
@@ -291,7 +283,7 @@ func _play_reveal() -> void:
 		0.6
 	)
 	t5.tween_method(
-		func(v: float) -> void: _stat_time.text = _fmt(int(v)), 0.0, float(_time_target), 0.6
+		func(v: float) -> void: _stat_time.text = Utils.format_duration(int(v)), 0.0, float(_time_target), 0.6
 	)
 	await t5.finished
 
@@ -311,92 +303,9 @@ func _play_reveal() -> void:
 	create_tween().tween_property(_back_btn, "modulate:a", 1.0, 0.25)
 
 
-# Builds the confetti burst — a one-shot rain of theme-coloured squares fired
-# from above the screen when the hero score lands.
-func _build_confetti() -> void:
-	_confetti = CPUParticles2D.new()
-	_confetti.emitting = false
-	_confetti.one_shot = true
-	_confetti.amount = 90
-	_confetti.lifetime = 2.6
-	_confetti.explosiveness = 0.35
-	_confetti.direction = Vector2(0, 1)
-	_confetti.spread = 35.0
-	_confetti.gravity = Vector2(0, 430)
-	_confetti.initial_velocity_min = 140.0
-	_confetti.initial_velocity_max = 280.0
-	_confetti.angular_velocity_min = -260.0
-	_confetti.angular_velocity_max = 260.0
-	_confetti.scale_amount_min = 5.0
-	_confetti.scale_amount_max = 11.0
-	_confetti.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-
-	# Distinct theme colours — constant interpolation gives crisp confetti hues.
-	var grad: Gradient = Gradient.new()
-	grad.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
-	grad.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
-	grad.colors = PackedColorArray(
-		[
-			UITheme.PURPLE_BRIGHT,
-			UITheme.MAGENTA,
-			UITheme.CYAN,
-			UITheme.AMBER,
-		]
-	)
-	_confetti.color_initial_ramp = grad
-
-	add_child(_confetti)
-
-	# Emit along a wide strip just above the top edge so confetti rains down.
-	var vp: Vector2 = get_viewport_rect().size
-	_confetti.position = Vector2(vp.x * 0.5, -20.0)
-	_confetti.emission_rect_extents = Vector2(vp.x * 0.5, 8.0)
-
-
-func _fmt(total_seconds: int) -> String:
-	var h: int = total_seconds / 3600
-	var m: int = (total_seconds % 3600) / 60
-	var s: int = total_seconds % 60
-	return "%d:%02d:%02d" % [h, m, s] if h > 0 else "%d:%02d" % [m, s]
-
-
-func _on_back_pressed() -> void:
-	SceneTransitioner.change_scene("res://scenes/journey_select/JourneySelect.tscn")
-
-
-# ---------------------------------------------------------------------------
-# Layout
-# ---------------------------------------------------------------------------
 
 
 func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_bg.anchor_right = 1.0
-	_bg.anchor_bottom = 1.0
-	_bg.offset_left = 0
-	_bg.offset_top = 0
-	_bg.offset_right = 0
-	_bg.offset_bottom = 0
-
-	var animated_bg: Control = $AnimatedBackground
-	animated_bg.anchor_right = 1.0
-	animated_bg.anchor_bottom = 1.0
-
-	# Viewport-bounded panel so it never overflows regardless of journey length.
-	_panel.anchor_left = 0.08
-	_panel.anchor_right = 0.92
-	_panel.anchor_top = 0.04
-	_panel.anchor_bottom = 0.96
-	_panel.offset_left = 0.0
-	_panel.offset_right = 0.0
-	_panel.offset_top = 0.0
-	_panel.offset_bottom = 0.0
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.custom_minimum_size = Vector2(PANEL_HALF_W * 2, 0)
-
 	_vbox.add_theme_constant_override("separation", 16)
 	_stats_row.add_theme_constant_override("separation", 0)
 
@@ -444,61 +353,5 @@ func _apply_layout() -> void:
 	score_section.move_child(breakdown_scroll, 1)
 
 
-# ---------------------------------------------------------------------------
-# Theme
-# ---------------------------------------------------------------------------
-
-
-func _apply_theme() -> void:
-	_bg.color = UITheme.BG
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = UITheme.PANEL_BG
-	s.border_color = UITheme.PURPLE_BRIGHT
-	s.border_width_left = BORDER_WIDTH
-	s.border_width_right = BORDER_WIDTH
-	s.border_width_top = BORDER_WIDTH
-	s.border_width_bottom = BORDER_WIDTH
-	s.corner_radius_top_left = 4
-	s.corner_radius_top_right = 4
-	s.corner_radius_bottom_left = 4
-	s.corner_radius_bottom_right = 4
-	s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.5)
-	s.shadow_size = 16
-	s.content_margin_left = 48
-	s.content_margin_right = 48
-	s.content_margin_top = 48
-	s.content_margin_bottom = 48
-	_panel.add_theme_stylebox_override("panel", s)
-
-	_title_lbl.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
-	_title_lbl.add_theme_font_size_override("font_size", 36)
-	_title_lbl.uppercase = true
-
-	_journey_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
-	_journey_lbl.add_theme_font_size_override("font_size", 18)
-	_journey_lbl.uppercase = true
-
-	var sep: StyleBoxFlat = StyleBoxFlat.new()
-	sep.bg_color = UITheme.SEPARATOR
-	sep.content_margin_top = 1
-	sep.content_margin_bottom = 1
-	_divider.add_theme_stylebox_override("separator", sep)
-
-	for lbl: Label in [_stat_rounds, _stat_actions, _stat_time]:
-		lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-		lbl.add_theme_font_size_override("font_size", 15)
-		lbl.uppercase = true
-
-	var score_sep: StyleBoxFlat = StyleBoxFlat.new()
-	score_sep.bg_color = UITheme.SEPARATOR
-	score_sep.content_margin_top = 1
-	score_sep.content_margin_bottom = 1
-	_score_divider.add_theme_stylebox_override("separator", score_sep)
-
-	_score_title.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
-	_score_title.add_theme_font_size_override("font_size", 18)
-	_score_title.uppercase = true
-	_score_title.text = "ROUND BREAKDOWN"
-
-	UITheme.style_button(_back_btn, UITheme.PURPLE_BRIGHT, 20, 14)
+func _on_back_button_pressed() -> void:
+	SceneTransitioner.change_scene("res://scenes/journey_select/JourneySelect.tscn")
