@@ -563,7 +563,7 @@ func _populate_modal(journey: Dictionary) -> void:
 	_stat_rounds.text = str(total_rounds) + " ROUNDS"
 	_stat_actions.text = str(journey.get("total_actions", 0)) + " ACTIONS"
 	var total_secs: int = (journey.get("total_length_ms", 0) as int) / 1000
-	_stat_length.text = _format_duration(total_secs)
+	_stat_length.text = Utils.format_duration(total_secs)
 
 	var desc: String = journey.get("description", "")
 	_modal_desc.text = desc
@@ -987,7 +987,7 @@ func _add_seq_to_list(
 				row.add_child(name_lbl)
 				var dur_secs: int = (round_data.get("length_ms", 0) as int) / 1000
 				var dur_lbl: Label = Label.new()
-				dur_lbl.text = _format_duration(dur_secs)
+				dur_lbl.text = Utils.format_duration(dur_secs)
 				dur_lbl.custom_minimum_size = Vector2(56, 0)
 				dur_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				dur_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
@@ -1064,12 +1064,3 @@ func _indent_wrap(child: Control, indent: int) -> Control:
 	mc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mc.add_child(child)
 	return mc
-
-
-func _format_duration(total_seconds: int) -> String:
-	var h: int = total_seconds / 3600
-	var m: int = (total_seconds % 3600) / 60
-	var s: int = total_seconds % 60
-	if h > 0:
-		return "%d:%02d:%02d" % [h, m, s]
-	return "%d:%02d" % [m, s]
