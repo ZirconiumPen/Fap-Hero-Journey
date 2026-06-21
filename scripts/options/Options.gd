@@ -246,7 +246,7 @@ func _apply_layout() -> void:
 	music_lbl.text = "Music Volume"
 	music_lbl.text = music_lbl.text.to_upper()
 	music_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(music_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(music_lbl, UITheme.WHITE_SOFT, 14)
 	music_row.add_child(music_lbl)
 
 	_music_slider = HSlider.new()
@@ -262,7 +262,7 @@ func _apply_layout() -> void:
 	_music_value_lbl = Label.new()
 	_music_value_lbl.text = "50%"
 	_music_value_lbl.custom_minimum_size = Vector2(VALUE_LABEL_W, 0)
-	_style_label(_music_value_lbl, UITheme.PURPLE_BRIGHT, 14, false)
+	UITheme.style_label(_music_value_lbl, UITheme.PURPLE_BRIGHT, 14)
 	music_row.add_child(_music_value_lbl)
 
 	_music_slider.value_changed.connect(
@@ -281,7 +281,7 @@ func _apply_layout() -> void:
 	var hud_delay_lbl: Label = Label.new()
 	hud_delay_lbl.text = "HUD AUTO-HIDE"
 	hud_delay_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(hud_delay_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(hud_delay_lbl, UITheme.WHITE_SOFT, 14)
 	hud_delay_row.add_child(hud_delay_lbl)
 
 	_hud_delay_slider = HSlider.new()
@@ -297,7 +297,7 @@ func _apply_layout() -> void:
 	_hud_delay_value_lbl = Label.new()
 	_hud_delay_value_lbl.text = "3.0s"
 	_hud_delay_value_lbl.custom_minimum_size = Vector2(VALUE_LABEL_W, 0)
-	_style_label(_hud_delay_value_lbl, UITheme.PURPLE_BRIGHT, 14, false)
+	UITheme.style_label(_hud_delay_value_lbl, UITheme.PURPLE_BRIGHT, 14)
 	hud_delay_row.add_child(_hud_delay_value_lbl)
 
 	_hud_delay_slider.value_changed.connect(
@@ -316,7 +316,7 @@ func _apply_layout() -> void:
 	var ui_scale_lbl: Label = Label.new()
 	ui_scale_lbl.text = "UI SCALE"
 	ui_scale_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(ui_scale_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(ui_scale_lbl, UITheme.WHITE_SOFT, 14)
 	ui_scale_row.add_child(ui_scale_lbl)
 
 	_ui_scale_slider = HSlider.new()
@@ -332,7 +332,7 @@ func _apply_layout() -> void:
 	_ui_scale_value_lbl = Label.new()
 	_ui_scale_value_lbl.text = "100%"
 	_ui_scale_value_lbl.custom_minimum_size = Vector2(VALUE_LABEL_W, 0)
-	_style_label(_ui_scale_value_lbl, UITheme.PURPLE_BRIGHT, 14, false)
+	UITheme.style_label(_ui_scale_value_lbl, UITheme.PURPLE_BRIGHT, 14)
 	ui_scale_row.add_child(_ui_scale_value_lbl)
 
 	_ui_scale_slider.value_changed.connect(
@@ -348,7 +348,7 @@ func _apply_layout() -> void:
 	var ui_scale_hint: Label = Label.new()
 	ui_scale_hint.text = "Scales the entire interface. Raise it if menus look small on a high-resolution or 4K display."
 	ui_scale_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(ui_scale_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(ui_scale_hint, UITheme.SEPARATOR, 11)
 	display_section.add_child(ui_scale_hint)
 
 	# ── Beat Bar row (code-generated, appended to DisplaySection) ────────────
@@ -359,7 +359,7 @@ func _apply_layout() -> void:
 	var beat_lbl: Label = Label.new()
 	beat_lbl.text = "BEAT BAR"
 	beat_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(beat_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(beat_lbl, UITheme.WHITE_SOFT, 14)
 	beat_row.add_child(beat_lbl)
 
 	_beat_bar_toggle = Button.new()
@@ -376,7 +376,7 @@ func _apply_layout() -> void:
 	var beat_hint: Label = Label.new()
 	beat_hint.text = "Shows upcoming stroke beats as orbs scrolling toward a hit-line during play."
 	beat_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(beat_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(beat_hint, UITheme.SEPARATOR, 11)
 	display_section.add_child(beat_hint)
 
 	# ── Update Check row (code-generated, appended to DisplaySection) ─────────
@@ -387,7 +387,7 @@ func _apply_layout() -> void:
 	var upd_lbl: Label = Label.new()
 	upd_lbl.text = "CHECK FOR UPDATES ON LAUNCH"
 	upd_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(upd_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(upd_lbl, UITheme.WHITE_SOFT, 14)
 	upd_row.add_child(upd_lbl)
 
 	_update_check_toggle = Button.new()
@@ -404,7 +404,7 @@ func _apply_layout() -> void:
 	var upd_hint: Label = Label.new()
 	upd_hint.text = "Pings GitHub once per launch for a newer build and shows a banner. Off = no network call."
 	upd_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(upd_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(upd_hint, UITheme.SEPARATOR, 11)
 	display_section.add_child(upd_hint)
 
 	for label_path in [
@@ -431,7 +431,7 @@ func _apply_layout() -> void:
 
 	var range_header: Label = Label.new()
 	range_header.text = "DEVICE RANGE"
-	_style_label(range_header, UITheme.PURPLE_BRIGHT, 13, true)
+	UITheme.style_label(range_header, UITheme.PURPLE_BRIGHT, 13, true)
 	range_section.add_child(range_header)
 
 	var range_divider: HSeparator = HSeparator.new()
@@ -445,7 +445,7 @@ func _apply_layout() -> void:
 	var range_lbl: Label = Label.new()
 	range_lbl.text = "Position Clamp"
 	range_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(range_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(range_lbl, UITheme.WHITE_SOFT, 14)
 	range_row.add_child(range_lbl)
 
 	# Slider + value labels stacked vertically
@@ -465,7 +465,7 @@ func _apply_layout() -> void:
 
 	_range_min_lbl = Label.new()
 	_range_min_lbl.text = "MIN: 0"
-	_style_label(_range_min_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_range_min_lbl, UITheme.PURPLE_MID, 11, true)
 	val_row.add_child(_range_min_lbl)
 
 	var val_spacer: Control = Control.new()
@@ -474,7 +474,7 @@ func _apply_layout() -> void:
 
 	_range_max_lbl = Label.new()
 	_range_max_lbl.text = "MAX: 100"
-	_style_label(_range_max_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_range_max_lbl, UITheme.PURPLE_MID, 11, true)
 	val_row.add_child(_range_max_lbl)
 
 	# Update labels, push live into the player, and auto-save whenever a handle is moved.
@@ -490,7 +490,7 @@ func _apply_layout() -> void:
 	var hint: Label = Label.new()
 	hint.text = "Hard-clamps all playback positions to this range. Affects both Buttplug and Serial outputs."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(hint, UITheme.SEPARATOR, 11)
 	range_section.add_child(hint)
 
 	# ── Home Position row ────────────────────────────────────────────────────
@@ -501,7 +501,7 @@ func _apply_layout() -> void:
 	var home_lbl: Label = Label.new()
 	home_lbl.text = "Home Position"
 	home_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(home_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(home_lbl, UITheme.WHITE_SOFT, 14)
 	home_row.add_child(home_lbl)
 
 	var home_slider_col: VBoxContainer = VBoxContainer.new()
@@ -520,7 +520,7 @@ func _apply_layout() -> void:
 
 	_home_value_lbl = Label.new()
 	_home_value_lbl.text = "50"
-	_style_label(_home_value_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_home_value_lbl, UITheme.PURPLE_MID, 11, true)
 	home_slider_col.add_child(_home_value_lbl)
 
 	_home_slider.value_changed.connect(
@@ -537,7 +537,7 @@ func _apply_layout() -> void:
 	var home_ease_lbl: Label = Label.new()
 	home_ease_lbl.text = "Home Ease (ms)"
 	home_ease_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(home_ease_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(home_ease_lbl, UITheme.WHITE_SOFT, 14)
 	home_ease_row.add_child(home_ease_lbl)
 
 	_home_ease_input = LineEdit.new()
@@ -549,7 +549,7 @@ func _apply_layout() -> void:
 
 	var home_ease_hint_lbl: Label = Label.new()
 	home_ease_hint_lbl.text = "ms"
-	_style_label(home_ease_hint_lbl, UITheme.SEPARATOR, 12, false)
+	UITheme.style_label(home_ease_hint_lbl, UITheme.SEPARATOR, 12)
 	home_ease_row.add_child(home_ease_hint_lbl)
 
 	_home_ease_input.text_changed.connect(func(_t: String) -> void: _save_settings())
@@ -557,7 +557,7 @@ func _apply_layout() -> void:
 	var home_hint: Label = Label.new()
 	home_hint.text = "L0 target position when playback pauses or stops. Secondary axes always return to centre."
 	home_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(home_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(home_hint, UITheme.SEPARATOR, 11)
 	range_section.add_child(home_hint)
 
 	# ── Latency Offset row ───────────────────────────────────────────────────
@@ -568,7 +568,7 @@ func _apply_layout() -> void:
 	var latency_lbl: Label = Label.new()
 	latency_lbl.text = "Latency Offset"
 	latency_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(latency_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(latency_lbl, UITheme.WHITE_SOFT, 14)
 	latency_row.add_child(latency_lbl)
 
 	var latency_col: VBoxContainer = VBoxContainer.new()
@@ -587,7 +587,7 @@ func _apply_layout() -> void:
 
 	_latency_value_lbl = Label.new()
 	_latency_value_lbl.text = "0 ms"
-	_style_label(_latency_value_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_latency_value_lbl, UITheme.PURPLE_MID, 11, true)
 	latency_col.add_child(_latency_value_lbl)
 
 	_latency_slider.value_changed.connect(
@@ -599,7 +599,7 @@ func _apply_layout() -> void:
 	var latency_hint: Label = Label.new()
 	latency_hint.text = "Shifts the funscript relative to the video to compensate for device/Bluetooth lag. Positive = device acts earlier."
 	latency_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(latency_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(latency_hint, UITheme.SEPARATOR, 11)
 	range_section.add_child(latency_hint)
 
 	# ── Vibration Intensity row ──────────────────────────────────────────────
@@ -610,7 +610,7 @@ func _apply_layout() -> void:
 	var vibe_lbl: Label = Label.new()
 	vibe_lbl.text = "Vibration Intensity"
 	vibe_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(vibe_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(vibe_lbl, UITheme.WHITE_SOFT, 14)
 	vibe_row.add_child(vibe_lbl)
 
 	var vibe_col: VBoxContainer = VBoxContainer.new()
@@ -629,7 +629,7 @@ func _apply_layout() -> void:
 
 	_vibe_value_lbl = Label.new()
 	_vibe_value_lbl.text = "100%"
-	_style_label(_vibe_value_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_vibe_value_lbl, UITheme.PURPLE_MID, 11, true)
 	vibe_col.add_child(_vibe_value_lbl)
 
 	_vibe_slider.value_changed.connect(
@@ -641,7 +641,7 @@ func _apply_layout() -> void:
 	var vibe_hint: Label = Label.new()
 	vibe_hint.text = "Scales output strength for vibrators. No effect on linear (stroker) devices."
 	vibe_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(vibe_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(vibe_hint, UITheme.SEPARATOR, 11)
 	range_section.add_child(vibe_hint)
 
 	# ── Max Stroke Speed row ─────────────────────────────────────────────────
@@ -652,7 +652,7 @@ func _apply_layout() -> void:
 	var speed_lbl: Label = Label.new()
 	speed_lbl.text = "Max Stroke Speed"
 	speed_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(speed_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(speed_lbl, UITheme.WHITE_SOFT, 14)
 	speed_row.add_child(speed_lbl)
 
 	var speed_col: VBoxContainer = VBoxContainer.new()
@@ -671,7 +671,7 @@ func _apply_layout() -> void:
 
 	_max_speed_value_lbl = Label.new()
 	_max_speed_value_lbl.text = "Off"
-	_style_label(_max_speed_value_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_max_speed_value_lbl, UITheme.PURPLE_MID, 11, true)
 	speed_col.add_child(_max_speed_value_lbl)
 
 	_max_speed_slider.value_changed.connect(
@@ -683,7 +683,7 @@ func _apply_layout() -> void:
 	var speed_hint: Label = Label.new()
 	speed_hint.text = "Caps how fast linear devices move — faster strokes are slowed to this limit. Off = unlimited. No effect on vibrators."
 	speed_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(speed_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(speed_hint, UITheme.SEPARATOR, 11)
 	range_section.add_child(speed_hint)
 
 	# ── Storyboard Filler section (built entirely in code) ────────────────────
@@ -694,7 +694,7 @@ func _apply_layout() -> void:
 
 	var filler_header: Label = Label.new()
 	filler_header.text = "STORYBOARD FILLER"
-	_style_label(filler_header, UITheme.PURPLE_BRIGHT, 13, true)
+	UITheme.style_label(filler_header, UITheme.PURPLE_BRIGHT, 13, true)
 	filler_section.add_child(filler_header)
 
 	var filler_divider: HSeparator = HSeparator.new()
@@ -709,7 +709,7 @@ func _apply_layout() -> void:
 	var filler_enable_lbl: Label = Label.new()
 	filler_enable_lbl.text = "Enable Filler"
 	filler_enable_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(filler_enable_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(filler_enable_lbl, UITheme.WHITE_SOFT, 14)
 	filler_enable_row.add_child(filler_enable_lbl)
 
 	_filler_toggle = Button.new()
@@ -726,7 +726,7 @@ func _apply_layout() -> void:
 	var filler_speed_lbl: Label = Label.new()
 	filler_speed_lbl.text = "Stroke Speed (ms)"
 	filler_speed_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(filler_speed_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(filler_speed_lbl, UITheme.WHITE_SOFT, 14)
 	filler_speed_row.add_child(filler_speed_lbl)
 
 	_filler_speed_input = LineEdit.new()
@@ -738,7 +738,7 @@ func _apply_layout() -> void:
 
 	var filler_speed_hint: Label = Label.new()
 	filler_speed_hint.text = "ms per half-stroke"
-	_style_label(filler_speed_hint, UITheme.SEPARATOR, 12, false)
+	UITheme.style_label(filler_speed_hint, UITheme.SEPARATOR, 12)
 	filler_speed_row.add_child(filler_speed_hint)
 
 	# Range row
@@ -749,7 +749,7 @@ func _apply_layout() -> void:
 	var filler_range_lbl: Label = Label.new()
 	filler_range_lbl.text = "Stroke Range"
 	filler_range_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(filler_range_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(filler_range_lbl, UITheme.WHITE_SOFT, 14)
 	filler_range_row.add_child(filler_range_lbl)
 
 	var filler_slider_col: VBoxContainer = VBoxContainer.new()
@@ -767,7 +767,7 @@ func _apply_layout() -> void:
 
 	_filler_range_min_lbl = Label.new()
 	_filler_range_min_lbl.text = "MIN: 0"
-	_style_label(_filler_range_min_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_filler_range_min_lbl, UITheme.PURPLE_MID, 11, true)
 	filler_val_row.add_child(_filler_range_min_lbl)
 
 	var filler_val_spacer: Control = Control.new()
@@ -776,7 +776,7 @@ func _apply_layout() -> void:
 
 	_filler_range_max_lbl = Label.new()
 	_filler_range_max_lbl.text = "MAX: 100"
-	_style_label(_filler_range_max_lbl, UITheme.PURPLE_MID, 11, true)
+	UITheme.style_label(_filler_range_max_lbl, UITheme.PURPLE_MID, 11, true)
 	filler_val_row.add_child(_filler_range_max_lbl)
 
 	_filler_range_slider.range_changed.connect(
@@ -809,7 +809,7 @@ func _apply_layout() -> void:
 	var filler_hint: Label = Label.new()
 	filler_hint.text = "Keeps the device active during storyboard scenes with a repeating alternating stroke. Respects the Position Clamp above."
 	filler_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(filler_hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(filler_hint, UITheme.SEPARATOR, 11)
 	filler_section.add_child(filler_hint)
 
 	# ── Journey storage location row (inserted into JourneysSection) ──────────
@@ -826,7 +826,7 @@ func _apply_layout() -> void:
 
 	var credits_header: Label = Label.new()
 	credits_header.text = "CREDITS"
-	_style_label(credits_header, UITheme.PURPLE_BRIGHT, 13, true)
+	UITheme.style_label(credits_header, UITheme.PURPLE_BRIGHT, 13, true)
 	credits_section.add_child(credits_header)
 
 	var credits_divider: HSeparator = HSeparator.new()
@@ -835,7 +835,7 @@ func _apply_layout() -> void:
 
 	var credits_music_lbl: Label = Label.new()
 	credits_music_lbl.text = "Music by Karl Casey @ White Bat Audio"
-	_style_label(credits_music_lbl, UITheme.WHITE_SOFT, 13, false)
+	UITheme.style_label(credits_music_lbl, UITheme.WHITE_SOFT, 13)
 	credits_section.add_child(credits_music_lbl)
 
 	# ── Tab bar — groups all sections above into navigable categories ─────────
@@ -930,7 +930,7 @@ func _on_tab_changed(idx: int) -> void:
 func _apply_theme() -> void:
 	_bg.color = UITheme.BG
 
-	_style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
+	UITheme.style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -949,7 +949,7 @@ func _apply_theme() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/IntifaceHeader",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialHeader",
 	]:
-		_style_label(get_node(header_path), UITheme.PURPLE_BRIGHT, 13, true)
+		UITheme.style_label(get_node(header_path), UITheme.PURPLE_BRIGHT, 13, true)
 
 	var sep_style: StyleBoxFlat = _make_separator_style()
 	for sep_path in [
@@ -974,11 +974,11 @@ func _apply_theme() -> void:
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialBaudRow/SerialBaudLabel",
 		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialAutoRow/SerialAutoLabel",
 	]:
-		_style_label(get_node(row_label_path), UITheme.WHITE_SOFT, 14, false)
+		UITheme.style_label(get_node(row_label_path), UITheme.WHITE_SOFT, 14)
 
-	_style_label(_master_value, UITheme.PURPLE_BRIGHT, 14, false)
-	_style_label(_status_lbl, UITheme.ERROR, 13, false)
-	_style_label(_serial_status_lbl, UITheme.ERROR, 13, false)
+	UITheme.style_label(_master_value, UITheme.PURPLE_BRIGHT, 14)
+	UITheme.style_label(_status_lbl, UITheme.ERROR, 13)
+	UITheme.style_label(_serial_status_lbl, UITheme.ERROR, 13)
 
 	_style_slider(_master_slider)
 	_style_option_button(_res_dropdown)
@@ -1021,12 +1021,6 @@ func _make_separator_style() -> StyleBoxFlat:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = UITheme.SEPARATOR
 	return s
-
-
-func _style_label(label: Label, color: Color, size: int, uppercase: bool = false) -> void:
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
-	label.uppercase = uppercase
 
 
 func _style_button(btn: Button, accent: Color) -> void:
@@ -1448,7 +1442,7 @@ func _build_transcode_section() -> void:
 
 	var header: Label = Label.new()
 	header.text = "TRANSCODING"
-	_style_label(header, UITheme.PURPLE_BRIGHT, 13, true)
+	UITheme.style_label(header, UITheme.PURPLE_BRIGHT, 13, true)
 	section.add_child(header)
 
 	var divider: HSeparator = HSeparator.new()
@@ -1463,13 +1457,13 @@ func _build_transcode_section() -> void:
 	var path_lbl: Label = Label.new()
 	path_lbl.text = "FFMPEG FOLDER"
 	path_lbl.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(path_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(path_lbl, UITheme.WHITE_SOFT, 14)
 	path_row.add_child(path_lbl)
 
 	_ffmpeg_path_label = Label.new()
 	_ffmpeg_path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_ffmpeg_path_label.clip_text = true
-	_style_label(_ffmpeg_path_label, UITheme.PURPLE_BRIGHT, 12, false)
+	UITheme.style_label(_ffmpeg_path_label, UITheme.PURPLE_BRIGHT, 12)
 	path_row.add_child(_ffmpeg_path_label)
 
 	var browse_btn: Button = Button.new()
@@ -1501,7 +1495,7 @@ func _build_transcode_section() -> void:
 
 	_ffmpeg_status_label = Label.new()
 	_ffmpeg_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(_ffmpeg_status_label, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(_ffmpeg_status_label, UITheme.SEPARATOR, 11)
 	section.add_child(_ffmpeg_status_label)
 
 	# Auto-transcode master toggle.
@@ -1512,7 +1506,7 @@ func _build_transcode_section() -> void:
 	var auto_lbl: Label = Label.new()
 	auto_lbl.text = "AUTO-TRANSCODE VIDEOS"
 	auto_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(auto_lbl, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(auto_lbl, UITheme.WHITE_SOFT, 14)
 	auto_row.add_child(auto_lbl)
 
 	_auto_transcode_toggle = Button.new()
@@ -1532,7 +1526,7 @@ func _build_transcode_section() -> void:
 	var hint: Label = Label.new()
 	hint.text = "On (recommended): videos are converted on save so they'll play — non-H.264 is transcoded, and H.264 in formats the player can't decode (10-bit, 4:2:2) is re-encoded. Off: videos are copied as-is and ffmpeg isn't needed — only use this if you prepare H.264 videos yourself. Leave FFmpeg Folder empty to use the bundled copy; set it only if the bundled ffmpeg won't run (e.g. under Wine)."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_style_label(hint, UITheme.SEPARATOR, 11, false)
+	UITheme.style_label(hint, UITheme.SEPARATOR, 11)
 	section.add_child(hint)
 
 
@@ -1600,13 +1594,13 @@ func _build_journey_location_row() -> void:
 	var loc_label: Label = Label.new()
 	loc_label.text = "STORAGE LOCATION"
 	loc_label.custom_minimum_size = Vector2(ROW_LABEL_W, 0)
-	_style_label(loc_label, UITheme.WHITE_SOFT, 14, false)
+	UITheme.style_label(loc_label, UITheme.WHITE_SOFT, 14)
 	loc_row.add_child(loc_label)
 
 	_journeys_path_label = Label.new()
 	_journeys_path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_journeys_path_label.clip_text = true
-	_style_label(_journeys_path_label, UITheme.PURPLE_BRIGHT, 12, false)
+	UITheme.style_label(_journeys_path_label, UITheme.PURPLE_BRIGHT, 12)
 	loc_row.add_child(_journeys_path_label)
 	_refresh_journeys_path_label()
 
@@ -1829,7 +1823,7 @@ func _create_move_modal() -> Control:
 	var status: Label = Label.new()
 	status.name = "Status"
 	status.text = "Starting…"
-	_style_label(status, UITheme.WHITE_SOFT, 13, false)
+	UITheme.style_label(status, UITheme.WHITE_SOFT, 13)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(status)
