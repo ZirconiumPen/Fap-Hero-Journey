@@ -31,8 +31,6 @@ const DIFF_COLORS: Dictionary = {
 const JourneyCardScene = preload("res://scenes/journey_select/JourneyCard.tscn")
 
 @onready var _back_btn: Button = %BackButton
-@onready var _title_lbl: Label = %TitleLabel
-@onready var _sort_lbl: Label = %SortLabel
 @onready var _sort_name: Button = %SortNameBtn
 @onready var _sort_duration: Button = %SortDurationBtn
 @onready var _sort_actions: Button = %SortActionsBtn
@@ -55,7 +53,6 @@ var _stat_rounds: Label = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/Stat
 var _stat_actions: Label = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/StatsRow/StatActions
 @onready
 var _stat_length: Label = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/StatsRow/StatLength
-@onready var _rounds_hdr: Label = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundsHeader
 @onready var _round_list: VBoxContainer = %RoundList
 @onready
 var _play_btn: Button = $DetailModal/ModalPanel/ModalLayout/DetailsColumn/ActionRow/PlayButton
@@ -97,7 +94,6 @@ var _tag_filter_idx: int = 0  # 0 = all, 1+ = TagRegistry.all()[idx-1]
 func _ready() -> void:
 	MusicService.play()
 	_apply_layout()
-	_apply_theme()
 	_connect_signals()
 	_scan_journeys()
 	_sort_and_populate()
@@ -133,61 +129,6 @@ func _update_grid_columns() -> void:
 # ---------------------------------------------------------------------------
 
 
-func _apply_theme() -> void:
-	# TopBar background via a Panel behind the HBoxContainer would need an extra
-	# node; instead we apply a dark strip by styling the scroll container top offset.
-	_style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
-	# Title no longer expands — the search field takes the flexible slot instead.
-	_title_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-
-	_style_label(_sort_lbl, UITheme.PURPLE_MID, 13, true)
-	_style_label(_empty_lbl, UITheme.PURPLE_MID, 15, true)
-	_empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_empty_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	_style_button(_back_btn, UITheme.MAGENTA)
-	_style_button(_sort_name, UITheme.PURPLE_BRIGHT)
-	_style_button(_sort_duration, UITheme.PURPLE_MID)
-	_style_button(_sort_actions, UITheme.PURPLE_MID)
-	_style_button(_play_btn, UITheme.PURPLE_BRIGHT)
-	_style_button(_edit_btn, UITheme.PURPLE_MID)
-	_style_button(_delete_btn, UITheme.DANGER)
-
-	UITheme.style_line_edit(_search_field)
-	UITheme.style_option_button(_diff_filter)
-	UITheme.style_option_button(_tag_filter)
-	_style_label(_count_label, UITheme.PURPLE_MID, 12, true)
-
-	_style_modal_panel()
-
-	_style_label(_modal_title, UITheme.PURPLE_BRIGHT, 22, true)
-	_style_label(_modal_author, UITheme.PURPLE_MID, 13, false)
-	_style_label(_modal_diff, UITheme.MAGENTA, 15, true)
-	_style_label(_modal_desc, UITheme.WHITE_SOFT, 12, false)
-	_modal_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	_style_label(_stat_rounds, UITheme.WHITE_SOFT, 13, true)
-	_style_label(_stat_actions, UITheme.WHITE_SOFT, 13, true)
-	_style_label(_stat_length, UITheme.WHITE_SOFT, 13, true)
-
-	_style_label(_rounds_hdr, UITheme.SEPARATOR, 11, true)
-
-	var sep_style: StyleBoxFlat = StyleBoxFlat.new()
-	sep_style.bg_color = UITheme.SEPARATOR
-	for sep_path in [
-		"DetailModal/ModalPanel/ModalLayout/DetailsColumn/StatsDivider",
-		"DetailModal/ModalPanel/ModalLayout/DetailsColumn/RoundsDivider",
-		"DetailModal/ModalPanel/ModalLayout/DetailsColumn/ActionDivider",
-	]:
-		var sep: HSeparator = get_node_or_null(sep_path)
-		if sep:
-			sep.add_theme_stylebox_override("separator", sep_style)
-
-	_backdrop.color = Color(0.0, 0.0, 0.0, 0.85)
-
-
 func _style_modal_panel() -> void:
 	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = UITheme.PANEL_BG
@@ -207,12 +148,6 @@ func _style_modal_panel() -> void:
 	s.content_margin_top = 28
 	s.content_margin_bottom = 28
 	_modal_panel.add_theme_stylebox_override("panel", s)
-
-
-func _style_label(label: Label, color: Color, size: int, uppercase: bool = false) -> void:
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
-	label.uppercase = uppercase
 
 
 func _style_button(btn: Button, accent: Color) -> void:
