@@ -622,11 +622,6 @@ func _populate_modal(journey: Dictionary) -> void:
 	_populate_scoreboard(journey)
 
 
-const SCORE_MONTHS: Array = [
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-]
-
-
 # Lazily builds the floating scoreboard panel (a styled card with a header and a
 # scrollable content column) as a sibling of the modal panel under DetailModal.
 func _ensure_scoreboard_panel() -> void:
@@ -750,7 +745,7 @@ func _make_score_row(rank: int, run: Dictionary) -> Control:
 	row.add_child(outcome_lbl)
 
 	var date_lbl: Label = Label.new()
-	date_lbl.text = _format_short_date(str(run.get("date", "")))
+	date_lbl.text = Utils.format_short_date(str(run.get("date", "")))
 	date_lbl.custom_minimum_size = Vector2(56, 0)
 	date_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	date_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
@@ -758,19 +753,6 @@ func _make_score_row(rank: int, run: Dictionary) -> Control:
 	row.add_child(date_lbl)
 
 	return row
-
-
-# ISO datetime ("2026-06-12T14:30:25") → "Jun 12". Falls back to the raw date
-# portion if parsing fails.
-func _format_short_date(iso: String) -> String:
-	if iso.is_empty():
-		return ""
-	var dt: Dictionary = Time.get_datetime_dict_from_datetime_string(iso, false)
-	var month: int = int(dt.get("month", 0))
-	var day: int = int(dt.get("day", 0))
-	if month >= 1 and month <= 12 and day >= 1:
-		return "%s %d" % [SCORE_MONTHS[month - 1], day]
-	return iso.split("T")[0]
 
 
 # Confirms, then wipes the current journey's recorded runs and refreshes the
