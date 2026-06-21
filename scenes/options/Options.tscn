@@ -13,15 +13,30 @@ grow_vertical = 2
 script = ExtResource("1_opts")
 
 [node name="Background" type="ColorRect" parent="." unique_id=209026964]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0, 0, 0, 1)
 
 [node name="AnimatedBackground" type="Control" parent="." unique_id=1629300971]
-anchors_preset = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("2_abg")
 
 [node name="TopBar" type="HBoxContainer" parent="." unique_id=1959050967]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 47.0
+grow_horizontal = 2
+theme_override_constants/separation = 0
 
 [node name="BackButton" type="Button" parent="TopBar" unique_id=278981733]
 layout_mode = 2
@@ -34,7 +49,15 @@ text = "OPTIONS"
 horizontal_alignment = 1
 
 [node name="ContentPanel" type="PanelContainer" parent="." unique_id=2073912755]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 13
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -262.0
+offset_right = 262.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="ContentScroll" type="ScrollContainer" parent="ContentPanel" unique_id=683705975]
 layout_mode = 2
@@ -46,6 +69,7 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
+theme_override_constants/margin_right = 24
 
 [node name="ContentVBox" type="VBoxContainer" parent="ContentPanel/ContentScroll/MarginWrapper" unique_id=97372042]
 layout_mode = 2

@@ -30,8 +30,6 @@ const RESOLUTIONS: Array = [
 	Vector2i(3840, 2160),
 ]
 
-@onready var _bg: ColorRect = $Background
-@onready var _top_bar: HBoxContainer = $TopBar
 @onready var _back_btn: Button = $TopBar/BackButton
 @onready var _title_lbl: Label = $TopBar/TitleLabel
 @onready var _content_panel: PanelContainer = $ContentPanel
@@ -152,40 +150,10 @@ func _ready() -> void:
 
 
 func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_bg.anchor_right = 1.0
-	_bg.anchor_bottom = 1.0
-	_bg.offset_left = 0
-	_bg.offset_top = 0
-	_bg.offset_right = 0
-	_bg.offset_bottom = 0
-
-	var animated_bg: Control = $AnimatedBackground
-	animated_bg.anchor_right = 1.0
-	animated_bg.anchor_bottom = 1.0
-
-	_top_bar.anchor_right = 1.0
-	_top_bar.anchor_bottom = 0.0
-	_top_bar.offset_left = 16
-	_top_bar.offset_right = -16
-	_top_bar.offset_bottom = TOP_BAR_HEIGHT
-	_top_bar.add_theme_constant_override("separation", 0)
-
-	_content_panel.anchor_left = 0.5
-	_content_panel.anchor_right = 0.5
-	_content_panel.anchor_top = 0.0
-	_content_panel.anchor_bottom = 1.0
-	_content_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_content_panel.offset_left = -PANEL_HALF_W
 	_content_panel.offset_right = PANEL_HALF_W
 	_content_panel.offset_top = TOP_BAR_HEIGHT + TAB_BAR_HEIGHT + PANEL_PAD_V
 	_content_panel.offset_bottom = -PANEL_PAD_V
-
-	($ContentPanel/ContentScroll/MarginWrapper as MarginContainer).add_theme_constant_override(
-		"margin_right", 24
-	)
 
 	# Wider inter-section spacing — the old fixed gap spacer nodes are hidden
 	# below now that each tab shows only a few sections at a time.
@@ -928,8 +896,6 @@ func _on_tab_changed(idx: int) -> void:
 
 
 func _apply_theme() -> void:
-	_bg.color = UITheme.BG
-
 	UITheme.style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
