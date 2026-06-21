@@ -30,7 +30,6 @@ const RESOLUTIONS: Array = [
 	Vector2i(3840, 2160),
 ]
 
-@onready var _back_btn: Button = $TopBar/BackButton
 @onready var _title_lbl: Label = $TopBar/TitleLabel
 @onready var _content_panel: PanelContainer = $ContentPanel
 @onready var _content_vbox: VBoxContainer = $ContentPanel/ContentScroll/MarginWrapper/ContentVBox
@@ -900,7 +899,6 @@ func _apply_theme() -> void:
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	_style_button(_back_btn, UITheme.MAGENTA)
 	_style_button(_open_folder_btn, UITheme.PURPLE_MID)
 	_style_button(_connect_btn, UITheme.PURPLE_BRIGHT)
 	_style_button(_scan_btn, UITheme.PURPLE_MID)
@@ -1352,7 +1350,6 @@ func _sync_buttplug_state() -> void:
 
 
 func _connect_signals() -> void:
-	_back_btn.pressed.connect(_on_back_pressed)
 	_open_folder_btn.pressed.connect(_on_open_journeys_folder_pressed)
 	_master_slider.value_changed.connect(_on_volume_changed)
 	_fs_toggle.toggled.connect(_on_fullscreen_toggled)
@@ -1805,14 +1802,6 @@ func _update_move_modal(modal: Control, status_text: String) -> void:
 		lbl.text = status_text
 
 
-func _on_back_pressed() -> void:
-	_save_settings()
-	if overlay_mode:
-		queue_free()
-	else:
-		SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
-
-
 func _on_volume_changed(value: float) -> void:
 	_update_volume_label(value)
 	AudioServer.set_bus_volume_db(0, linear_to_db(value))
@@ -2052,3 +2041,11 @@ func _sync_serial_state() -> void:
 		_set_serial_status("● DISCONNECTED", UITheme.ERROR)
 		_style_button(_serial_connect_btn, UITheme.PURPLE_BRIGHT)
 		_serial_connect_btn.text = "> CONNECT"
+
+
+func _on_back_button_pressed() -> void:
+	_save_settings()
+	if overlay_mode:
+		queue_free()
+	else:
+		SceneTransitioner.change_scene("res://scenes/main/Main.tscn")
