@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://dnkxs8cafxrc7"]
+
+[ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="1_bljjq"]
+
+[node name="AnimatedBackground" type="ColorRect" unique_id=1724102878]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+script = ExtResource("1_bljjq")

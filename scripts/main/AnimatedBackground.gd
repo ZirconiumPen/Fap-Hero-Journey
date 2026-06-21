@@ -33,12 +33,8 @@ var _indicators: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_screen_size = get_viewport_rect().size
 	get_viewport().size_changed.connect(_on_resize)
-	_build_indicators()
+	_on_resize()
 
 
 func _on_resize() -> void:

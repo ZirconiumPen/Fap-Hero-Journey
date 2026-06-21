@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://borpa6qo26geo"]
 
 [ext_resource type="Script" uid="uid://886lbtll1qkr" path="res://scripts/journey_select/JourneySelect.gd" id="1_jsel"]
-[ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
+[ext_resource type="PackedScene" uid="uid://dnkxs8cafxrc7" path="res://components/animated_background.tscn" id="2_npvrh"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_npvrh"]
 content_margin_left = 12.0
@@ -30,23 +30,9 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_jsel")
 
-[node name="Background" type="ColorRect" parent="." unique_id=744543218]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 1)
-
-[node name="AnimatedBackground" type="Control" parent="." unique_id=1577566533]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("2_abg")
+[node name="AnimatedBackground" parent="." unique_id=1724102878 instance=ExtResource("2_npvrh")]
+layout_mode = 0
+anchors_preset = 0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=778506588]
 layout_mode = 1

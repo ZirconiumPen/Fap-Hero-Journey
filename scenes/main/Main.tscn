@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://2kqlt5tkvd2b"]
 
 [ext_resource type="Script" uid="uid://d288w124lrltr" path="res://scripts/main/Main.gd" id="1_u1xfj"]
-[ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_nha0i"]
+[ext_resource type="PackedScene" uid="uid://dnkxs8cafxrc7" path="res://components/animated_background.tscn" id="2_1rhdn"]
 [ext_resource type="Script" uid="uid://byeqbxixv5a1o" path="res://components/button_effects.gd" id="3_1rhdn"]
 [ext_resource type="PackedScene" uid="uid://dk87out6m1h2h" path="res://components/blinker.tscn" id="3_gyg6b"]
 [ext_resource type="Script" uid="uid://cnfaeqf83ubro" path="res://scenes/main/version_label.gd" id="3_q24mn"]
@@ -36,18 +36,9 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_u1xfj")
 
-[node name="Background" type="ColorRect" parent="." unique_id=1071955145]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 1)
-
-[node name="AnimatedBackground" type="Control" parent="." unique_id=1673800333]
+[node name="AnimatedBackground" parent="." unique_id=1724102878 instance=ExtResource("2_1rhdn")]
+layout_mode = 0
 anchors_preset = 0
-script = ExtResource("2_nha0i")
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=488459364]
 layout_mode = 1

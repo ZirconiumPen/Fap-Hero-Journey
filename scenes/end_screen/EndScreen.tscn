@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://d03rk7wg2s5b2"]
 
 [ext_resource type="Script" uid="uid://t207ewvht7q3" path="res://scripts/end_screen/EndScreen.gd" id="1_es"]
-[ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
+[ext_resource type="PackedScene" uid="uid://dnkxs8cafxrc7" path="res://components/animated_background.tscn" id="2_ddmf0"]
 [ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="3_fjo8k"]
 [ext_resource type="LabelSettings" uid="uid://hqlp8oc3ukng" path="res://theming/text_label.tres" id="4_2n8ot"]
 [ext_resource type="PackedScene" uid="uid://b4hhba2foxea4" path="res://scenes/end_screen/confetti.tscn" id="5_ddmf0"]
@@ -15,23 +15,9 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_es")
 
-[node name="Background" type="ColorRect" parent="." unique_id=195991042]
+[node name="AnimatedBackground" parent="." unique_id=445802545 instance=ExtResource("2_ddmf0")]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 1)
-
-[node name="AnimatedBackground" type="Control" parent="." unique_id=2063710927]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("2_abg")
+script = null
 
 [node name="Panel" type="PanelContainer" parent="." unique_id=254198848]
 custom_minimum_size = Vector2(880, 0)
