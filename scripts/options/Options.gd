@@ -10,9 +10,9 @@ const TOP_BAR_HEIGHT: int = 64
 const TAB_BAR_HEIGHT: int = 48
 const PANEL_HALF_W: int = 480
 const PANEL_PAD_V: int = 24
-const BORDER_WIDTH: int = 3
 const ROW_LABEL_W: int = 260
 const SLIDER_MIN_W: int = 260
+const SLIDER_MIN_H: int = 48
 const VALUE_LABEL_W: int = 64
 
 # Tab categories. Each groups a set of sections; only one tab is shown at a time.
@@ -132,7 +132,6 @@ var _credits_section: VBoxContainer = null
 
 func _ready() -> void:
 	_apply_layout()
-	_apply_theme()
 	_populate_resolution_dropdown()
 	_populate_output_mode_dropdown()
 	_refresh_serial_ports()
@@ -221,8 +220,7 @@ func _apply_layout() -> void:
 	_music_slider.step = 0.01
 	_music_slider.value = 0.5
 	_music_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_music_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, 0)
-	_style_slider(_music_slider)
+	_music_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, SLIDER_MIN_H)
 	music_row.add_child(_music_slider)
 
 	_music_value_lbl = Label.new()
@@ -256,8 +254,7 @@ func _apply_layout() -> void:
 	_hud_delay_slider.step = 0.5
 	_hud_delay_slider.value = 3.0
 	_hud_delay_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_hud_delay_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, 0)
-	_style_slider(_hud_delay_slider)
+	_hud_delay_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, SLIDER_MIN_H)
 	hud_delay_row.add_child(_hud_delay_slider)
 
 	_hud_delay_value_lbl = Label.new()
@@ -291,8 +288,7 @@ func _apply_layout() -> void:
 	_ui_scale_slider.step = 0.05
 	_ui_scale_slider.value = 1.0
 	_ui_scale_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_ui_scale_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, 0)
-	_style_slider(_ui_scale_slider)
+	_ui_scale_slider.custom_minimum_size = Vector2(SLIDER_MIN_W, SLIDER_MIN_H)
 	ui_scale_row.add_child(_ui_scale_slider)
 
 	_ui_scale_value_lbl = Label.new()
@@ -401,7 +397,6 @@ func _apply_layout() -> void:
 	range_section.add_child(range_header)
 
 	var range_divider: HSeparator = HSeparator.new()
-	range_divider.add_theme_stylebox_override("separator", _make_separator_style())
 	range_section.add_child(range_divider)
 
 	var range_row: HBoxContainer = HBoxContainer.new()
@@ -481,7 +476,7 @@ func _apply_layout() -> void:
 	_home_slider.step = 1
 	_home_slider.value = 50
 	_home_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_slider(_home_slider)
+	_home_slider.custom_minimum_size.y = SLIDER_MIN_H
 	home_slider_col.add_child(_home_slider)
 
 	_home_value_lbl = Label.new()
@@ -510,7 +505,6 @@ func _apply_layout() -> void:
 	_home_ease_input.text = "2000"
 	_home_ease_input.custom_minimum_size = Vector2(100, 0)
 	_home_ease_input.placeholder_text = "2000"
-	_style_line_edit(_home_ease_input)
 	home_ease_row.add_child(_home_ease_input)
 
 	var home_ease_hint_lbl: Label = Label.new()
@@ -548,7 +542,7 @@ func _apply_layout() -> void:
 	_latency_slider.step = 10
 	_latency_slider.value = 0
 	_latency_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_slider(_latency_slider)
+	_latency_slider.custom_minimum_size.y = SLIDER_MIN_H
 	latency_col.add_child(_latency_slider)
 
 	_latency_value_lbl = Label.new()
@@ -590,7 +584,7 @@ func _apply_layout() -> void:
 	_vibe_slider.step = 1
 	_vibe_slider.value = 100
 	_vibe_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_slider(_vibe_slider)
+	_vibe_slider.custom_minimum_size.y = SLIDER_MIN_H
 	vibe_col.add_child(_vibe_slider)
 
 	_vibe_value_lbl = Label.new()
@@ -632,7 +626,7 @@ func _apply_layout() -> void:
 	_max_speed_slider.step = 25
 	_max_speed_slider.value = 0
 	_max_speed_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_slider(_max_speed_slider)
+	_max_speed_slider.custom_minimum_size.y = SLIDER_MIN_H
 	speed_col.add_child(_max_speed_slider)
 
 	_max_speed_value_lbl = Label.new()
@@ -664,7 +658,6 @@ func _apply_layout() -> void:
 	filler_section.add_child(filler_header)
 
 	var filler_divider: HSeparator = HSeparator.new()
-	filler_divider.add_theme_stylebox_override("separator", _make_separator_style())
 	filler_section.add_child(filler_divider)
 
 	# Enable row
@@ -699,7 +692,6 @@ func _apply_layout() -> void:
 	_filler_speed_input.text = "2000"
 	_filler_speed_input.custom_minimum_size = Vector2(100, 0)
 	_filler_speed_input.placeholder_text = "2000"
-	_style_line_edit(_filler_speed_input)
 	filler_speed_row.add_child(_filler_speed_input)
 
 	var filler_speed_hint: Label = Label.new()
@@ -796,7 +788,6 @@ func _apply_layout() -> void:
 	credits_section.add_child(credits_header)
 
 	var credits_divider: HSeparator = HSeparator.new()
-	credits_divider.add_theme_stylebox_override("separator", _make_separator_style())
 	credits_section.add_child(credits_divider)
 
 	var credits_music_lbl: Label = Label.new()
@@ -888,100 +879,6 @@ func _on_tab_changed(idx: int) -> void:
 	($ContentPanel/ContentScroll as ScrollContainer).scroll_vertical = 0
 
 
-# ---------------------------------------------------------------------------
-# Theme
-# ---------------------------------------------------------------------------
-
-
-func _apply_theme() -> void:
-	_style_button(_open_folder_btn, UITheme.PURPLE_MID)
-	_style_button(_connect_btn, UITheme.PURPLE_BRIGHT)
-	_style_button(_scan_btn, UITheme.PURPLE_MID)
-
-	_style_panel()
-
-	for header_path in [
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/JourneysSection/JourneysHeader",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputHeader",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/AudioHeader",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/DisplayHeader",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/IntifaceHeader",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialHeader",
-	]:
-		UITheme.style_label(get_node(header_path), UITheme.PURPLE_BRIGHT, 13, true)
-
-	var sep_style: StyleBoxFlat = _make_separator_style()
-	for sep_path in [
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/JourneysSection/JourneysDivider",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputDivider",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/AudioDivider",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/DisplayDivider",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/IntifaceDivider",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialDivider",
-	]:
-		(get_node(sep_path) as HSeparator).add_theme_stylebox_override("separator", sep_style)
-
-	for row_label_path in [
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputModeRow/OutputModeLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/MasterRow/MasterLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/FullscreenRow/FsLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/ResolutionRow/ResLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/AddressRow/AddressLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/AutoConnectRow/AutoConnectLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/DeviceRow/DeviceLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialPortRow/SerialPortLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialBaudRow/SerialBaudLabel",
-		"ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialAutoRow/SerialAutoLabel",
-	]:
-		UITheme.style_label(get_node(row_label_path), UITheme.WHITE_SOFT, 14)
-
-	UITheme.style_label(_master_value, UITheme.PURPLE_BRIGHT, 14)
-	UITheme.style_label(_status_lbl, UITheme.ERROR, 13)
-	UITheme.style_label(_serial_status_lbl, UITheme.ERROR, 13)
-
-	_style_slider(_master_slider)
-	_style_option_button(_res_dropdown)
-	_style_option_button(_device_dropdown)
-	_style_option_button(_output_mode_dropdown)
-	_style_option_button(_serial_port_dropdown)
-	_style_line_edit(_address_input)
-	_style_line_edit(_serial_baud_input)
-	_style_toggle(_fs_toggle, false)
-	_style_toggle(_auto_toggle, false)
-	_style_toggle(_serial_auto_toggle, false)
-	_style_button(_bp_test_btn, UITheme.PURPLE_MID)
-	_style_button(_serial_refresh_btn, UITheme.PURPLE_MID)
-	_style_button(_serial_connect_btn, UITheme.PURPLE_BRIGHT)
-	_style_button(_serial_test_btn, UITheme.PURPLE_MID)
-
-
-func _style_panel() -> void:
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = UITheme.PANEL_BG
-	s.border_color = UITheme.PURPLE_BRIGHT
-	s.border_width_left = BORDER_WIDTH
-	s.border_width_right = BORDER_WIDTH
-	s.border_width_top = BORDER_WIDTH
-	s.border_width_bottom = BORDER_WIDTH
-	s.corner_radius_top_left = 4
-	s.corner_radius_top_right = 4
-	s.corner_radius_bottom_left = 4
-	s.corner_radius_bottom_right = 4
-	s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.5)
-	s.shadow_size = 12
-	s.content_margin_left = 32
-	s.content_margin_right = 32
-	s.content_margin_top = 28
-	s.content_margin_bottom = 28
-	_content_panel.add_theme_stylebox_override("panel", s)
-
-
-func _make_separator_style() -> StyleBoxFlat:
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = UITheme.SEPARATOR
-	return s
-
-
 func _style_button(btn: Button, accent: Color) -> void:
 	btn.add_theme_color_override("font_color", accent)
 	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
@@ -1026,65 +923,7 @@ func _style_toggle(btn: Button, pressed: bool) -> void:
 	btn.text = "ON" if pressed else "OFF"
 
 
-func _style_slider(slider: HSlider) -> void:
-	var track: StyleBoxFlat = StyleBoxFlat.new()
-	track.bg_color = UITheme.PURPLE_DARK
-	track.border_color = UITheme.PURPLE_MID
-	track.border_width_left = 1
-	track.border_width_right = 1
-	track.border_width_top = 1
-	track.border_width_bottom = 1
-	track.content_margin_top = 4
-	track.content_margin_bottom = 4
 
-	var fill: StyleBoxFlat = StyleBoxFlat.new()
-	fill.bg_color = UITheme.PURPLE_BRIGHT
-	fill.content_margin_top = 4
-	fill.content_margin_bottom = 4
-
-	slider.add_theme_stylebox_override("slider", track)
-	slider.add_theme_stylebox_override("grabber_area", fill)
-	slider.add_theme_color_override("grabber_color", UITheme.MAGENTA)
-	slider.custom_minimum_size.y = 24
-
-
-func _style_option_button(opt: OptionButton) -> void:
-	opt.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-	opt.add_theme_color_override("font_hover_color", UITheme.PURPLE_BRIGHT)
-	opt.add_theme_font_size_override("font_size", 14)
-	opt.add_theme_stylebox_override(
-		"normal", _make_btn_style(UITheme.PURPLE_MID, UITheme.PURPLE_DARK)
-	)
-	opt.add_theme_stylebox_override(
-		"hover", _make_btn_style(UITheme.PURPLE_BRIGHT, UITheme.PURPLE_MID)
-	)
-	opt.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-
-func _style_line_edit(edit: LineEdit) -> void:
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = UITheme.PURPLE_DARK
-	s.border_color = UITheme.PURPLE_MID
-
-	s.border_width_left = 2
-	s.border_width_right = 2
-	s.border_width_top = 2
-	s.border_width_bottom = 2
-
-	s.content_margin_left = 12
-	s.content_margin_right = 12
-	s.content_margin_top = 8
-	s.content_margin_bottom = 8
-
-	edit.add_theme_stylebox_override("normal", s)
-	edit.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-	edit.add_theme_color_override("font_placeholder_color", UITheme.PURPLE_MID)
-	edit.add_theme_color_override("caret_color", UITheme.PURPLE_BRIGHT)
-	edit.add_theme_color_override(
-		"selection_color",
-		Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.4)
-	)
-	edit.add_theme_font_size_override("font_size", 14)
 
 
 # ---------------------------------------------------------------------------
@@ -1404,7 +1243,6 @@ func _build_transcode_section() -> void:
 	section.add_child(header)
 
 	var divider: HSeparator = HSeparator.new()
-	divider.add_theme_stylebox_override("separator", _make_separator_style())
 	section.add_child(divider)
 
 	# ffmpeg folder row: label · path · Browse · Test · Use Bundled

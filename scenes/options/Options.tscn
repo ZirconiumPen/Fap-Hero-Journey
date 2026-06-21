@@ -3,6 +3,8 @@
 [ext_resource type="Script" uid="uid://bgj4onmimjgml" path="res://scripts/options/Options.gd" id="1_opts"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
 [ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="3_qw2mn"]
+[ext_resource type="LabelSettings" uid="uid://hqlp8oc3ukng" path="res://theming/text_label.tres" id="4_k0pk8"]
+[ext_resource type="LabelSettings" uid="uid://b7xbr2gvspmo6" path="res://theming/error_label.tres" id="5_p8lls"]
 
 [node name="root" type="Control" unique_id=1278072632]
 layout_mode = 3
@@ -87,6 +89,7 @@ layout_mode = 2
 [node name="JourneysHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/JourneysSection" unique_id=1900000042]
 layout_mode = 2
 text = "JOURNEYS"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="JourneysDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/JourneysSection" unique_id=1900000043]
 layout_mode = 2
@@ -108,6 +111,7 @@ layout_mode = 2
 [node name="OutputHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection" unique_id=1900000011]
 layout_mode = 2
 text = "DEVICE OUTPUT"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="OutputDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection" unique_id=1900000012]
 layout_mode = 2
@@ -118,6 +122,7 @@ layout_mode = 2
 [node name="OutputModeLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputModeRow" unique_id=1900000014]
 layout_mode = 2
 text = "MODE"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="OutputModeDropdown" type="OptionButton" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputModeRow" unique_id=1900000015]
 layout_mode = 2
@@ -132,6 +137,7 @@ layout_mode = 2
 [node name="AudioHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection" unique_id=1369014179]
 layout_mode = 2
 text = "AUDIO"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="AudioDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection" unique_id=1867101801]
 layout_mode = 2
@@ -142,6 +148,7 @@ layout_mode = 2
 [node name="MasterLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/MasterRow" unique_id=507941285]
 layout_mode = 2
 text = "MASTER VOLUME"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="MasterSlider" type="HSlider" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/MasterRow" unique_id=5367122]
 layout_mode = 2
@@ -153,6 +160,7 @@ value = 1.0
 [node name="MasterValue" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/AudioSection/MasterRow" unique_id=1312614152]
 layout_mode = 2
 text = "100%"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="SectionGap" type="Control" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox" unique_id=181150838]
 custom_minimum_size = Vector2(0, 24)
@@ -164,6 +172,7 @@ layout_mode = 2
 [node name="DisplayHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection" unique_id=1687603665]
 layout_mode = 2
 text = "DISPLAY"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="DisplayDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection" unique_id=28846271]
 layout_mode = 2
@@ -175,6 +184,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "FULLSCREEN"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="FsToggle" type="Button" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/FullscreenRow" unique_id=1609010535]
 layout_mode = 2
@@ -188,6 +198,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "RESOLUTION"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="ResDropdown" type="OptionButton" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/DisplaySection/ResolutionRow" unique_id=1530432207]
 layout_mode = 2
@@ -202,6 +213,7 @@ layout_mode = 2
 [node name="IntifaceHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection" unique_id=637286422]
 layout_mode = 2
 text = "INTIFACE"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="IntifaceDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection" unique_id=1085229917]
 layout_mode = 2
@@ -212,6 +224,7 @@ layout_mode = 2
 [node name="AddressLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/AddressRow" unique_id=503147492]
 layout_mode = 2
 text = "ADDRESS"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="AddressInput" type="LineEdit" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/AddressRow" unique_id=1554009889]
 layout_mode = 2
@@ -225,6 +238,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "AUTO-CONNECT ON LAUNCH"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="AutoConnectToggle" type="Button" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/AutoConnectRow" unique_id=1555326985]
 layout_mode = 2
@@ -252,6 +266,7 @@ text = "> SCAN"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "● DISCONNECTED"
+label_settings = ExtResource("5_p8lls")
 
 [node name="DeviceRow" type="HBoxContainer" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection" unique_id=1733917558]
 layout_mode = 2
@@ -259,6 +274,7 @@ layout_mode = 2
 [node name="DeviceLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/DeviceRow" unique_id=1208849919]
 layout_mode = 2
 text = "DEVICE"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="DeviceDropdown" type="OptionButton" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/IntifaceSection/DeviceRow" unique_id=1467889269]
 layout_mode = 2
@@ -275,6 +291,7 @@ layout_mode = 2
 [node name="SerialHeader" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection" unique_id=1900000022]
 layout_mode = 2
 text = "SERIAL T-CODE (SR6 / OSR2)"
+label_settings = ExtResource("3_qw2mn")
 
 [node name="SerialDivider" type="HSeparator" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection" unique_id=1900000023]
 layout_mode = 2
@@ -285,6 +302,7 @@ layout_mode = 2
 [node name="SerialPortLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialPortRow" unique_id=1900000025]
 layout_mode = 2
 text = "COM PORT"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="SerialPortDropdown" type="OptionButton" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialPortRow" unique_id=1900000026]
 layout_mode = 2
@@ -300,6 +318,7 @@ layout_mode = 2
 [node name="SerialBaudLabel" type="Label" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialBaudRow" unique_id=1900000029]
 layout_mode = 2
 text = "BAUD RATE"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="SerialBaudInput" type="LineEdit" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialBaudRow" unique_id=1900000030]
 layout_mode = 2
@@ -314,6 +333,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "AUTO-CONNECT ON LAUNCH"
+label_settings = ExtResource("4_k0pk8")
 
 [node name="SerialAutoToggle" type="Button" parent="ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialAutoRow" unique_id=1900000033]
 layout_mode = 2
@@ -335,5 +355,6 @@ text = "> TEST STROKE"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "● DISCONNECTED"
+label_settings = ExtResource("5_p8lls")
 
 [connection signal="pressed" from="BackButton" to="." method="_on_back_button_pressed"]
