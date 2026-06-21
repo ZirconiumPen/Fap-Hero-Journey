@@ -731,7 +731,7 @@ func _make_score_row(rank: int, run: Dictionary) -> Control:
 	row.add_child(rank_lbl)
 
 	var score_lbl: Label = Label.new()
-	score_lbl.text = _format_score(int(run.get("score", 0)))
+	score_lbl.text = Utils.format_score(int(run.get("score", 0)))
 	score_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	score_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
 	score_lbl.add_theme_font_size_override("font_size", 12)
@@ -758,17 +758,6 @@ func _make_score_row(rank: int, run: Dictionary) -> Control:
 	row.add_child(date_lbl)
 
 	return row
-
-
-# Thousands-separated score, e.g. 14200 → "14,200".
-func _format_score(n: int) -> String:
-	var s: String = str(absi(n))
-	var out: String = ""
-	while s.length() > 3:
-		out = "," + s.substr(s.length() - 3) + out
-		s = s.substr(0, s.length() - 3)
-	out = s + out
-	return ("-" + out) if n < 0 else out
 
 
 # ISO datetime ("2026-06-12T14:30:25") → "Jun 12". Falls back to the raw date
