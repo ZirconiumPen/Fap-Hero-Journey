@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bgj4onmimjgml" path="res://scripts/options/Options.gd" id="1_opts"]
 [ext_resource type="Script" uid="uid://dscg7dyswe1h7" path="res://scripts/main/AnimatedBackground.gd" id="2_abg"]
+[ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="3_qw2mn"]
 
 [node name="root" type="Control" unique_id=1278072632]
 layout_mode = 3
@@ -46,6 +47,7 @@ text = "< BACK"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "OPTIONS"
+label_settings = ExtResource("3_qw2mn")
 horizontal_alignment = 1
 
 [node name="ContentPanel" type="PanelContainer" parent="." unique_id=2073912755]
@@ -329,3 +331,5 @@ text = "> TEST STROKE"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "● DISCONNECTED"
+
+[connection signal="pressed" from="TopBar/BackButton" to="." method="_on_back_button_pressed"]

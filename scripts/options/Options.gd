@@ -30,7 +30,6 @@ const RESOLUTIONS: Array = [
 	Vector2i(3840, 2160),
 ]
 
-@onready var _title_lbl: Label = $TopBar/TitleLabel
 @onready var _content_panel: PanelContainer = $ContentPanel
 @onready var _content_vbox: VBoxContainer = $ContentPanel/ContentScroll/MarginWrapper/ContentVBox
 @onready
@@ -895,10 +894,6 @@ func _on_tab_changed(idx: int) -> void:
 
 
 func _apply_theme() -> void:
-	UITheme.style_label(_title_lbl, UITheme.PURPLE_BRIGHT, 18, true)
-	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
 	_style_button(_open_folder_btn, UITheme.PURPLE_MID)
 	_style_button(_connect_btn, UITheme.PURPLE_BRIGHT)
 	_style_button(_scan_btn, UITheme.PURPLE_MID)
