@@ -31,24 +31,28 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_abg")
 
-[node name="TopBar" type="HBoxContainer" parent="." unique_id=1959050967]
+[node name="TitleLabel" type="Label" parent="." unique_id=1510658439]
 layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 47.0
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -52.5
+offset_top = 16.0
+offset_right = 52.5
+offset_bottom = 50.0
 grow_horizontal = 2
-theme_override_constants/separation = 0
-
-[node name="BackButton" type="Button" parent="TopBar" unique_id=278981733]
-layout_mode = 2
-text = "< BACK"
-
-[node name="TitleLabel" type="Label" parent="TopBar" unique_id=1510658439]
-layout_mode = 2
 size_flags_horizontal = 3
 text = "OPTIONS"
 label_settings = ExtResource("3_qw2mn")
 horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="." unique_id=278981733]
+layout_mode = 1
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 119.0
+offset_bottom = 71.0
+text = "< BACK"
 
 [node name="ContentPanel" type="PanelContainer" parent="." unique_id=2073912755]
 layout_mode = 1
@@ -332,4 +336,4 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "● DISCONNECTED"
 
-[connection signal="pressed" from="TopBar/BackButton" to="." method="_on_back_button_pressed"]
+[connection signal="pressed" from="BackButton" to="." method="_on_back_button_pressed"]
