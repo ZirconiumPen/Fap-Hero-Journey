@@ -1,9 +1,8 @@
+class_name ForkScreen
 extends Control
 
 signal path_chosen(index: int)
 
-@onready var _backdrop: ColorRect = $Backdrop
-@onready var _center_box: VBoxContainer = $CenterBox
 @onready var _fork_title: Label = $CenterBox/ForkTitle
 @onready var _fork_sub: Label = $CenterBox/ForkSubtitle
 @onready var _cards_row: HBoxContainer = $CenterBox/CardsRow
@@ -18,7 +17,6 @@ var _default_path: int = 0  # conditional fallback path index
 
 
 func _ready() -> void:
-	_apply_layout()
 	_apply_base_theme()
 
 
@@ -360,30 +358,6 @@ func _path_display_name(index: int) -> String:
 			return n
 	return "Path %d" % (index + 1)
 
-
-func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_backdrop.anchor_right = 1.0
-	_backdrop.anchor_bottom = 1.0
-	_backdrop.offset_left = 0
-	_backdrop.offset_top = 0
-	_backdrop.offset_right = 0
-	_backdrop.offset_bottom = 0
-
-	_center_box.anchor_left = 0.1
-	_center_box.anchor_right = 0.9
-	_center_box.anchor_top = 0.1
-	_center_box.anchor_bottom = 0.9
-	_center_box.offset_left = 0
-	_center_box.offset_top = 0
-	_center_box.offset_right = 0
-	_center_box.offset_bottom = 0
-	_center_box.add_theme_constant_override("separation", 24)
-
-	_cards_row.add_theme_constant_override("separation", 20)
-	_cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 
 func _apply_base_theme() -> void:
