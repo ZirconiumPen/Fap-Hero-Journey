@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://ttmdoof13yx4"]
 
 [ext_resource type="Script" uid="uid://cwwqtfpswu8er" path="res://scripts/fork_screen/ForkScreen.gd" id="1_fscr"]
+[ext_resource type="LabelSettings" uid="uid://dx7wyw25c8lnf" path="res://theming/subtitle_label.tres" id="2_bn5or"]
 
 [node name="root" type="Control" unique_id=1000000001]
 layout_mode = 3
@@ -35,10 +36,12 @@ theme_override_constants/separation = 24
 layout_mode = 2
 text = "FORK IN THE ROAD"
 horizontal_alignment = 1
+uppercase = true
 
 [node name="ForkSubtitle" type="Label" parent="CenterBox" unique_id=1000000005]
 layout_mode = 2
 text = "Choose your path"
+label_settings = ExtResource("2_bn5or")
 horizontal_alignment = 1
 
 [node name="CardsRow" type="HBoxContainer" parent="CenterBox" unique_id=1000000006]

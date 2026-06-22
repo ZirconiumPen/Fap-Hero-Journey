@@ -16,10 +16,6 @@ var _cond_metric: String = "score"  # conditional metric (score/coins/item)
 var _default_path: int = 0  # conditional fallback path index
 
 
-func _ready() -> void:
-	_apply_base_theme()
-
-
 func setup(fork_data: Dictionary) -> void:
 	var title: String = fork_data.get("title", "")
 	if title != "":
@@ -359,16 +355,6 @@ func _path_display_name(index: int) -> String:
 	return "Path %d" % (index + 1)
 
 
-
-func _apply_base_theme() -> void:
-	_fork_title.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-	_fork_title.add_theme_font_size_override("font_size", 32)
-	_fork_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_fork_title.uppercase = true
-
-	_fork_sub.add_theme_color_override("font_color", UITheme.DARK_TEXT)
-	_fork_sub.add_theme_font_size_override("font_size", 15)
-	_fork_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _style_button(btn: Button, accent: Color) -> void:
