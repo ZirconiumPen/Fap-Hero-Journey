@@ -5,10 +5,7 @@ signal closed
 const PANEL_WIDTH: int = 300
 const SLIDE_TIME: float = 0.18
 
-@onready var _backdrop: ColorRect = $Backdrop
 @onready var _panel: PanelContainer = $Panel
-@onready var _vbox: VBoxContainer = $Panel/VBox
-@onready var _header: HBoxContainer = $Panel/VBox/HeaderRow
 @onready var _title: Label = $Panel/VBox/HeaderRow/Title
 @onready var _close_btn: Button = $Panel/VBox/HeaderRow/CloseButton
 @onready var _subtitle: Label = $Panel/VBox/Subtitle
@@ -22,12 +19,6 @@ var _activating: bool = false
 
 
 func _ready() -> void:
-	# The backdrop and root cover the full viewport for slide animation only —
-	# they must not block clicks to the game beneath.
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_backdrop.color = Color(0, 0, 0, 0)
-	_apply_layout()
 	_apply_theme()
 	_close_btn.pressed.connect(close)
 	InventoryService.InventoryChanged.connect(_refresh)
@@ -192,29 +183,6 @@ func _activate_card(card: Control, use_lbl: Label, slot_idx: int) -> void:
 # --------------------------------------------------------------------------
 # Layout / theme
 # --------------------------------------------------------------------------
-
-
-func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_backdrop.anchor_right = 1.0
-	_backdrop.anchor_bottom = 1.0
-
-	# Panel: anchored to the right edge, full height.
-	_panel.anchor_left = 1.0
-	_panel.anchor_top = 0.0
-	_panel.anchor_right = 1.0
-	_panel.anchor_bottom = 1.0
-	_panel.offset_left = -PANEL_WIDTH
-	_panel.offset_right = 0
-	_panel.offset_top = 0
-	_panel.offset_bottom = 0
-	_panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-
-	_vbox.add_theme_constant_override("separation", 12)
-	_header.add_theme_constant_override("separation", 8)
-	_item_list.add_theme_constant_override("separation", 10)
 
 
 func _apply_theme() -> void:
