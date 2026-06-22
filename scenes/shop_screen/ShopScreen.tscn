@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://bm06hpee7taph"]
 
 [ext_resource type="Script" uid="uid://cybh7h3tweqc8" path="res://scripts/shop_screen/ShopScreen.gd" id="1_shop"]
+[ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="2_jmby5"]
 
 [node name="root" type="Control" unique_id=215509115]
 layout_mode = 3
@@ -12,22 +13,37 @@ grow_vertical = 2
 script = ExtResource("1_shop")
 
 [node name="Backdrop" type="ColorRect" parent="." unique_id=485843370]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0, 0, 0, 0.78)
 
 [node name="Panel" type="PanelContainer" parent="." unique_id=142168256]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.08
+anchor_top = 0.08
+anchor_right = 0.92
+anchor_bottom = 0.92
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="VBox" type="VBoxContainer" parent="Panel" unique_id=1104104977]
 layout_mode = 2
+theme_override_constants/separation = 18
 
 [node name="HeaderRow" type="HBoxContainer" parent="Panel/VBox" unique_id=274931851]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="Title" type="Label" parent="Panel/VBox/HeaderRow" unique_id=299605003]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "// BLACK MARKET //"
+label_settings = ExtResource("2_jmby5")
 
 [node name="CoinBadge" type="PanelContainer" parent="Panel/VBox/HeaderRow" unique_id=1810782806]
 layout_mode = 2
@@ -40,9 +56,18 @@ text = "♦ 0"
 layout_mode = 2
 text = "JACK IN. SPEND COIN. UPGRADE YOUR STACK."
 
-[node name="CardsRow" type="HBoxContainer" parent="Panel/VBox" unique_id=1403140991]
+[node name="CardsScroll" type="ScrollContainer" parent="Panel/VBox" unique_id=533973431]
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="CardsFlow" type="HFlowContainer" parent="Panel/VBox/CardsScroll" unique_id=1546531106]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 16
+alignment = 1
 
 [node name="FooterRow" type="HBoxContainer" parent="Panel/VBox" unique_id=442410765]
 layout_mode = 2

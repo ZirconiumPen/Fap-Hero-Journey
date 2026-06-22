@@ -6,13 +6,10 @@ const DEFAULT_COUNT: int = 3
 
 @onready var _backdrop: ColorRect = $Backdrop
 @onready var _panel: PanelContainer = $Panel
-@onready var _vbox: VBoxContainer = $Panel/VBox
-@onready var _header: HBoxContainer = $Panel/VBox/HeaderRow
 @onready var _title: Label = $Panel/VBox/HeaderRow/Title
 @onready var _coin_badge: PanelContainer = $Panel/VBox/HeaderRow/CoinBadge
 @onready var _coin_lbl: Label = $Panel/VBox/HeaderRow/CoinBadge/CoinLabel
 @onready var _subtitle: Label = $Panel/VBox/Subtitle
-@onready var _cards_row: HBoxContainer = $Panel/VBox/CardsRow
 @onready var _continue: Button = $Panel/VBox/FooterRow/ContinueButton
 
 var _offered_ids: Array = []
@@ -21,11 +18,10 @@ var _price_mult: float = 1.0  # per-shop price multiplier from journey config
 
 # Wrapping grid that replaces the scene's fixed 3-wide CardsRow at runtime so a
 # shop can offer any number of items (built in _apply_layout).
-var _cards_flow: HFlowContainer = null
+@onready var _cards_flow: HFlowContainer = %CardsFlow
 
 
 func _ready() -> void:
-	_apply_layout()
 	_apply_theme()
 	_continue.pressed.connect(_on_continue_pressed)
 	CoinService.BalanceChanged.connect(_on_balance_changed)
@@ -304,71 +300,11 @@ func _on_continue_pressed() -> void:
 
 
 # --------------------------------------------------------------------------
-# Layout
-# --------------------------------------------------------------------------
-
-
-func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_backdrop.anchor_right = 1.0
-	_backdrop.anchor_bottom = 1.0
-
-	_panel.anchor_left = 0.07
-	_panel.anchor_right = 0.93
-	_panel.anchor_top = 0.08
-	_panel.anchor_bottom = 0.92
-
-	_vbox.add_theme_constant_override("separation", 18)
-	_header.add_theme_constant_override("separation", 12)
-
-	# Replace the scene's fixed 3-wide CardsRow with a vertically-scrolling
-	# wrapping grid so the shop can present any number of item cards.
-	var cards_scroll: ScrollContainer = ScrollContainer.new()
-	cards_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	cards_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	_cards_flow = HFlowContainer.new()
-	_cards_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cards_flow.alignment = FlowContainer.ALIGNMENT_CENTER
-	_cards_flow.add_theme_constant_override("h_separation", 16)
-	_cards_flow.add_theme_constant_override("v_separation", 16)
-	cards_scroll.add_child(_cards_flow)
-
-	var row_idx: int = _cards_row.get_index()
-	_vbox.add_child(cards_scroll)
-	_vbox.move_child(cards_scroll, row_idx)
-	_cards_row.queue_free()
-
-
-# --------------------------------------------------------------------------
 # Theme
 # --------------------------------------------------------------------------
 
 
 func _apply_theme() -> void:
-	# Panel: cyberpunk-rundown — magenta border with amber accent edges.
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = UITheme.PANEL_BG_SHOP
-	panel_style.border_color = UITheme.MAGENTA
-	panel_style.border_width_left = 1
-	panel_style.border_width_right = 1
-	panel_style.border_width_top = 3
-	panel_style.border_width_bottom = 3
-	panel_style.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.45)
-	panel_style.shadow_size = 24
-	panel_style.content_margin_left = 28
-	panel_style.content_margin_right = 28
-	panel_style.content_margin_top = 22
-	panel_style.content_margin_bottom = 22
-	_panel.add_theme_stylebox_override("panel", panel_style)
-
-	_title.add_theme_color_override("font_color", UITheme.MAGENTA)
-	_title.add_theme_font_size_override("font_size", 30)
-	_title.uppercase = true
-
 	# Coin badge
 	var coin_style: StyleBoxFlat = StyleBoxFlat.new()
 	coin_style.bg_color = Color(UITheme.AMBER.r, UITheme.AMBER.g, UITheme.AMBER.b, 0.10)
