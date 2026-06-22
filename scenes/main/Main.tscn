@@ -37,8 +37,7 @@ grow_vertical = 2
 script = ExtResource("1_u1xfj")
 
 [node name="AnimatedBackground" parent="." unique_id=1724102878 instance=ExtResource("2_1rhdn")]
-layout_mode = 0
-anchors_preset = 0
+layout_mode = 1
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=488459364]
 layout_mode = 1
