@@ -58,6 +58,8 @@ var _graph_model: Dictionary = {}
 var _selected_ids: Array = []               # selected node ids (graph mode) — drives the highlight + group ops
 var _current_layout_node_id: String = ""    # transient: the node _make_node is building (graph mode)
 var _node_ctrls: Dictionary = {}            # node_id -> Control (graph mode), for live drag moves
+var _node_warnings: Dictionary = {}         # node_id -> soft-validation summary (author badge); pulled per layout
+var warning_provider: Callable = Callable() # builder hook → {node_id: warning}; called each layout (editor only)
 var _connect_mode: bool = false             # builder is wiring an edge — a node click is a target, not a drag
 
 # Node-drag state. A plain press on a node arms a drag of the whole selection; _input tracks
@@ -184,10 +186,16 @@ func _resize_canvas_to_content(content_size: Vector2) -> void:
 func _layout_graph() -> void:
 	var nodes: Dictionary = _graph_model.get("nodes", {})
 	_node_ctrls = {}   # node_id -> Control (rebuilt each layout)
+	# Pull fresh soft-validation badges from the builder once per layout, so EVERY render path (edit,
+	# selection, create / paste / import) shows them. No provider on the player map / export → no badges.
+	_node_warnings = warning_provider.call() if (not map_mode and warning_provider.is_valid()) else {}
 	for id: String in nodes:
 		var n: Dictionary = nodes[id]
 		_current_layout_node_id = id   # read by _make_node to mark the selected node
-		var ctrl: Control = _make_node(_graph_display_item(n), JourneyGraph.is_end(_graph_model, id))
+		var disp: Dictionary = _graph_display_item(n)
+		if not map_mode:               # author-only soft-validation badge (never on the player map)
+			disp["warning"] = str(_node_warnings.get(id, ""))
+		var ctrl: Control = _make_node(disp, JourneyGraph.is_end(_graph_model, id))
 		ctrl.position = n.get("pos", Vector2.ZERO)
 		ctrl.set_meta("graph_node_id", id)
 		if not map_mode:   # player-facing map: nodes are read-only (no select/drag wiring)
@@ -204,7 +212,7 @@ func _layout_graph() -> void:
 		for e: Dictionary in n.get("out", []):
 			var to: String = str(e.get("to", ""))
 			if to != "" and _node_ctrls.has(to):
-				_add_edge(_node_bottom(_node_ctrls[id]), _node_top(_node_ctrls[to]),
+				_add_edge_between(_node_ctrls[id], _node_ctrls[to],
 					UITheme.FORK_EDGE if is_fork else UITheme.EDGE)
 	_canvas.set_edges(_edges)
 	_resize_canvas_to_content(_graph_content_size(_node_ctrls))
@@ -641,6 +649,22 @@ func _make_node(item: Dictionary, is_terminal: bool = false) -> Control:
 	secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(secondary_lbl)
 
+	# Soft validation: an author-facing ⚠ at the right edge of a node with a problem (a round with no
+	# funscript, a moved source file, an unreachable island, …). The builder supplies the text via
+	# warning_provider; never present in map mode. Added to `row` (a real container child, so it always
+	# lays out); the glyph ignores the mouse like the rest of the node, and the detail shows as the
+	# node's hover tooltip (the panel already stops the mouse in the editor).
+	var warning: String = str(item.get("warning", ""))
+	if warning != "":
+		panel.tooltip_text = warning
+		var warn_lbl: Label = Label.new()
+		warn_lbl.text = "⚠"
+		warn_lbl.add_theme_color_override("font_color", UITheme.AMBER)
+		warn_lbl.add_theme_font_size_override("font_size", 18)
+		warn_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		warn_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(warn_lbl)
+
 	return panel
 
 
@@ -756,16 +780,46 @@ func _fork_type_label(resolution: String) -> String:
 # Edges
 # ---------------------------------------------------------------------------
 
-func _add_edge(from: Vector2, to: Vector2, color: Color) -> void:
-	_edges.append({"from": from, "to": to, "color": color})
+# Appends an orthogonal edge that leaves the source and enters the target on whichever faces point
+# toward each other (top / bottom / left / right) — so a sideways or upward connection lands on the
+# side or bottom of the node instead of always routing into its top.
+func _add_edge_between(src: Control, tgt: Control, color: Color) -> void:
+	var route: Dictionary = _edge_route(src, tgt)
+	_edges.append({"points": route["points"], "arrow_dir": route["arrow_dir"], "color": color})
 
 
-func _node_top(node: Control) -> Vector2:
-	return node.position + Vector2(node.size.x * 0.5, 0.0)
-
-
-func _node_bottom(node: Control) -> Vector2:
-	return node.position + Vector2(node.size.x * 0.5, node.size.y)
+# Builds an orthogonal 3-segment route between two node rects. The exit/entry faces are chosen by
+# which face the centre-to-centre line crosses (aspect-ratio aware, so wide nodes still prefer a
+# vertical exit); the route leaves straight out of the exit face, runs perpendicular, then turns
+# straight into the entry face. arrow_dir is the unit heading at the entry (for the arrowhead).
+func _edge_route(src: Control, tgt: Control) -> Dictionary:
+	var ss: Vector2 = src.size
+	var ts: Vector2 = tgt.size
+	var sc: Vector2 = src.position + ss * 0.5
+	var tc: Vector2 = tgt.position + ts * 0.5
+	var delta: Vector2 = tc - sc
+	var approach: float = 20.0   # how far before the entry face the route makes its final turn
+	var from: Vector2
+	var to: Vector2
+	var arrow_dir: Vector2
+	var pts: PackedVector2Array = PackedVector2Array()
+	# Vertical when the centre line exits the top/bottom face rather than a side: compare slopes
+	# scaled by the half-extents, i.e. |dy|/halfH vs |dx|/halfW → |dy|*W vs |dx|*H.
+	if absf(delta.y) * ss.x >= absf(delta.x) * ss.y:
+		if delta.y >= 0.0:   # target below → leave bottom, enter top
+			from = Vector2(sc.x, src.position.y + ss.y); to = Vector2(tc.x, tgt.position.y);        arrow_dir = Vector2(0, 1)
+		else:                # target above → leave top, enter bottom
+			from = Vector2(sc.x, src.position.y);        to = Vector2(tc.x, tgt.position.y + ts.y); arrow_dir = Vector2(0, -1)
+		var bend_y: float = clampf(to.y - arrow_dir.y * approach, minf(from.y, to.y), maxf(from.y, to.y))
+		pts.append(from); pts.append(Vector2(from.x, bend_y)); pts.append(Vector2(to.x, bend_y)); pts.append(to)
+	else:
+		if delta.x >= 0.0:   # target right → leave right, enter left
+			from = Vector2(src.position.x + ss.x, sc.y); to = Vector2(tgt.position.x, tc.y);        arrow_dir = Vector2(1, 0)
+		else:                # target left → leave left, enter right
+			from = Vector2(src.position.x, sc.y);        to = Vector2(tgt.position.x + ts.x, tc.y); arrow_dir = Vector2(-1, 0)
+		var bend_x: float = clampf(to.x - arrow_dir.x * approach, minf(from.x, to.x), maxf(from.x, to.x))
+		pts.append(from); pts.append(Vector2(bend_x, from.y)); pts.append(Vector2(bend_x, to.y)); pts.append(to)
+	return {"points": pts, "arrow_dir": arrow_dir}
 
 
 # ---------------------------------------------------------------------------

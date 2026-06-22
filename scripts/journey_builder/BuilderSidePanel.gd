@@ -302,8 +302,10 @@ func show_graph_node_editor(node_id: String) -> void:
 			_owner._refresh_graph()                    # structural change → re-render the canvas
 			show_graph_node_editor(node_id)
 		_build_side_panel_editor(side_vbox, display, arr, 0, reselect)
+		# Divider between the content editor (round types / fields) and the node-operations block
+		# (connect / duplicate / delete / add) below.
+		side_vbox.add_child(_side_divider_line())
 		# Edge wiring (slice 3c): connect this node's flow to a target, or disconnect (end here).
-		side_vbox.add_child(_side_section_separator())
 		var connecting: bool = _owner._connecting_from == node_id
 		var conn_btn: Button = UITheme.make_icon_btn(
 			"✕ CANCEL CONNECT" if connecting else "🔗 CONNECT TO…", false, UITheme.AMBER)
@@ -708,6 +710,19 @@ func _side_section_separator() -> Control:
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size = Vector2(0, 6)
 	return spacer
+
+
+# A visible horizontal divider line (thin, in the separator colour) marking a major break between
+# side-panel groups — heavier than the subtle _side_section_separator spacer. Used between a node's
+# content editor and its operations block (connect / duplicate / delete / add).
+func _side_divider_line() -> HSeparator:
+	var line: HSeparator = HSeparator.new()
+	line.add_theme_constant_override("separation", 13)
+	var sb: StyleBoxLine = StyleBoxLine.new()
+	sb.color = UITheme.SEPARATOR
+	sb.thickness = 1
+	line.add_theme_stylebox_override("separator", sb)
+	return line
 
 
 # Fills `lbl` with a round's funscript length + action count (e.g. "4:32 · 812

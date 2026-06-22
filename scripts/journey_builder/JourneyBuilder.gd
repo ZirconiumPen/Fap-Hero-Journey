@@ -205,6 +205,7 @@ func _setup_graph_view() -> void:
 	_graph.connect_target_picked.connect(_on_connect_target_picked)
 	_graph.nodes_drag_started.connect(_push_undo)
 	_graph.edge_drawn.connect(_on_edge_drawn)
+	_graph.warning_provider = _compute_node_warnings   # GraphView pulls soft-validation badges each layout
 	_graph.call_deferred("set_graph", _graph_model)
 
 
@@ -213,6 +214,46 @@ func _refresh_graph() -> void:
 	if not _graph:
 		return
 	_graph.set_graph(_graph_model)
+
+
+# Per-node soft validation for the live editor badge (restores the tree builder's node alerts):
+# content problems (a round with no funscript, a moved source file, an unnamed fork choice, …) plus
+# structural ones (an unreachable island, a dangling edge). Reuses the exact presave checkers, so a
+# node badges for precisely what would block a save — but soft: it never blocks editing. Returns
+# {node_id: summary}; the summary is the node's ⚠ hover tooltip.
+func _compute_node_warnings() -> Dictionary:
+	var warnings: Dictionary = {}
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	for id: String in nodes:
+		var n: Dictionary = nodes[id]
+		var issues: Array = []
+		match str(n.get("type", "")):
+			"round":      _save_check_round(n.get("data", {}), "Round", issues)
+			"storyboard": _save_check_storyboard(n.get("data", {}), "Storyboard", issues)
+			"fork":       _save_check_fork_graph(n, "Fork", issues)
+		if not issues.is_empty():
+			var details: Array = []
+			for it: Dictionary in issues:
+				details.append(str(it.get("detail", "Problem")))
+			warnings[id] = "\n".join(details)
+	# Structural (whole-graph) problems, attached to the offending node.
+	for gi: Dictionary in JourneyGraph.validate_graph(_graph_model):
+		var sid: String = str(gi.get("id", ""))
+		if sid == "" or not nodes.has(sid):
+			continue   # journey-level (e.g. no_start) — surfaced at save, not per node
+		var msg: String = _structural_warning_text(str(gi.get("kind", "")))
+		if msg != "":
+			warnings[sid] = (str(warnings[sid]) + "\n" + msg) if warnings.has(sid) else msg
+	return warnings
+
+
+# Short per-node text for a structural validation issue (JourneyGraph.validate_graph kind).
+func _structural_warning_text(kind: String) -> String:
+	match kind:
+		"unreachable": return "Unreachable — nothing leads here, so this node would never play."
+		"dangling":    return "A connection points to a node that no longer exists."
+		"cycle":       return "Part of a loop — a journey must flow forward (no cycles)."
+	return ""
 
 
 # ---------------------------------------------------------------------------
