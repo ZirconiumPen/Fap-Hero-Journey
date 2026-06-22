@@ -5,11 +5,10 @@ signal closed
 const PANEL_WIDTH: int = 300
 const SLIDE_TIME: float = 0.18
 
-@onready var _panel: PanelContainer = $Panel
-@onready var _close_btn: Button = $Panel/VBox/HeaderRow/CloseButton
-@onready var _empty_lbl: Label = $Panel/VBox/EmptyLabel
-@onready var _scroll: ScrollContainer = $Panel/VBox/Scroll
-@onready var _item_list: VBoxContainer = $Panel/VBox/Scroll/ItemList
+@onready var _panel: PanelContainer = %Panel
+@onready var _empty_lbl: Label = %EmptyLabel
+@onready var _scroll: ScrollContainer = %Scroll
+@onready var _item_list: VBoxContainer = %ItemList
 
 # True while an activation animation is playing — blocks further card clicks
 # until the inventory list rebuilds (cleared in _refresh).
@@ -17,30 +16,21 @@ var _activating: bool = false
 
 
 func _ready() -> void:
-	_close_btn.pressed.connect(close)
 	InventoryService.InventoryChanged.connect(_refresh)
 	_refresh()
 	_slide_in()
 
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		close()
+		_on_close_button_pressed()
 		get_viewport().set_input_as_handled()
 
 
-func close() -> void:
-	emit_signal("closed")
-	var tween: Tween = create_tween()
-	tween.tween_property(_panel, "position:x", get_viewport_rect().size.x, SLIDE_TIME)
-	tween.tween_callback(queue_free)
-
-
 func _slide_in() -> void:
-	var w: float = get_viewport_rect().size.x
-	_panel.position.x = w
+	_panel.position.x = get_viewport_rect().size.x
 	var tween: Tween = create_tween()
-	tween.tween_property(_panel, "position:x", w - PANEL_WIDTH, SLIDE_TIME)
+	tween.tween_property(_panel, "position:x", -_panel.size.x, SLIDE_TIME).as_relative()
 
 
 # --------------------------------------------------------------------------
@@ -177,7 +167,6 @@ func _activate_card(card: Control, use_lbl: Label, slot_idx: int) -> void:
 	tw.tween_callback(func() -> void: InventoryService.ActivateItem(slot_idx))
 
 
-
 # `accent` colours the card outline — a bold left stripe plus a thin border —
 # so the item's effect class (buff / debuff / modifier) reads at a glance.
 func _row_stylebox(accent: Color) -> StyleBoxFlat:
@@ -193,3 +182,10 @@ func _row_stylebox(accent: Color) -> StyleBoxFlat:
 	s.corner_radius_bottom_left = 4
 	s.corner_radius_bottom_right = 4
 	return s
+
+
+func _on_close_button_pressed() -> void:
+	closed.emit()
+	var tween: Tween = create_tween()
+	tween.tween_property(_panel, "position:x", get_viewport_rect().size.x, SLIDE_TIME)
+	tween.tween_callback(queue_free)

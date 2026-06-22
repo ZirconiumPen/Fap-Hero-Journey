@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://crx72d8yyp8gv"]
 
 [ext_resource type="Script" uid="uid://2bnlrwwu8by8" path="res://scripts/inventory/InventoryPanel.gd" id="1_inv"]
+[ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="2_b3pjt"]
+[ext_resource type="LabelSettings" uid="uid://dx7wyw25c8lnf" path="res://theming/subtitle_label.tres" id="3_62hlj"]
 
 [node name="root" type="Control" unique_id=1830338422]
 layout_mode = 3
@@ -23,18 +25,30 @@ mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
 [node name="Panel" type="PanelContainer" parent="." unique_id=1137232948]
-layout_mode = 0
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -305.0
+grow_horizontal = 0
+grow_vertical = 2
 
 [node name="VBox" type="VBoxContainer" parent="Panel" unique_id=174644229]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="HeaderRow" type="HBoxContainer" parent="Panel/VBox" unique_id=835907745]
 layout_mode = 2
+theme_override_constants/separation = 8
 
 [node name="Title" type="Label" parent="Panel/VBox/HeaderRow" unique_id=1206892600]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "INVENTORY"
+label_settings = ExtResource("2_b3pjt")
 
 [node name="CloseButton" type="Button" parent="Panel/VBox/HeaderRow" unique_id=86928722]
 layout_mode = 2
@@ -43,16 +57,25 @@ text = "✕"
 [node name="Subtitle" type="Label" parent="Panel/VBox" unique_id=606986354]
 layout_mode = 2
 text = "CLICK AN ITEM TO ACTIVATE"
+label_settings = ExtResource("3_62hlj")
 
 [node name="EmptyLabel" type="Label" parent="Panel/VBox" unique_id=87627417]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 text = "// INVENTORY EMPTY //"
+label_settings = ExtResource("3_62hlj")
+horizontal_alignment = 1
 
 [node name="Scroll" type="ScrollContainer" parent="Panel/VBox" unique_id=965088277]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
 [node name="ItemList" type="VBoxContainer" parent="Panel/VBox/Scroll" unique_id=2033798664]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[connection signal="pressed" from="Panel/VBox/HeaderRow/CloseButton" to="." method="_on_close_button_pressed"]
