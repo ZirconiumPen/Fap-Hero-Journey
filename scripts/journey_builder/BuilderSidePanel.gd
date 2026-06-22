@@ -8,9 +8,7 @@ extends RefCounted
 #
 # Public entry points:
 #   show_journey_info_panel()                 – default view, journey metadata
-#   show_node_editor(item, arr, idx)          – per-node editor for a graph selection
-#   show_insert_popup(overlay, graph, arr, idx, screen_pos)
-#                                             – floating "+" insert picker
+#   show_graph_node_editor(node_id)           – per-node editor for the selected graph node
 #
 # Everything else is internal. The owner (JourneyBuilder) is accessed via
 # `_owner.<field>` / `_owner.<method>()`.
@@ -60,77 +58,6 @@ func _init(owner: JourneyBuilder) -> void:
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
-
-func show_insert_popup(overlay: Control, graph: Control, arr: Array, insert_idx: int, screen_pos: Vector2) -> void:
-	# Builds a small floating panel with 4 type buttons. Clicking outside it
-	# dismisses without inserting.
-	var popup: PopupPanel = PopupPanel.new()
-	overlay.add_child(popup)
-
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = UITheme.PANEL_BG
-	panel_style.border_color = UITheme.PURPLE_BRIGHT
-	panel_style.border_width_left   = 2; panel_style.border_width_right  = 2
-	panel_style.border_width_top    = 2; panel_style.border_width_bottom = 2
-	panel_style.content_margin_left   = 6; panel_style.content_margin_right  = 6
-	panel_style.content_margin_top    = 6; panel_style.content_margin_bottom = 6
-	popup.add_theme_stylebox_override("panel", panel_style)
-
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	popup.add_child(vbox)
-
-	var hdr: Label = Label.new()
-	hdr.text = "INSERT HERE"
-	hdr.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	hdr.add_theme_font_size_override("font_size", 10)
-	hdr.uppercase = true
-	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(hdr)
-
-	# Paste row — only when something has been copied. Drops fresh deep
-	# duplicates of the clipboard item(s) into this exact slot, so modules copied
-	# anywhere (even a whole fork subtree, or several at once) can land in any
-	# branch.
-	if not _owner._clipboard_items.is_empty():
-		var paste_btn: Button = Button.new()
-		paste_btn.text = "📋 PASTE %s" % _owner._clipboard_label().to_upper()
-		paste_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		paste_btn.custom_minimum_size = Vector2(180, 0)
-		UITheme.style_button(paste_btn, UITheme.AMBER)
-		paste_btn.pressed.connect(func() -> void:
-			_owner._paste_clipboard_into(arr, insert_idx)
-			popup.queue_free()
-		)
-		vbox.add_child(paste_btn)
-
-		var sep: HSeparator = HSeparator.new()
-		vbox.add_child(sep)
-
-	var specs: Array = [
-		{"label": "▶ ROUND",      "color": UITheme.PURPLE_MID,    "item": JourneyData.new_item("round")},
-		{"label": "◆ SHOP",       "color": UITheme.PURPLE_BRIGHT, "item": JourneyData.new_item("shop")},
-		{"label": "◈ STORYBOARD", "color": UITheme.STORYBOARD,    "item": JourneyData.new_item("storyboard")},
-		{"label": "⑂ FORK",       "color": UITheme.MAGENTA,       "item": JourneyData.new_item("fork")},
-	]
-	for spec in specs:
-		var btn: Button = Button.new()
-		btn.text = spec["label"]
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(180, 0)
-		UITheme.style_button(btn, spec["color"])
-		var item_template: Dictionary = spec["item"]
-		btn.pressed.connect(func() -> void:
-			_owner._push_undo()
-			arr.insert(insert_idx, item_template.duplicate(true))
-			popup.queue_free()
-			graph.call_deferred("set_items", _owner._items)
-			graph.call_deferred("select_item", arr, insert_idx)
-		)
-		vbox.add_child(btn)
-
-	popup.popup(Rect2i(Vector2i(screen_pos), Vector2i(0, 0)))
-
 
 # Default side-panel view (no node selected). Shows journey metadata + quick-add.
 func show_journey_info_panel() -> void:
@@ -269,57 +196,7 @@ func show_journey_info_panel() -> void:
 	side_vbox.add_child(map_toggle)
 
 	side_vbox.add_child(_side_section_separator())
-
-	# Bulk-import discoverability hint.
-	var bulk_hint: Label = Label.new()
-	bulk_hint.text = "TIP: DROP VIDEOS + FUNSCRIPTS — OR A WHOLE FOLDER — ON THE GRAPH TO AUTO-CREATE ROUNDS (MATCHED BY FILE NAME)."
-	bulk_hint.add_theme_color_override("font_color", Color(UITheme.PURPLE_MID.r, UITheme.PURPLE_MID.g, UITheme.PURPLE_MID.b, 0.75))
-	bulk_hint.add_theme_font_size_override("font_size", 10)
-	bulk_hint.uppercase = true
-	bulk_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bulk_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(bulk_hint)
-
-	side_vbox.add_child(_side_section_separator())
-
-	# Quick-add buttons to top level
-	var add_lbl: Label = Label.new()
-	add_lbl.text = "ADD TO TOP LEVEL"
-	add_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	add_lbl.add_theme_font_size_override("font_size", 10)
-	add_lbl.uppercase = true
-	side_vbox.add_child(add_lbl)
-
-	var add_specs: Array = [
-		{"label": "+ ROUND",      "color": UITheme.PURPLE_MID,    "item": JourneyData.new_item("round")},
-		{"label": "◆ SHOP",       "color": UITheme.PURPLE_BRIGHT, "item": JourneyData.new_item("shop")},
-		{"label": "◈ STORYBOARD", "color": UITheme.STORYBOARD,    "item": JourneyData.new_item("storyboard")},
-		{"label": "⑂ FORK",       "color": UITheme.MAGENTA,       "item": JourneyData.new_item("fork")},
-	]
-	for spec in add_specs:
-		var btn: Button = Button.new()
-		btn.text = spec["label"]
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_button(btn, spec["color"])
-		var item_template: Dictionary = spec["item"]
-		btn.pressed.connect(func() -> void:
-			_owner._push_undo()
-			_owner._items.append(item_template.duplicate(true))
-			_owner._refresh_graph()
-		)
-		side_vbox.add_child(btn)
-
-	# Paste-to-top-level — appends fresh deep duplicates of the clipboard item(s)
-	# to the end of the top-level sequence. Only shown when something's copied.
-	if not _owner._clipboard_items.is_empty():
-		var paste_btn: Button = Button.new()
-		paste_btn.text = "📋 PASTE %s" % _owner._clipboard_label().to_upper()
-		paste_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_button(paste_btn, UITheme.AMBER)
-		paste_btn.pressed.connect(func() -> void:
-			_owner._paste_clipboard_into(_owner._items, _owner._items.size())
-		)
-		side_vbox.add_child(paste_btn)
+	side_vbox.add_child(_make_graph_add_buttons())
 
 
 # Toggle chip for one journey tag. Filled with the tag's colour when on,
@@ -369,22 +246,375 @@ func _make_tag_toggle(tag_def: Dictionary) -> Button:
 	return btn
 
 
-# Builds the editor for the currently selected node into the side panel.
-func show_node_editor(item: Dictionary, arr: Array, idx: int) -> void:
+# Graph-editor: the "ADD NODE" button row (round/shop/storyboard/fork → _create_graph_node). Shown
+# in both the journey-info panel and the node editor so creating a node is always reachable.
+func _make_graph_add_buttons() -> Control:
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.add_child(_side_field_label("ADD NODE"))
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	for spec: Array in [
+			["▶ ROUND", "round", UITheme.PURPLE_MID],
+			["◆ SHOP", "shop", UITheme.PURPLE_BRIGHT],
+			["◈ STORY", "storyboard", UITheme.STORYBOARD],
+			["⑂ FORK", "fork", UITheme.MAGENTA]]:
+		var btn: Button = UITheme.make_icon_btn(spec[0], false, spec[2])
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var t: String = spec[1]
+		btn.pressed.connect(func() -> void: _owner._create_graph_node(t))
+		row.add_child(btn)
+	box.add_child(row)
+	return box
+
+
+# Graph-editor (L1 slice 2b/3b): the editor for a selected GRAPH node. Reuses the per-type field
+# editors by pointing them at node.data (arr = [node.data], idx = 0), so edits mutate the node in
+# place. Forks edit their out-edges (slice 3c), so they show a placeholder for now. Topped with the
+# add-node row and tailed with a delete button. Field edits reflect on the canvas on the next
+# refresh (re-selecting a node, or a structural change).
+func show_graph_node_editor(node_id: String) -> void:
 	var side_vbox: VBoxContainer = _owner._side_vbox
 	for c in side_vbox.get_children():
 		c.queue_free()
-	# Any node can be previewed in the real runtime via "Test From Here" (saves
-	# the journey, then launches GameLoop at this node). Nodes inside a fork path
-	# are reached by force-resolving their parent fork(s) along the way.
-	side_vbox.add_child(_make_test_controls(item, arr))
+	var node: Dictionary = (_owner._graph_model.get("nodes", {}) as Dictionary).get(node_id, {})
+	if node.is_empty():
+		show_journey_info_panel()
+		return
+	# Test From Here at the top — save + play the journey starting at this node (a synthetic
+	# {node_id} item is all _save_and_test_from needs; the graph is node-id native).
+	side_vbox.add_child(_make_test_controls({"node_id": node_id}, []))
 	side_vbox.add_child(_side_section_separator())
-	_build_side_panel_editor(side_vbox, item, arr, idx, _owner._graph)
+	var node_type: String = node.get("type", "round")
+	if node_type == "fork":
+		# Fork editing = out-edges as choices (3c-ii). reselect rebuilds the side panel after a
+		# structural change (resolution toggle, add/remove choice) so per-choice fields match.
+		var fork_reselect: Callable = func(_i: int) -> void:
+			_owner._refresh_graph()
+			show_graph_node_editor(node_id)
+		side_vbox.add_child(_make_graph_fork_editor(node_id, node, fork_reselect))
+	else:
+		var data: Dictionary = node.get("data", {})
+		var display: Dictionary = data.duplicate()   # gives _build_side_panel_editor a "type" to dispatch on
+		display["type"] = node_type
+		var arr: Array = [data]                        # arr[0] IS node.data — editors mutate the node
+		var reselect: Callable = func(_new_idx: int) -> void:
+			_owner._refresh_graph()                    # structural change → re-render the canvas
+			show_graph_node_editor(node_id)
+		_build_side_panel_editor(side_vbox, display, arr, 0, reselect)
+		# Divider between the content editor (round types / fields) and the node-operations block
+		# (connect / duplicate / delete / add) below.
+		side_vbox.add_child(_side_divider_line())
+		# Edge wiring (slice 3c): connect this node's flow to a target, or disconnect (end here).
+		var connecting: bool = _owner._connecting_from == node_id
+		var conn_btn: Button = UITheme.make_icon_btn(
+			"✕ CANCEL CONNECT" if connecting else "🔗 CONNECT TO…", false, UITheme.AMBER)
+		conn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		conn_btn.pressed.connect(func() -> void: _owner._begin_connect(node_id))
+		side_vbox.add_child(conn_btn)
+		var node_out: Array = node.get("out", [])
+		if not node_out.is_empty() and str((node_out[0] as Dictionary).get("to", "")) != "":
+			var disc_btn: Button = UITheme.make_icon_btn("✂ DISCONNECT (END HERE)", false, UITheme.PURPLE_MID)
+			disc_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			disc_btn.pressed.connect(func() -> void: _owner._disconnect_graph_node(node_id))
+			side_vbox.add_child(disc_btn)
+	side_vbox.add_child(_side_section_separator())
+	var dup_btn: Button = UITheme.make_icon_btn("⎘ DUPLICATE", false, UITheme.PURPLE_MID)
+	dup_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_btn.pressed.connect(func() -> void: _owner._duplicate_selection())
+	side_vbox.add_child(dup_btn)
+	var del_btn: Button = UITheme.make_icon_btn("🗑 DELETE NODE", false, UITheme.ERROR_SOFT)
+	del_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	del_btn.pressed.connect(func() -> void: _owner._delete_graph_node(node_id))
+	side_vbox.add_child(del_btn)
+
+	side_vbox.add_child(_side_section_separator())
+	side_vbox.add_child(_make_graph_add_buttons())
+
+
+# Graph editor: the side panel shown when 2+ nodes are selected. Group actions only (per-node field
+# editing needs a single selection); the ADD NODE row stays so creating is always reachable.
+func show_graph_multi_select_panel(ids: Array) -> void:
+	var side_vbox: VBoxContainer = _owner._side_vbox
+	if side_vbox == null:
+		return
+	for c in side_vbox.get_children():
+		c.queue_free()
+
+	var hdr: Label = Label.new()
+	hdr.text = "// %d NODES SELECTED //" % ids.size()
+	hdr.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
+	hdr.add_theme_font_size_override("font_size", 14)
+	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	side_vbox.add_child(hdr)
+
+	var hint: Label = Label.new()
+	hint.text = "Drag any selected node to move the group. Ctrl/Shift-click a node to adjust the selection; click empty space to clear."
+	hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	side_vbox.add_child(hint)
+
+	side_vbox.add_child(_side_section_separator())
+	var copy_btn: Button = UITheme.make_icon_btn("⧉ COPY (%d)" % ids.size(), false, UITheme.PURPLE_BRIGHT)
+	copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy_btn.pressed.connect(func() -> void: _owner._copy_selection())
+	side_vbox.add_child(copy_btn)
+	var dup_btn: Button = UITheme.make_icon_btn("⎘ DUPLICATE (%d)" % ids.size(), false, UITheme.PURPLE_MID)
+	dup_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_btn.pressed.connect(func() -> void: _owner._duplicate_selection())
+	side_vbox.add_child(dup_btn)
+	var del_btn: Button = UITheme.make_icon_btn("🗑 DELETE SELECTED (%d)" % ids.size(), false, UITheme.ERROR_SOFT)
+	del_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	del_btn.pressed.connect(func() -> void: _owner._delete_selected_nodes())
+	side_vbox.add_child(del_btn)
+
+	side_vbox.add_child(_side_section_separator())
+	side_vbox.add_child(_make_graph_add_buttons())
+
+
+# Graph-editor fork editor (3c-ii): edits the fork's meta (title/description/resolution + the
+# conditional sub-config) and its CHOICES — one per out-edge. Unlike the tree fork editor, a
+# choice holds no nested items; it just carries its config and a `to` target wired by connect
+# mode. Mutates node.data + node.out in place; structural changes go through `reselect`.
+func _make_graph_fork_editor(node_id: String, node: Dictionary, reselect: Callable) -> Control:
+	var data: Dictionary = node.get("data", {})
+	var out: Array = node.get("out", [])
+
+	var col: VBoxContainer = VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+
+	col.add_child(_side_field_label("TITLE"))
+	var title_edit: LineEdit = LineEdit.new()
+	title_edit.placeholder_text = "Fork title (optional)..."
+	title_edit.text = data.get("title", "")
+	UITheme.style_line_edit(title_edit)
+	title_edit.text_changed.connect(func(v: String) -> void: data["title"] = v)
+	col.add_child(title_edit)
+
+	col.add_child(_side_field_label("DESCRIPTION"))
+	var desc_edit: LineEdit = LineEdit.new()
+	desc_edit.placeholder_text = "Fork description (optional)..."
+	desc_edit.text = data.get("description", "")
+	UITheme.style_line_edit(desc_edit)
+	desc_edit.text_changed.connect(func(v: String) -> void: data["description"] = v)
+	col.add_child(desc_edit)
+
+	# Resolution: how the journey picks a choice.
+	col.add_child(_side_field_label("RESOLUTION"))
+	var res_values: Array = ["choice", "random", "conditional", "sacrifice"]
+	var res_dd: OptionButton = OptionButton.new()
+	res_dd.add_item("Player Choice")
+	res_dd.add_item("Random")
+	res_dd.add_item("Conditional")
+	res_dd.add_item("Sacrifice")
+	res_dd.selected = max(0, res_values.find(data.get("resolution", "choice")))
+	res_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_option_button(res_dd)
+	res_dd.item_selected.connect(func(i: int) -> void:
+		data["resolution"] = res_values[i]
+		reselect.call(0)   # rebuild so per-choice fields match the new type
+	)
+	col.add_child(res_dd)
+
+	var resolution: String = data.get("resolution", "choice")
+	var metric: String = data.get("cond_metric", "score")
+
+	# Conditional sub-config: which metric + the fallback choice.
+	if resolution == "conditional":
+		col.add_child(_side_field_label("CONDITION"))
+		var metric_values: Array = ["score", "coins", "item"]
+		var metric_dd: OptionButton = OptionButton.new()
+		metric_dd.add_item("Last Round Score")
+		metric_dd.add_item("Coin Balance")
+		metric_dd.add_item("Item Owned")
+		metric_dd.selected = max(0, metric_values.find(metric))
+		metric_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_option_button(metric_dd)
+		metric_dd.item_selected.connect(func(i: int) -> void:
+			data["cond_metric"] = metric_values[i]
+			reselect.call(0)
+		)
+		col.add_child(metric_dd)
+
+		col.add_child(_side_field_label("DEFAULT CHOICE (NO MATCH)"))
+		var def_dd: OptionButton = OptionButton.new()
+		for ej in out.size():
+			var en: String = str((out[ej] as Dictionary).get("name", "")).strip_edges()
+			def_dd.add_item("Choice %d%s" % [ej + 1, ("  " + en) if en != "" else ""])
+		def_dd.selected = clampi(int(data.get("default_path", 0)), 0, max(0, out.size() - 1))
+		def_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_option_button(def_dd)
+		def_dd.item_selected.connect(func(i: int) -> void: data["default_path"] = i)
+		col.add_child(def_dd)
+
+	var res_hint: Label = Label.new()
+	res_hint.text = _fork_resolution_hint(resolution, metric)
+	res_hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	res_hint.add_theme_font_size_override("font_size", 10)
+	res_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(res_hint)
+
+	col.add_child(_side_section_separator())
+	col.add_child(_side_field_label("CHOICES"))
+
+	for ei in out.size():
+		col.add_child(_make_graph_choice_block(node_id, out, ei, resolution, metric, reselect))
+
+	# Cap at 4 to match the proven ForkScreen choice layout.
+	if out.size() < 4:
+		var add_btn: Button = Button.new()
+		add_btn.text = "+ ADD CHOICE"
+		add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UITheme.style_button(add_btn, UITheme.PURPLE_MID)
+		add_btn.pressed.connect(func() -> void: _owner._add_fork_edge(node_id))
+		col.add_child(add_btn)
+
+	return col
+
+
+# One choice card inside the graph fork editor: name / description / card image, the per-
+# resolution field (weight / threshold / cost / required item — reusing the tree helpers, which
+# write to out[ei] just as they do for a tree path), and the "LEADS TO" wiring (connect / clear).
+func _make_graph_choice_block(node_id: String, out: Array, ei: int, resolution: String, metric: String, reselect: Callable) -> Control:
+	var edge: Dictionary = out[ei]
+
+	var panel: PanelContainer = PanelContainer.new()
+	var ps: StyleBoxFlat = StyleBoxFlat.new()
+	ps.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.08)
+	ps.border_color = UITheme.MAGENTA
+	ps.border_width_left = 1; ps.border_width_right = 1
+	ps.border_width_top = 1; ps.border_width_bottom = 1
+	ps.content_margin_left = 10; ps.content_margin_right = 10
+	ps.content_margin_top = 8; ps.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", ps)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var sub: VBoxContainer = VBoxContainer.new()
+	sub.add_theme_constant_override("separation", 4)
+	panel.add_child(sub)
+
+	var hdr: HBoxContainer = HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", ROW_SEP)
+	sub.add_child(hdr)
+	var choice_lbl: Label = Label.new()
+	choice_lbl.text = "CHOICE %d" % (ei + 1)
+	choice_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
+	choice_lbl.add_theme_font_size_override("font_size", 11)
+	choice_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.add_child(choice_lbl)
+	# A fork needs ≥2 choices (matches the tree's path minimum + ForkScreen).
+	if out.size() > 2:
+		var rm_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
+		rm_btn.tooltip_text = "Delete this choice"
+		rm_btn.pressed.connect(func() -> void: _owner._remove_fork_edge(node_id, ei))
+		hdr.add_child(rm_btn)
+
+	sub.add_child(_side_field_label("NAME"))
+	var name_edit: LineEdit = LineEdit.new()
+	name_edit.placeholder_text = "Choice name..."
+	name_edit.text = edge.get("name", "")
+	UITheme.style_line_edit(name_edit)
+	name_edit.text_changed.connect(func(v: String) -> void: out[ei]["name"] = v)
+	sub.add_child(name_edit)
+
+	sub.add_child(_side_field_label("DESCRIPTION"))
+	var cdesc_edit: LineEdit = LineEdit.new()
+	cdesc_edit.placeholder_text = "Description (optional)..."
+	cdesc_edit.text = edge.get("description", "")
+	UITheme.style_line_edit(cdesc_edit)
+	cdesc_edit.text_changed.connect(func(v: String) -> void: out[ei]["description"] = v)
+	sub.add_child(cdesc_edit)
+
+	sub.add_child(_side_field_label("CARD IMAGE"))
+	var img_zone: PanelContainer = DropZoneScript.new()
+	img_zone.accepted_extensions = JourneyData.IMAGE_EXTENSIONS.duplicate()
+	img_zone.picker_title = "Select Card Image for Choice %d" % (ei + 1)
+	img_zone.picker_filters = ["*.png,*.jpg,*.jpeg,*.webp ; Image Files"]
+	img_zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sub.add_child(img_zone)
+	if edge.get("image_path", "") != "":
+		img_zone.call_deferred("set_file", edge["image_path"])
+	var img_rm_btn: Button = Button.new()
+	img_rm_btn.text = "✕ REMOVE IMAGE"
+	img_rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	img_rm_btn.visible = edge.get("image_path", "") != ""
+	UITheme.style_button(img_rm_btn, UITheme.MAGENTA)
+	img_rm_btn.pressed.connect(func() -> void:
+		_delete_saved_image(out[ei].get("image_path", ""))
+		out[ei]["image_path"] = ""
+		img_zone.call_deferred("set_file", "")
+		img_rm_btn.visible = false
+	)
+	img_zone.file_dropped.connect(func(p: String) -> void:
+		out[ei]["image_path"] = p
+		img_rm_btn.visible = true
+	)
+	sub.add_child(img_rm_btn)
+
+	# Per-resolution field — the shared helpers write to out[ei][key] (out is an edge array,
+	# indexed exactly like the tree's paths array).
+	if resolution == "random":
+		_add_path_int_field(sub, out, ei, "weight", "WEIGHT (RELATIVE ODDS)", 1000)
+	elif resolution == "sacrifice":
+		_add_path_int_field(sub, out, ei, "cost", "COIN COST", 999999)
+		_add_required_item_field(sub, out, ei, edge, "REQUIRED ITEM (CONSUMED)")
+	elif resolution == "conditional" and metric == "item":
+		_add_required_item_field(sub, out, ei, edge, "REQUIRED ITEM")
+	elif resolution == "conditional":
+		var thr_label: String = "ACTIVATES AT ≥  (%s)" % ("SCORE" if metric == "score" else "COINS")
+		_add_path_int_field(sub, out, ei, "threshold", thr_label, 999999)
+
+	# LEADS TO — the choice's target node, wired via connect mode.
+	sub.add_child(_side_section_separator())
+	sub.add_child(_side_field_label("LEADS TO"))
+	var to_id: String = str(edge.get("to", ""))
+	var target_lbl: Label = Label.new()
+	target_lbl.text = _graph_node_label(to_id) if to_id != "" else "(not set — ends the run on this choice)"
+	target_lbl.add_theme_color_override("font_color", UITheme.SUCCESS if to_id != "" else UITheme.DARK_TEXT)
+	target_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.add_child(target_lbl)
+
+	var connecting: bool = _owner._connecting_from == node_id and _owner._connecting_edge_idx == ei
+	var conn_btn: Button = UITheme.make_icon_btn(
+		"✕ CANCEL CONNECT" if connecting else "🔗 CONNECT TO…", false, UITheme.AMBER)
+	conn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_btn.pressed.connect(func() -> void: _owner._begin_connect_fork_edge(node_id, ei))
+	sub.add_child(conn_btn)
+	if to_id != "":
+		var clear_btn: Button = UITheme.make_icon_btn("✂ CLEAR (END ON THIS CHOICE)", false, UITheme.PURPLE_MID)
+		clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		clear_btn.pressed.connect(func() -> void: _owner._clear_fork_edge(node_id, ei))
+		sub.add_child(clear_btn)
+
+	return panel
+
+
+# Short readable label for a graph node (used by the fork choice "LEADS TO" line).
+func _graph_node_label(node_id: String) -> String:
+	var nodes: Dictionary = _owner._graph_model.get("nodes", {})
+	if not nodes.has(node_id):
+		return "(missing node)"
+	var n: Dictionary = nodes[node_id]
+	var d: Dictionary = n.get("data", {})
+	match str(n.get("type", "")):
+		"round":
+			var rn: String = str(d.get("name", "")).strip_edges()
+			return "Round — %s" % (rn if rn != "" else "(unnamed)")
+		"shop":
+			var sn: String = str(d.get("title", "")).strip_edges()
+			return "Shop — %s" % (sn if sn != "" else "(unnamed)")
+		"storyboard":
+			return "Storyboard"
+		"fork":
+			var fn: String = str(d.get("title", "")).strip_edges()
+			return "Fork — %s" % (fn if fn != "" else "(unnamed)")
+	return node_id
 
 
 # Test-play controls block: the "Test From Here" button plus the seed inputs.
-# `item`/`arr` identify which node to launch from (arr is its containing array —
-# _items for a top-level node, or a fork path's `items` for a nested one).
+# `item` carries the node_id to launch from; `arr` is vestigial (graph mode passes []),
+# kept only for the shared _save_and_test_from signature.
 func _make_test_controls(item: Dictionary, arr: Array) -> Control:
 	var box: VBoxContainer = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
@@ -425,172 +655,19 @@ func _make_seed_spin(value: int, setter: Callable) -> SpinBox:
 # Group-action panel shown when 2+ nodes are selected. Lists the selection and
 # offers Copy / Cut / Delete and block Move Up / Down — all routed to the owner's
 # set-based operations. No per-field editing while multiple are selected.
-func show_multi_select_panel(items: Array, _arr: Array) -> void:
-	var side_vbox: VBoxContainer = _owner._side_vbox
-	for c in side_vbox.get_children():
-		c.queue_free()
-
-	var hdr: Label = Label.new()
-	hdr.text = "// %d MODULES SELECTED //" % items.size()
-	hdr.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
-	hdr.add_theme_font_size_override("font_size", 14)
-	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(hdr)
-
-	var hint: Label = Label.new()
-	hint.text = "CTRL+CLICK A NODE TO ADD/REMOVE.  DRAG A BOX ON THE GRAPH TO SELECT.  ACTIONS APPLY TO ALL SELECTED."
-	hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	hint.add_theme_font_size_override("font_size", 10)
-	hint.uppercase = true
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(hint)
-
-	side_vbox.add_child(_side_section_separator())
-
-	# Listing of the selected modules, in sequence order.
-	for it: Dictionary in _owner._selected_items_in_order():
-		var row_lbl: Label = Label.new()
-		row_lbl.text = "%s  %s" % [_type_glyph(it), _brief_item_name(it)]
-		row_lbl.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-		row_lbl.add_theme_font_size_override("font_size", 12)
-		row_lbl.clip_text = true
-		side_vbox.add_child(row_lbl)
-
-	side_vbox.add_child(_side_section_separator())
-
-	# Clipboard row: Copy + Cut.
-	var clip_row: HBoxContainer = HBoxContainer.new()
-	clip_row.add_theme_constant_override("separation", 6)
-	var copy_btn: Button = UITheme.make_icon_btn("⧉ COPY", false, UITheme.PURPLE_BRIGHT)
-	copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	copy_btn.pressed.connect(func() -> void: _owner._copy_selection())
-	clip_row.add_child(copy_btn)
-	var cut_btn: Button = UITheme.make_icon_btn("✂ CUT", false, UITheme.MAGENTA)
-	cut_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cut_btn.pressed.connect(func() -> void: _owner._cut_selection())
-	clip_row.add_child(cut_btn)
-	side_vbox.add_child(clip_row)
-
-	# Move row: block up / down.
-	var move_row: HBoxContainer = HBoxContainer.new()
-	move_row.add_theme_constant_override("separation", 6)
-	var up_btn: Button = UITheme.make_icon_btn("↑ MOVE UP", false, UITheme.PURPLE_MID)
-	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	up_btn.pressed.connect(func() -> void: _owner._move_selection(-1))
-	move_row.add_child(up_btn)
-	var dn_btn: Button = UITheme.make_icon_btn("↓ MOVE DOWN", false, UITheme.PURPLE_MID)
-	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dn_btn.pressed.connect(func() -> void: _owner._move_selection(1))
-	move_row.add_child(dn_btn)
-	side_vbox.add_child(move_row)
-
-	# Delete.
-	var del_btn: Button = UITheme.make_icon_btn("✕ DELETE ALL", false, UITheme.MAGENTA)
-	del_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	del_btn.pressed.connect(func() -> void: _owner._delete_selection())
-	side_vbox.add_child(del_btn)
-
-
-# Shown when a fork branch (path label) is selected. New/pasted items go to the
-# top of that path. The Add / Paste buttons reuse the owner's insertion target,
-# which is the selected branch.
-func show_branch_panel(path: Dictionary) -> void:
-	var side_vbox: VBoxContainer = _owner._side_vbox
-	for c in side_vbox.get_children():
-		c.queue_free()
-
-	var hdr: Label = Label.new()
-	hdr.text = "// FORK BRANCH //"
-	hdr.add_theme_color_override("font_color", UITheme.MAGENTA)
-	hdr.add_theme_font_size_override("font_size", 14)
-	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(hdr)
-
-	var pname: String = (path.get("name", "") as String).strip_edges()
-	var name_lbl: Label = Label.new()
-	name_lbl.text = "↳ " + (pname if pname != "" else "Unnamed path").to_upper()
-	name_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
-	name_lbl.add_theme_font_size_override("font_size", 12)
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(name_lbl)
-
-	var hint: Label = Label.new()
-	hint.text = "New items are added to the top of this branch.  Tip: Ctrl+1–4 to add, Ctrl+V to paste."
-	hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	hint.add_theme_font_size_override("font_size", 10)
-	hint.uppercase = true
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	side_vbox.add_child(hint)
-
-	side_vbox.add_child(_side_section_separator())
-	side_vbox.add_child(_side_field_label("ADD TO THIS BRANCH"))
-
-	var specs: Array = [
-		{"label": "+ ROUND",      "color": UITheme.PURPLE_MID,    "type": "round"},
-		{"label": "◆ SHOP",       "color": UITheme.PURPLE_BRIGHT, "type": "shop"},
-		{"label": "◈ STORYBOARD", "color": UITheme.STORYBOARD,    "type": "storyboard"},
-		{"label": "⑂ FORK",       "color": UITheme.MAGENTA,       "type": "fork"},
-	]
-	for spec: Dictionary in specs:
-		var btn: Button = Button.new()
-		btn.text = spec["label"]
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_button(btn, spec["color"])
-		var t: String = spec["type"]
-		btn.pressed.connect(func() -> void: _owner._insert_new_item(t))
-		side_vbox.add_child(btn)
-
-	if not _owner._clipboard_items.is_empty():
-		var paste_btn: Button = Button.new()
-		paste_btn.text = "📋 PASTE %s" % _owner._clipboard_label().to_upper()
-		paste_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_button(paste_btn, UITheme.AMBER)
-		paste_btn.pressed.connect(func() -> void: _owner._paste_clipboard_after_selection())
-		side_vbox.add_child(paste_btn)
-
-
-# Small type glyph for the multi-select listing (matches the graph node icons).
-func _type_glyph(item: Dictionary) -> String:
-	match item.get("type", "round"):
-		"round":      return "▶"
-		"shop":       return "◆"
-		"storyboard": return "◈"
-		"fork":       return "⑂"
-	return "•"
-
-
-# One-line human name for an item in the multi-select listing.
-func _brief_item_name(item: Dictionary) -> String:
-	match item.get("type", "round"):
-		"round":
-			var n: String = (item.get("name", "") as String).strip_edges()
-			return n if n != "" else "Round"
-		"shop":
-			var t: String = (item.get("title", "") as String).strip_edges()
-			return t if t != "" else "Shop"
-		"storyboard":
-			var lc: int = (item.get("lines", []) as Array).size()
-			return "Storyboard (%d line%s)" % [lc, "s" if lc != 1 else ""]
-		"fork":
-			var ft: String = (item.get("title", "") as String).strip_edges()
-			var pc: int = (item.get("paths", []) as Array).size()
-			return "%s (%d paths)" % [ft if ft != "" else "Fork", pc]
-	return "Item"
 
 
 # ── Internal: per-type editors ──────────────────────────────────────────────
 
-# Dispatches to the right inline editor based on item type. The path-item
-# editors work directly on the parent array reference, so edits persist back
-# into _items at any nesting depth.
+# Dispatches to the right inline editor based on item type. The editors work directly
+# on the passed array reference (arr = [node.data]), so field edits persist into the
+# graph node in place.
 func _build_side_panel_editor(
 		container: VBoxContainer,
 		item: Dictionary,
 		arr: Array,
 		idx: int,
-		graph: Control) -> void:
+		reselect_override: Callable = Callable()) -> void:
 	var item_type: String = item.get("type", "round")
 
 	var hdr: Label = Label.new()
@@ -599,27 +676,23 @@ func _build_side_panel_editor(
 		"round":      hdr.text = "// ROUND //";      accent = UITheme.PURPLE_BRIGHT
 		"shop":       hdr.text = "// SHOP //";       accent = UITheme.PURPLE_BRIGHT
 		"storyboard": hdr.text = "// STORYBOARD //"; accent = UITheme.STORYBOARD
-		"fork":       hdr.text = "// FORK //";       accent = UITheme.MAGENTA
 		_:            hdr.text = "// ITEM //";       accent = UITheme.PURPLE_MID
 	hdr.add_theme_color_override("font_color", accent)
 	hdr.add_theme_font_size_override("font_size", 14)
 	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	container.add_child(hdr)
 
-	# Called by editors after a structural change (move / delete / add line) to
-	# refresh both the graph and the side panel for the new state.
-	var reselect: Callable = func(new_idx: int) -> void:
-		graph.select_item(arr, new_idx)
+	# Called by the editors after a structural change (move / delete / add line) to re-show the
+	# node (the graph editor passes a re-show-by-node-id callback).
+	var reselect: Callable = reselect_override
 
 	match item_type:
 		"round":
-			container.add_child(_make_side_round_editor(arr, idx, graph, reselect))
+			container.add_child(_make_side_round_editor(arr, idx, reselect))
 		"shop":
-			container.add_child(_make_side_shop_editor(arr, idx, graph, reselect))
+			container.add_child(_make_side_shop_editor(arr, idx))
 		"storyboard":
-			container.add_child(_make_side_storyboard_editor(arr, idx, graph, reselect))
-		"fork":
-			container.add_child(_make_fork_compact_editor(arr, idx, graph, reselect))
+			container.add_child(_make_side_storyboard_editor(arr, idx, reselect))
 
 
 # ── Internal: small helpers ─────────────────────────────────────────────────
@@ -637,6 +710,19 @@ func _side_section_separator() -> Control:
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size = Vector2(0, 6)
 	return spacer
+
+
+# A visible horizontal divider line (thin, in the separator colour) marking a major break between
+# side-panel groups — heavier than the subtle _side_section_separator spacer. Used between a node's
+# content editor and its operations block (connect / duplicate / delete / add).
+func _side_divider_line() -> HSeparator:
+	var line: HSeparator = HSeparator.new()
+	line.add_theme_constant_override("separation", 13)
+	var sb: StyleBoxLine = StyleBoxLine.new()
+	sb.color = UITheme.SEPARATOR
+	sb.thickness = 1
+	line.add_theme_stylebox_override("separator", sb)
+	return line
 
 
 # Fills `lbl` with a round's funscript length + action count (e.g. "4:32 · 812
@@ -661,91 +747,9 @@ func _format_duration(ms: int) -> String:
 	return "%d:%02d" % [total_s / 60, total_s % 60]
 
 
-# Bottom action block used by every side-panel editor: a clipboard row
-# (Copy / Cut / Duplicate) stacked above the move/delete row. Returns a VBox so
-# all four item editors get the same controls from one place.
-func _side_action_row(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
-	var block: VBoxContainer = VBoxContainer.new()
-	block.add_theme_constant_override("separation", 6)
-	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# ── Clipboard row: Copy + Duplicate ──────────────────────────────────────
-	var clip_row: HBoxContainer = HBoxContainer.new()
-	clip_row.add_theme_constant_override("separation", 6)
-
-	# Copy / Cut route through the owner's set-based ops (this single-node editor
-	# is just the one-item selection), so keyboard and button paths stay identical.
-	var copy_btn: Button = UITheme.make_icon_btn("⧉ COPY", false, UITheme.PURPLE_BRIGHT)
-	copy_btn.custom_minimum_size = Vector2(0, 0)
-	copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	copy_btn.pressed.connect(func() -> void: _owner._copy_selection())
-	clip_row.add_child(copy_btn)
-
-	var cut_btn: Button = UITheme.make_icon_btn("✂ CUT", false, UITheme.MAGENTA)
-	cut_btn.custom_minimum_size = Vector2(0, 0)
-	cut_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cut_btn.pressed.connect(func() -> void: _owner._cut_selection())
-	clip_row.add_child(cut_btn)
-
-	# Duplicate = copy + drop a clone directly after this item, then select it.
-	var dup_btn: Button = UITheme.make_icon_btn("⎘ DUPLICATE", false, UITheme.PURPLE_MID)
-	dup_btn.custom_minimum_size = Vector2(0, 0)
-	dup_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_btn.pressed.connect(func() -> void:
-		_owner._push_undo()
-		arr.insert(idx + 1, (arr[idx] as Dictionary).duplicate(true))
-		reselect.call(idx + 1)
-	)
-	clip_row.add_child(dup_btn)
-	block.add_child(clip_row)
-
-	# ── Move / delete row ─────────────────────────────────────────────────────
-	var row: HBoxContainer = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-
-	var up_btn: Button = UITheme.make_icon_btn("↑ MOVE UP", idx == 0, UITheme.PURPLE_MID)
-	up_btn.custom_minimum_size = Vector2(0, 0)
-	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	up_btn.pressed.connect(func() -> void:
-		if idx <= 0: return
-		_owner._push_undo()
-		var tmp: Dictionary = arr[idx]
-		arr[idx]     = arr[idx - 1]
-		arr[idx - 1] = tmp
-		reselect.call(idx - 1)
-	)
-	row.add_child(up_btn)
-
-	var dn_btn: Button = UITheme.make_icon_btn("↓ MOVE DOWN", idx == arr.size() - 1, UITheme.PURPLE_MID)
-	dn_btn.custom_minimum_size = Vector2(0, 0)
-	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dn_btn.pressed.connect(func() -> void:
-		if idx >= arr.size() - 1: return
-		_owner._push_undo()
-		var tmp: Dictionary = arr[idx]
-		arr[idx]     = arr[idx + 1]
-		arr[idx + 1] = tmp
-		reselect.call(idx + 1)
-	)
-	row.add_child(dn_btn)
-
-	var rm_btn: Button = UITheme.make_icon_btn("✕ DELETE", false, UITheme.MAGENTA)
-	rm_btn.custom_minimum_size = Vector2(0, 0)
-	rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rm_btn.pressed.connect(func() -> void:
-		_owner._push_undo()
-		arr.remove_at(idx)
-		reselect.call(-1)
-	)
-	row.add_child(rm_btn)
-
-	block.add_child(row)
-	return block
-
-
 # ── Internal: round / shop / storyboard / fork inline editors ──────────────
 
-func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
+func _make_side_round_editor(arr: Array, idx: int, reselect: Callable) -> Control:
 	var round_data: Dictionary = arr[idx]
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
@@ -886,13 +890,10 @@ func _make_side_round_editor(arr: Array, idx: int, graph: Control, reselect: Cal
 
 	col.add_child(_side_section_separator())
 	col.add_child(_make_blessed_toggle(arr, idx, reselect))
-
-	col.add_child(_side_section_separator())
-	col.add_child(_side_action_row(arr, idx, graph, reselect))
 	return col
 
 
-func _make_side_shop_editor(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
+func _make_side_shop_editor(arr: Array, idx: int) -> Control:
 	var shop_data: Dictionary = arr[idx]
 	# Backfill config defaults so first-time edits have keys to write to.
 	if not shop_data.has("mode"):             shop_data["mode"] = "pool"
@@ -1010,13 +1011,10 @@ func _make_side_shop_editor(arr: Array, idx: int, graph: Control, reselect: Call
 		arr[idx]["price_multiplier"] = v
 	)
 	col.add_child(mult_spin)
-
-	col.add_child(_side_section_separator())
-	col.add_child(_side_action_row(arr, idx, graph, reselect))
 	return col
 
 
-func _make_side_storyboard_editor(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
+func _make_side_storyboard_editor(arr: Array, idx: int, reselect: Callable) -> Control:
 	var sb_data: Dictionary = arr[idx]
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
@@ -1105,9 +1103,6 @@ func _make_side_storyboard_editor(arr: Array, idx: int, graph: Control, reselect
 		_show_paste_lines_popup(lines_arr, refresh_self)
 	)
 	col.add_child(paste_btn)
-
-	col.add_child(_side_section_separator())
-	col.add_child(_side_action_row(arr, idx, graph, reselect))
 	return col
 
 
@@ -1173,8 +1168,6 @@ func _show_paste_lines_popup(lines_arr: Array, refresh_storyboard: Callable) -> 
 	UITheme.style_button(apply_btn, UITheme.STORYBOARD)
 	apply_btn.pressed.connect(func() -> void:
 		var parsed: Array = _parse_pasted_lines(text_edit.text)
-		if not parsed.is_empty():
-			_owner._push_undo()
 		for line: Dictionary in parsed:
 			lines_arr.append(line)
 		popup.queue_free()
@@ -1303,7 +1296,6 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	up_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	up_btn.pressed.connect(func() -> void:
 		if line_idx <= 0: return
-		_owner._push_undo()
 		var tmp: Dictionary = lines_arr[line_idx]
 		lines_arr[line_idx]     = lines_arr[line_idx - 1]
 		lines_arr[line_idx - 1] = tmp
@@ -1314,7 +1306,6 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	dn_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dn_btn.pressed.connect(func() -> void:
 		if line_idx >= lines_arr.size() - 1: return
-		_owner._push_undo()
 		var tmp: Dictionary = lines_arr[line_idx]
 		lines_arr[line_idx]     = lines_arr[line_idx + 1]
 		lines_arr[line_idx + 1] = tmp
@@ -1324,7 +1315,6 @@ func _make_side_storyboard_line_block(lines_arr: Array, line_idx: int, refresh_s
 	var rm_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
 	rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rm_btn.pressed.connect(func() -> void:
-		_owner._push_undo()
 		lines_arr.remove_at(line_idx)
 		refresh_storyboard.call()
 	)
@@ -1370,248 +1360,10 @@ func _make_insert_line_btn(lines_arr: Array, insert_at: int, refresh: Callable) 
 	btn.add_theme_color_override("font_pressed_color", c)
 
 	btn.pressed.connect(func() -> void:
-		_owner._push_undo()
 		lines_arr.insert(insert_at, {"speaker": "", "text": "", "image": ""})
 		refresh.call()
 	)
 	return btn
-
-
-func _make_fork_compact_editor(arr: Array, idx: int, graph: Control, reselect: Callable) -> Control:
-	var item: Dictionary = arr[idx]
-
-	var col: VBoxContainer = VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-
-	var title_lbl: Label = Label.new()
-	title_lbl.text = "TITLE"
-	title_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	title_lbl.add_theme_font_size_override("font_size", 10)
-	title_lbl.uppercase = true
-	col.add_child(title_lbl)
-
-	var title_edit: LineEdit = LineEdit.new()
-	title_edit.placeholder_text = "Fork title (optional)..."
-	title_edit.text = item.get("title", "")
-	UITheme.style_line_edit(title_edit)
-	title_edit.text_changed.connect(func(val: String) -> void:
-		arr[idx]["title"] = val
-	)
-	col.add_child(title_edit)
-
-	var desc_lbl: Label = Label.new()
-	desc_lbl.text = "DESCRIPTION"
-	desc_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	desc_lbl.add_theme_font_size_override("font_size", 10)
-	desc_lbl.uppercase = true
-	col.add_child(desc_lbl)
-
-	var desc_edit: LineEdit = LineEdit.new()
-	desc_edit.placeholder_text = "Fork description (optional)..."
-	desc_edit.text = item.get("description", "")
-	UITheme.style_line_edit(desc_edit)
-	desc_edit.text_changed.connect(func(val: String) -> void:
-		arr[idx]["description"] = val
-	)
-	col.add_child(desc_edit)
-
-	var paths_arr: Array = item.get("paths", [])
-	if not item.has("paths"):
-		arr[idx]["paths"] = paths_arr
-
-	# ── Resolution: how the journey chooses a path ───────────────────────────
-	col.add_child(_side_field_label("RESOLUTION"))
-	var res_values: Array = ["choice", "random", "conditional", "sacrifice"]
-	var res_dd: OptionButton = OptionButton.new()
-	res_dd.add_item("Player Choice")
-	res_dd.add_item("Random")
-	res_dd.add_item("Conditional")
-	res_dd.add_item("Sacrifice")
-	res_dd.selected = max(0, res_values.find(item.get("resolution", "choice")))
-	res_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_option_button(res_dd)
-	res_dd.item_selected.connect(func(i: int) -> void:
-		arr[idx]["resolution"] = res_values[i]
-		reselect.call(idx)   # rebuild so per-path fields match the new type
-	)
-	col.add_child(res_dd)
-
-	var resolution: String = item.get("resolution", "choice")
-
-	# Conditional sub-config: which metric + the fallback path.
-	if resolution == "conditional":
-		col.add_child(_side_field_label("CONDITION"))
-		var metric_values: Array = ["score", "coins", "item"]
-		var metric_dd: OptionButton = OptionButton.new()
-		metric_dd.add_item("Last Round Score")
-		metric_dd.add_item("Coin Balance")
-		metric_dd.add_item("Item Owned")
-		metric_dd.selected = max(0, metric_values.find(item.get("cond_metric", "score")))
-		metric_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_option_button(metric_dd)
-		metric_dd.item_selected.connect(func(i: int) -> void:
-			arr[idx]["cond_metric"] = metric_values[i]
-			reselect.call(idx)
-		)
-		col.add_child(metric_dd)
-
-		col.add_child(_side_field_label("DEFAULT PATH (NO MATCH)"))
-		var def_dd: OptionButton = OptionButton.new()
-		for pj in paths_arr.size():
-			var pn: String = (paths_arr[pj].get("name", "") as String).strip_edges()
-			def_dd.add_item("Path %d%s" % [pj + 1, ("  " + pn) if pn != "" else ""])
-		def_dd.selected = clampi(int(item.get("default_path", 0)), 0, max(0, paths_arr.size() - 1))
-		def_dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_option_button(def_dd)
-		def_dd.item_selected.connect(func(i: int) -> void:
-			arr[idx]["default_path"] = i
-		)
-		col.add_child(def_dd)
-
-	var res_hint: Label = Label.new()
-	res_hint.text = _fork_resolution_hint(resolution, item.get("cond_metric", "score"))
-	res_hint.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	res_hint.add_theme_font_size_override("font_size", 10)
-	res_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	col.add_child(res_hint)
-
-	col.add_child(_side_section_separator())
-
-	# ── Paths ────────────────────────────────────────────────────────────────
-	var paths_lbl: Label = Label.new()
-	paths_lbl.text = "PATHS"
-	paths_lbl.add_theme_color_override("font_color", UITheme.SEPARATOR)
-	paths_lbl.add_theme_font_size_override("font_size", 10)
-	paths_lbl.uppercase = true
-	col.add_child(paths_lbl)
-
-	for pi in paths_arr.size():
-		col.add_child(_make_path_editor_block(item, paths_arr, pi, graph, reselect))
-
-	if paths_arr.size() < 4:
-		var add_path_btn: Button = Button.new()
-		add_path_btn.text = "+ ADD PATH"
-		add_path_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UITheme.style_button(add_path_btn, UITheme.PURPLE_MID)
-		add_path_btn.pressed.connect(func() -> void:
-			_owner._push_undo()
-			paths_arr.append({
-				"name": "Path %s" % char(65 + paths_arr.size()),
-				"description": "", "image_path": "", "items": [],
-				"weight": 1, "threshold": 0, "required_item": "", "cost": 0,
-			})
-			reselect.call(idx)
-		)
-		col.add_child(add_path_btn)
-
-	col.add_child(_side_section_separator())
-	col.add_child(_side_action_row(arr, idx, graph, reselect))
-	return col
-
-
-# Per-path editor card inside the fork compact editor.
-func _make_path_editor_block(fork: Dictionary, paths_arr: Array, pi: int, graph: Control, reselect: Callable) -> Control:
-	var path: Dictionary = paths_arr[pi]
-
-	var panel: PanelContainer = PanelContainer.new()
-	var ps: StyleBoxFlat = StyleBoxFlat.new()
-	ps.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.08)
-	ps.border_color = UITheme.MAGENTA
-	ps.border_width_left   = 1; ps.border_width_right  = 1
-	ps.border_width_top    = 1; ps.border_width_bottom = 1
-	ps.content_margin_left = 10; ps.content_margin_right  = 10
-	ps.content_margin_top  = 8;  ps.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", ps)
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	var sub: VBoxContainer = VBoxContainer.new()
-	sub.add_theme_constant_override("separation", 4)
-	panel.add_child(sub)
-
-	var hdr: HBoxContainer = HBoxContainer.new()
-	hdr.add_theme_constant_override("separation", ROW_SEP)
-	sub.add_child(hdr)
-
-	var path_lbl: Label = Label.new()
-	path_lbl.text = "PATH %d" % (pi + 1)
-	path_lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
-	path_lbl.add_theme_font_size_override("font_size", 11)
-	path_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hdr.add_child(path_lbl)
-
-	if paths_arr.size() > 2:
-		var rm_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
-		rm_btn.pressed.connect(func() -> void:
-			_owner._push_undo()
-			paths_arr.remove_at(pi)
-			graph.call_deferred("refresh")
-		)
-		hdr.add_child(rm_btn)
-
-	sub.add_child(_side_field_label("NAME"))
-	var name_edit: LineEdit = LineEdit.new()
-	name_edit.placeholder_text = "Path name..."
-	name_edit.text = path.get("name", "")
-	UITheme.style_line_edit(name_edit)
-	name_edit.text_changed.connect(func(val: String) -> void:
-		paths_arr[pi]["name"] = val
-	)
-	sub.add_child(name_edit)
-
-	sub.add_child(_side_field_label("DESCRIPTION"))
-	var desc_edit: LineEdit = LineEdit.new()
-	desc_edit.placeholder_text = "Description (optional)..."
-	desc_edit.text = path.get("description", "")
-	UITheme.style_line_edit(desc_edit)
-	desc_edit.text_changed.connect(func(val: String) -> void:
-		paths_arr[pi]["description"] = val
-	)
-	sub.add_child(desc_edit)
-
-	sub.add_child(_side_field_label("CARD IMAGE"))
-	var img_zone: PanelContainer = DropZoneScript.new()
-	img_zone.accepted_extensions   = JourneyData.IMAGE_EXTENSIONS.duplicate()
-	img_zone.picker_title          = "Select Card Image for Path %d" % (pi + 1)
-	img_zone.picker_filters        = ["*.png,*.jpg,*.jpeg,*.webp ; Image Files"]
-	img_zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sub.add_child(img_zone)
-	if path.get("image_path", "") != "":
-		img_zone.call_deferred("set_file", path["image_path"])
-	var path_rm_btn: Button = Button.new()
-	path_rm_btn.text = "✕ REMOVE IMAGE"
-	path_rm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	path_rm_btn.visible = path.get("image_path", "") != ""
-	UITheme.style_button(path_rm_btn, UITheme.MAGENTA)
-	path_rm_btn.pressed.connect(func() -> void:
-		_delete_saved_image(paths_arr[pi].get("image_path", ""))
-		paths_arr[pi]["image_path"] = ""
-		img_zone.call_deferred("set_file", "")
-		path_rm_btn.visible = false
-	)
-	img_zone.file_dropped.connect(func(p: String) -> void:
-		paths_arr[pi]["image_path"] = p
-		path_rm_btn.visible = true
-	)
-	sub.add_child(path_rm_btn)
-
-	# Per-path field(s) for the fork's resolution type.
-	var resolution: String = fork.get("resolution", "choice")
-	var metric: String = fork.get("cond_metric", "score")
-	if resolution == "random":
-		_add_path_int_field(sub, paths_arr, pi, "weight", "WEIGHT (RELATIVE ODDS)", 1000)
-	elif resolution == "sacrifice":
-		# A path can demand coins and/or an item; both spent on pick. 0 + None = free.
-		_add_path_int_field(sub, paths_arr, pi, "cost", "COIN COST", 999999)
-		_add_required_item_field(sub, paths_arr, pi, path, "REQUIRED ITEM (CONSUMED)")
-	elif resolution == "conditional" and metric == "item":
-		# Pure ownership check — not consumed.
-		_add_required_item_field(sub, paths_arr, pi, path, "REQUIRED ITEM")
-	elif resolution == "conditional":
-		# score / coins → numeric tier threshold
-		var thr_label: String = "ACTIVATES AT ≥  (%s)" % ("SCORE" if metric == "score" else "COINS")
-		_add_path_int_field(sub, paths_arr, pi, "threshold", thr_label, 999999)
-
-	return panel
 
 
 # Adds a labeled integer SpinBox to `container` that writes its value back to
@@ -2487,5 +2239,3 @@ func _delete_saved_image(path: String) -> void:
 	var user_data: String = ProjectSettings.globalize_path("user://")
 	if abs_path.begins_with(user_data) and FileAccess.file_exists(abs_path):
 		DirAccess.remove_absolute(abs_path)
-
-

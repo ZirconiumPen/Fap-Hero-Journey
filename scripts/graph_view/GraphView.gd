@@ -3,29 +3,23 @@ extends Control
 
 # ---------------------------------------------------------------------------
 # GraphView.gd
-# Renders a journey's _items[] tree as an auto-laid-out graph. Top-to-bottom
-# flow for sequences; forks branch horizontally with each path as a sub-column.
-# Recurses through nested forks at arbitrary depth.
+# Renders a free-form journey graph: each node placed at its saved pos, edges
+# drawn from every node's out-list. The builder drives editing (select / drag /
+# wire) and the player-facing journey map reuses it read-only (map_mode).
 #
 # Public API:
-#   set_items(items: Array)        — sets the model and rebuilds the graph
+#   set_graph(graph: Dictionary)   — sets the graph model and rebuilds
 #   refresh()                      — rebuilds from the current model
-# Signals:
-#   selection_changed(items, parent_arr) — emitted when the selection changes
+# Signals (see declarations below):
+#   graph_selection_changed(ids)   — the selected-node set changed
+#   connect_target_picked(node_id) — a node was clicked while wiring an edge
 # ---------------------------------------------------------------------------
-
-signal selection_changed(items: Array, parent_arr: Array)
-signal insert_requested(parent_arr: Array, idx: int, screen_pos: Vector2)
-# Emitted when a fork-branch (path) label is clicked — selects that branch as an
-# insertion target so new/pasted items land at the top of the path.
-signal branch_selected(path: Dictionary)
 
 const NODE_WIDTH:  float = 200.0
 const NODE_HEIGHT: float = 64.0
 const V_GAP:       float = 40.0
 const H_GAP:       float = 36.0
 const PATH_LABEL_HEIGHT: float = 32.0
-const INSERT_BTN_SIZE: float = 22.0
 const ZOOM_MIN:    float = 0.15
 const ZOOM_MAX:    float = 4.0
 const ZOOM_STEP:   float = 0.1
@@ -39,33 +33,10 @@ const FIT_PADDING:     float = 60.0
 const CANVAS_MIN_SIZE:       float = 8000.0
 const CANVAS_CONTENT_MARGIN: float = 600.0
 
-var _items:           Array      = []
-# Multi-selection: the selected item dicts (by reference) plus the single parent
-# array they all belong to (same-branch constraint). Empty = nothing selected;
-# size 1 = single selection (drives the per-node editor).
-var _selected_items:  Array      = []
-var _selected_arr:    Array      = []
-# The selected fork-branch path dict (mutually exclusive with node selection),
-# or {} when no branch is selected. Drives the path-label highlight.
-var _selected_path:   Dictionary = {}
 
-# Range-select anchor: the last single/ctrl-clicked node, used as the fixed end
-# of a Shift+click range. {} when there's no anchor.
-var _anchor_item:     Dictionary = {}
-var _anchor_arr:      Array      = []
-
-# Optional callback (set by the builder) that, given an item dict, returns a
-# short problem summary String ("" when the item is fine). Drives the warning
-# badge drawn on each node. Evaluated at layout time so badges always reflect
-# the current model.
-var validity_fn: Callable = Callable()
-# Items that end the run (no items follow them anywhere in the flow).
-# Rebuilt on every refresh() so the set is always current.
-var _terminal_items:  Array      = []
-
-# Read-only "map mode" (player-facing journey map): suppresses all editing
-# affordances — node selection, insert buttons, validity badges, marquee — while
-# keeping pan/zoom. Set before set_items(). Adds the "you are here" marker API.
+# Read-only "map mode" (player-facing journey map): suppresses editing affordances
+# (node selection / drag wiring) while keeping pan/zoom. Set before set_graph().
+# Adds the "you are here" marker API.
 var map_mode: bool = false
 
 # Pan / zoom state
@@ -75,25 +46,64 @@ var _panning:    bool    = false
 var _last_mouse: Vector2 = Vector2.ZERO
 var _has_initial_center: bool = false
 
-# Marquee (drag-select) state. Coordinates are in GraphView-local (screen) space.
+
+# Auto-layout artefacts (rebuilt on refresh).
+# Edges: list of {from: Vector2, to: Vector2, color: Color, dashed?: bool}
+var _edges: Array = []
+
+
+# The free-form graph model (GRAPH_EDITOR_OVERHAUL.md): {start, nodes:{id:{type,data,pos,out}}}.
+# Rendered by _layout_graph — nodes at their saved pos, edges from each node's out-list.
+var _graph_model: Dictionary = {}
+var _selected_ids: Array = []               # selected node ids (graph mode) — drives the highlight + group ops
+var _current_layout_node_id: String = ""    # transient: the node _make_node is building (graph mode)
+var _node_ctrls: Dictionary = {}            # node_id -> Control (graph mode), for live drag moves
+var _node_warnings: Dictionary = {}         # node_id -> soft-validation summary (author badge); pulled per layout
+var warning_provider: Callable = Callable() # builder hook → {node_id: warning}; called each layout (editor only)
+var _connect_mode: bool = false             # builder is wiring an edge — a node click is a target, not a drag
+
+# Node-drag state. A plain press on a node arms a drag of the whole selection; _input tracks
+# motion/release globally so it survives the cursor leaving the node.
+var _dragging_node: String = ""             # the pressed node, or "" when no drag is armed
+var _drag_moved: bool = false               # did the drag actually move (vs a plain click)?
+var _drag_started: bool = false             # has the drag emitted nodes_drag_started yet (one undo per drag)?
+var _drag_collapse_to: String = ""          # plain-press on a multi-selected node → collapse to it on release-no-move
+
+# Drag-to-connect state (dragging from a node's out-handle to a target node). _input tracks the
+# motion/release globally, like the node drag; _draw renders the rubber-band line.
+const HANDLE_SIZE: float = 16.0
+var _connect_drag_active:   bool       = false
+var _connect_drag_source:   String     = ""             # the node the edge starts from
+var _connect_drag_edge_idx: int        = -1             # fork choice index, or -1 for a regular node's single out-edge
+var _connect_drag_from:     Vector2    = Vector2.ZERO   # canvas-space handle position (line start)
+var _connect_drag_to:       Vector2    = Vector2.ZERO   # canvas-space cursor position (line end)
+var _connect_drag_target:   String     = ""             # node under the cursor (the drop target), or ""
+var _connect_drag_invalid:  Dictionary = {}             # node ids that can't be targets (source + ancestors → would cycle)
+
+# Marquee (box-select) state, in GraphView-local (screen) space.
 var _marquee_active:   bool    = false
-var _marquee_additive: bool    = false   # Ctrl held at drag start → add to selection
+var _marquee_additive: bool    = false      # Ctrl/Shift held at drag start → add to the selection
 var _marquee_start:    Vector2 = Vector2.ZERO
 var _marquee_end:      Vector2 = Vector2.ZERO
 const MARQUEE_DRAG_THRESHOLD: float = 6.0
 
-# Auto-layout artefacts (rebuilt on refresh).
-# Edges: list of {from: Vector2, to: Vector2, color: Color}
-var _edges: Array = []
+# Emitted when the selected-node set changes (click / ctrl-click / shift-click / marquee / clear /
+# programmatic select). The builder mirrors it + drives the side panel (0 → journey info, 1 → node
+# editor, 2+ → multi-select panel).
+signal graph_selection_changed(ids: Array)
+# A node was clicked while connect mode is armed — the builder wires the edge to it.
+signal connect_target_picked(node_id: String)
+# A node drag actually started moving — the builder snapshots for undo (one entry per drag).
+signal nodes_drag_started()
+# An out-handle was dragged onto a target node — the builder wires source→target (edge_idx = fork
+# choice, or -1 for a regular node's single out-edge), reusing its connect validation + undo.
+signal edge_drawn(source_id: String, edge_idx: int, target_id: String)
 
 # "You are here" marker (map mode). A glowing ring around the current node, child
-# of _canvas so it pans/zooms with the graph. _marker_y tracks the current node's
-# canvas-space Y so non-round keys (which can repeat across fork levels) resolve to
-# the next node DOWN the graph rather than an earlier collision.
+# of _canvas so it pans/zooms with the graph.
 const MARKER_PAD: float = 9.0
 var _marker:       Panel = null
 var _marker_color: Color = UITheme.PURPLE_BRIGHT
-var _marker_y:     float = -INF
 
 # Background grid + edges live on _canvas. Nodes are added as children of _canvas
 # so they pan/zoom together with edges.
@@ -116,7 +126,7 @@ func _ready() -> void:
 	_canvas.size = Vector2(CANVAS_MIN_SIZE, CANVAS_MIN_SIZE)
 
 	_empty_hint = Label.new()
-	_empty_hint.text = "Drop videos or a whole folder here to auto-create rounds —\nor click  +  to add your first item."
+	_empty_hint.text = "Drop videos or a folder here to auto-create rounds,\nor use  ADD NODE  in the side panel."
 	_empty_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_empty_hint.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_empty_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -129,8 +139,10 @@ func _ready() -> void:
 	add_child(_empty_hint)
 
 
-func set_items(items: Array) -> void:
-	_items = items
+# Render entry: set the graph model and rebuild — nodes at their saved positions,
+# edges from out-lists. See _layout_graph.
+func set_graph(graph: Dictionary) -> void:
+	_graph_model = graph
 	refresh()
 
 
@@ -140,29 +152,19 @@ func refresh() -> void:
 		c.queue_free()
 	_edges.clear()
 
-	# Onboarding hint only while there's nothing authored yet.
+	# Onboarding hint only while the graph has no nodes (else it overlays the graph).
 	if _empty_hint:
-		_empty_hint.visible = _items.is_empty()
-
-	# Recompute which items end the run before laying out so _make_node can
-	# query the set during layout.
-	_terminal_items = _collect_terminal_items(_items, false)
+		_empty_hint.visible = (_graph_model.get("nodes", {}) as Dictionary).is_empty()
 
 	# Apply pan/zoom transform to the canvas.
 	_apply_transform()
 
-	# Lay out items starting at origin (0, 0) — the canvas transform handles offset.
-	# We do this deferred so the freed children are gone before we add new ones.
+	# Lay out the graph deferred so the freed children are gone before we add new ones.
 	call_deferred("_do_layout")
 
 
 func _do_layout() -> void:
-	var bounds: Dictionary = _layout_items(_items, 0.0, 0.0)
-	_canvas.set_edges(_edges)
-	_resize_canvas_to_content(bounds.get("size", Vector2(CANVAS_MIN_SIZE, CANVAS_MIN_SIZE)))
-	if not _has_initial_center:
-		_has_initial_center = true
-		call_deferred("_center_initial_view")
+	_layout_graph()
 
 
 # Grows _canvas so its rect always covers the laid-out content. Edges are drawn
@@ -177,6 +179,364 @@ func _resize_canvas_to_content(content_size: Vector2) -> void:
 	_canvas.size = Vector2(w, h)
 
 
+# ── Graph-editor layout (L1) ─────────────────────────────────────────────────
+
+# Renders the free-form graph: each node at its saved pos, edges drawn from every node's
+# out-list. Reuses _make_node via a tree-item-shaped display adapter.
+func _layout_graph() -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	_node_ctrls = {}   # node_id -> Control (rebuilt each layout)
+	# Pull fresh soft-validation badges from the builder once per layout, so EVERY render path (edit,
+	# selection, create / paste / import) shows them. No provider on the player map / export → no badges.
+	_node_warnings = warning_provider.call() if (not map_mode and warning_provider.is_valid()) else {}
+	for id: String in nodes:
+		var n: Dictionary = nodes[id]
+		_current_layout_node_id = id   # read by _make_node to mark the selected node
+		var disp: Dictionary = _graph_display_item(n)
+		if not map_mode:               # author-only soft-validation badge (never on the player map)
+			disp["warning"] = str(_node_warnings.get(id, ""))
+		var ctrl: Control = _make_node(disp, JourneyGraph.is_end(_graph_model, id))
+		ctrl.position = n.get("pos", Vector2.ZERO)
+		ctrl.set_meta("graph_node_id", id)
+		if not map_mode:   # player-facing map: nodes are read-only (no select/drag wiring)
+			ctrl.gui_input.connect(_on_graph_node_gui_input.bind(id))
+		_canvas.add_child(ctrl)
+		_node_ctrls[id] = ctrl
+	# Out-handles in a second pass so they're the topmost (always-clickable) children.
+	if not map_mode:
+		for id: String in nodes:
+			_add_out_handles(id, nodes[id], (_node_ctrls[id] as Control).position)
+	for id: String in nodes:
+		var n: Dictionary = nodes[id]
+		var is_fork: bool = n.get("type", "") == "fork"
+		for e: Dictionary in n.get("out", []):
+			var to: String = str(e.get("to", ""))
+			if to != "" and _node_ctrls.has(to):
+				_add_edge_between(_node_ctrls[id], _node_ctrls[to],
+					UITheme.FORK_EDGE if is_fork else UITheme.EDGE)
+	_canvas.set_edges(_edges)
+	_resize_canvas_to_content(_graph_content_size(_node_ctrls))
+	if not _has_initial_center:
+		_has_initial_center = true
+		call_deferred("_center_initial_view")
+
+
+# Tree-item shape _make_node expects, built from a graph node (type at top level; a fork's
+# sublabel reads paths.size(), which maps to its out-edge count).
+func _graph_display_item(n: Dictionary) -> Dictionary:
+	var d: Dictionary = (n.get("data", {}) as Dictionary).duplicate()
+	d["type"] = n.get("type", "round")
+	if d["type"] == "fork":
+		d["paths"] = n.get("out", [])
+	return d
+
+
+# Bounding size of the placed graph nodes (for canvas sizing). Uses the fixed node size rather
+# than c.size, which may not be laid out yet at this point.
+func _graph_content_size(ctrls: Dictionary) -> Vector2:
+	var size: Vector2 = Vector2(NODE_WIDTH, NODE_HEIGHT)
+	for id: String in ctrls:
+		var c: Control = ctrls[id]
+		size.x = maxf(size.x, c.position.x + NODE_WIDTH)
+		size.y = maxf(size.y, c.position.y + NODE_HEIGHT)
+	return size
+
+
+# A press on a graph node: wires the edge (connect mode), or updates the selection and arms a drag
+# of the whole selection. Modifiers: Ctrl = toggle this node, Shift = add it; plain = select just it
+# (or keep a multi-selection for a group drag, collapsing to this node on a release with no move).
+func _on_graph_node_gui_input(event: InputEvent, node_id: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	if _connect_mode:
+		# Wiring an edge: this click is the target — let the builder finish the connect; no drag.
+		connect_target_picked.emit(node_id)
+		accept_event()
+		return
+	if mb.ctrl_pressed:
+		_toggle_in_selection(node_id)
+		accept_event()
+		return
+	if mb.shift_pressed:
+		_add_to_selection(node_id)
+		accept_event()
+		return
+	# Plain press → arm a drag. Keep an existing multi-selection that already includes this node
+	# (so the drag moves the group); otherwise select just this node.
+	_drag_collapse_to = ""
+	if node_id in _selected_ids:
+		if _selected_ids.size() > 1:
+			_drag_collapse_to = node_id
+	else:
+		_set_selection([node_id])
+	_dragging_node = node_id
+	_drag_moved = false
+	_drag_started = false
+	accept_event()
+
+
+# Drives a node drag armed by _on_graph_node_gui_input. Global (not gui_input) so it keeps tracking
+# when the cursor leaves the node. Moves the WHOLE selection live; grid-snaps each on release. A
+# press with no motion collapses a kept multi-selection to the pressed node. No-op when no drag.
+func _input(event: InputEvent) -> void:
+	if _connect_drag_active:
+		_handle_connect_drag_input(event)
+		return
+	if _dragging_node == "":
+		return
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if event is InputEventMouseMotion:
+		if not _drag_started:
+			_drag_started = true
+			nodes_drag_started.emit()   # builder snapshots the pre-drag state for undo
+		var delta: Vector2 = (event as InputEventMouseMotion).relative / _zoom
+		for id: String in _selected_ids:
+			var n: Dictionary = nodes.get(id, {})
+			if not n.is_empty():
+				n["pos"] = (n.get("pos", Vector2.ZERO) as Vector2) + delta
+				if _node_ctrls.has(id):
+					(_node_ctrls[id] as Control).position = n["pos"]
+		_drag_moved = true
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_dragging_node = ""
+			if _drag_moved:
+				for id: String in _selected_ids:
+					var n2: Dictionary = nodes.get(id, {})
+					if not n2.is_empty():
+						n2["pos"] = GraphLayout.snap(n2.get("pos", Vector2.ZERO))
+				refresh()   # re-render: highlights, grid-snapped positions, edges reconnected
+			elif _drag_collapse_to != "":
+				_set_selection([_drag_collapse_to])   # plain click on a multi-selected node → just it
+			_drag_collapse_to = ""
+			get_viewport().set_input_as_handled()
+
+
+# ── Drag-to-connect (out-handles) ────────────────────────────────────────────
+
+# Adds the out-handle nub(s) to a node's bottom edge: one centred handle for a regular node (its
+# single out-edge), one per choice for a fork (spread along the bottom, tinted like fork edges).
+func _add_out_handles(node_id: String, node: Dictionary, node_pos: Vector2) -> void:
+	if node.get("type", "") == "fork":
+		var out: Array = node.get("out", [])
+		var count: int = maxi(1, out.size())
+		for ei in count:
+			var fx: float = NODE_WIDTH * float(ei + 1) / float(count + 1)
+			_make_handle(node_id, ei, node_pos + Vector2(fx, NODE_HEIGHT), UITheme.FORK_EDGE)
+	else:
+		_make_handle(node_id, -1, node_pos + Vector2(NODE_WIDTH * 0.5, NODE_HEIGHT), UITheme.EDGE)
+
+
+# One out-handle nub (a small circle straddling the bottom edge). Dragging it starts a connect-drag.
+func _make_handle(node_id: String, edge_idx: int, center: Vector2, color: Color) -> void:
+	var h: Panel = Panel.new()
+	h.size = Vector2(HANDLE_SIZE, HANDLE_SIZE)
+	h.position = center - Vector2(HANDLE_SIZE * 0.5, HANDLE_SIZE * 0.5)
+	h.mouse_filter = Control.MOUSE_FILTER_STOP
+	h.tooltip_text = "Drag to connect this node to another"
+	var s: StyleBoxFlat = StyleBoxFlat.new()
+	s.bg_color = Color(0.04, 0.0, 0.06, 0.98)
+	s.border_color = color
+	s.border_width_left = 2; s.border_width_right = 2
+	s.border_width_top = 2;  s.border_width_bottom = 2
+	var rad: int = int(HANDLE_SIZE * 0.5)
+	s.corner_radius_top_left = rad;    s.corner_radius_top_right = rad
+	s.corner_radius_bottom_left = rad; s.corner_radius_bottom_right = rad
+	h.add_theme_stylebox_override("panel", s)
+	h.gui_input.connect(_on_handle_gui_input.bind(node_id, edge_idx, center))
+	_canvas.add_child(h)
+
+
+# Press on an out-handle → begin a connect-drag from it. _input then tracks the rubber-band.
+func _on_handle_gui_input(event: InputEvent, node_id: String, edge_idx: int, center: Vector2) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			_connect_drag_active   = true
+			_connect_drag_source   = node_id
+			_connect_drag_edge_idx = edge_idx
+			_connect_drag_from     = center
+			_connect_drag_to       = center
+			_connect_drag_target   = ""
+			_connect_drag_invalid  = _ancestors_and_self(node_id)
+			# A fork can't point two choices at the same node — block any node another of this fork's
+			# choices already targets (one choice per target).
+			if edge_idx >= 0:
+				var node_d: Dictionary = (_graph_model.get("nodes", {}) as Dictionary).get(node_id, {})
+				var out: Array = node_d.get("out", [])
+				for j in out.size():
+					if j != edge_idx:
+						var t: String = str((out[j] as Dictionary).get("to", ""))
+						if t != "":
+							_connect_drag_invalid[t] = true
+			accept_event()
+
+
+# Drives the connect-drag (global, so it survives leaving the handle): tracks the cursor for the
+# rubber-band + hovered target, and on release wires a valid target via the edge_drawn signal.
+func _handle_connect_drag_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_connect_drag_to = _canvas.get_local_mouse_position()
+		_connect_drag_target = _node_at_canvas_point(_connect_drag_to)
+		queue_redraw()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			var target: String = _node_at_canvas_point(_canvas.get_local_mouse_position())
+			var src: String = _connect_drag_source
+			var eidx: int = _connect_drag_edge_idx
+			_connect_drag_active = false
+			_connect_drag_source = ""
+			_connect_drag_target = ""
+			queue_redraw()
+			# Valid drop only: a node, not the source, not an ancestor (which would form a cycle).
+			if target != "" and target != src and not _connect_drag_invalid.has(target):
+				edge_drawn.emit(src, eidx, target)
+			get_viewport().set_input_as_handled()
+
+
+# The node id whose laid-out rect contains canvas-space point `p`, or "".
+func _node_at_canvas_point(p: Vector2) -> String:
+	for id: String in _node_ctrls:
+		var c: Control = _node_ctrls[id]
+		if Rect2(c.position, c.size).has_point(p):
+			return id
+	return ""
+
+
+# Set of node ids that must NOT be wire targets for `source` — the source itself plus every node that
+# can reach it (an edge source→ancestor would close a cycle). Reverse BFS over the out-edges.
+func _ancestors_and_self(source: String) -> Dictionary:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	var preds: Dictionary = {}
+	for id: String in nodes:
+		preds[id] = []
+	for id: String in nodes:
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			var to: String = str(e.get("to", ""))
+			if to != "" and nodes.has(to):
+				(preds[to] as Array).append(id)
+	var invalid: Dictionary = {source: true}
+	var queue: Array = [source]
+	var qi: int = 0
+	while qi < queue.size():
+		var cur: String = queue[qi]
+		qi += 1
+		for p: String in (preds.get(cur, []) as Array):
+			if not invalid.has(p):
+				invalid[p] = true
+				queue.append(p)
+	return invalid
+
+
+# Replaces the selection set, re-renders, and notifies the builder. The internal click/marquee
+# helpers and the public select/clear all funnel through here so there's one emit path.
+func _set_selection(ids: Array) -> void:
+	_selected_ids = ids.duplicate()
+	refresh()
+	graph_selection_changed.emit(_selected_ids)
+
+
+# Ctrl+click: toggle a node in/out of the selection.
+func _toggle_in_selection(node_id: String) -> void:
+	var ids: Array = _selected_ids.duplicate()
+	if ids.has(node_id):
+		ids.erase(node_id)
+	else:
+		ids.append(node_id)
+	_set_selection(ids)
+
+
+# Shift+click: add a node to the selection (no-op if already in).
+func _add_to_selection(node_id: String) -> void:
+	if node_id in _selected_ids:
+		return
+	var ids: Array = _selected_ids.duplicate()
+	ids.append(node_id)
+	_set_selection(ids)
+
+
+# Selects one node programmatically (e.g. after a create / wire) — single-node selection.
+func select_graph_node(node_id: String) -> void:
+	_set_selection([node_id])
+
+
+# Selects an explicit set of nodes (e.g. restoring after undo). Drops any id not in the graph.
+func set_selection(ids: Array) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	var valid: Array = []
+	for id: String in ids:
+		if nodes.has(id):
+			valid.append(id)
+	_set_selection(valid)
+
+
+# Clears the selection (e.g. after a delete) and re-renders.
+func clear_graph_selection() -> void:
+	_set_selection([])
+
+
+# Builder sets this while wiring an edge (click-to-connect): a node press becomes a target click
+# (emit selection, no move-drag) instead of starting a drag.
+func set_connect_mode(on: bool) -> void:
+	_connect_mode = on
+
+
+# Graph-editor seed: records {node_id: top-left Vector2} for a builder item tree by running a
+# tree-style layout (fork packing, centering, rejoin handling) — without making any Controls. The
+# builder seeds a migrated (legacy) journey from this so it opens compact and centered on x=0
+# (which is what _center_initial_view frames).
+func tree_positions(items: Array) -> Dictionary:
+	var pos: Dictionary = {}
+	_tree_positions(items, 0.0, 0.0, pos)
+	return pos
+
+
+# Computes tree-style positions, storing pos[node_id] instead of instantiating nodes (no edges or
+# labels). Returns Vector2(width, bottom_y) the items occupy.
+func _tree_positions(items: Array, x_center: float, y: float, pos: Dictionary) -> Vector2:
+	var cur_y: float = y
+	var max_w: float = NODE_WIDTH
+	if items.is_empty():
+		return Vector2(NODE_WIDTH, y)
+	for item: Dictionary in items:
+		var nid: String = str(item.get("node_id", ""))
+		if item.get("type", "round") == "fork":
+			if nid != "":
+				pos[nid] = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
+			cur_y += NODE_HEIGHT + V_GAP
+			var paths: Array = item.get("paths", [])
+			var path_widths: Array = []
+			for path: Dictionary in paths:
+				path_widths.append(maxf(_measure_items_width(path.get("items", [])), NODE_WIDTH))
+			var total_w: float = 0.0
+			for w in path_widths:
+				total_w += w
+			if paths.size() > 1:
+				total_w += (paths.size() - 1) * H_GAP
+			max_w = maxf(max_w, total_w)
+			var col_x: float = x_center - total_w * 0.5
+			var max_branch_y: float = cur_y
+			for pi in paths.size():
+				var pw: float = path_widths[pi]
+				var path_cx: float = col_x + pw * 0.5
+				var sub: Vector2 = _tree_positions((paths[pi] as Dictionary).get("items", []), path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP, pos)
+				max_branch_y = maxf(max_branch_y, sub.y)
+				col_x += pw + H_GAP
+			cur_y = max_branch_y
+		else:
+			if nid != "":
+				pos[nid] = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
+			cur_y += NODE_HEIGHT + V_GAP
+	return Vector2(max_w, cur_y)
+
+
 # Aligns the top-center of the graph (where the first item sits, at x=0, y=0
 # in canvas-local space) with the top-center of the visible area.
 func _center_initial_view() -> void:
@@ -185,135 +545,6 @@ func _center_initial_view() -> void:
 		await get_tree().process_frame
 	_pan_offset = Vector2(size.x * 0.5, VIEW_TOP_MARGIN)
 	_apply_transform()
-
-
-# Recursively lays out an items[] array as a vertical column centered on x_center.
-# Returns { "size": Vector2(max_w, cur_y), "last_nodes": Array[Control] }
-# where last_nodes are the Controls at the open ends of this subtree (can be
-# multiple after an unresolved fork — used by the caller to draw merge arrows).
-func _layout_items(items: Array, x_center: float, y: float) -> Dictionary:
-	var cur_y: float = y
-	var max_w: float = NODE_WIDTH
-	# open_ends: Controls whose bottom port awaits an outgoing edge.
-	# After a fork, this holds the last node of each path so merge arrows can
-	# be drawn to whatever comes next at this level.
-	var open_ends: Array  = []
-	# Whether open_ends came from fork paths (drives edge colour for merges).
-	var from_fork: bool   = false
-
-	# Insert button before the first item (idx=0). Sits in the gap above y.
-	_place_insert_btn(items, 0, x_center, y - V_GAP * 0.5)
-
-	# Empty branch: just show the single insert button.
-	if items.is_empty():
-		return {"size": Vector2(NODE_WIDTH, y), "last_nodes": []}
-
-	for i in items.size():
-		var item: Dictionary = items[i]
-		var item_type: String = item.get("type", "round")
-
-		if item_type == "fork":
-			# ── Fork node ────────────────────────────────────────────────────
-			var fork_node: Control = _make_node(item, items, i)
-			fork_node.position = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
-			_canvas.add_child(fork_node)
-			# Connect whatever preceded this fork to the fork node.
-			for oe in open_ends:
-				_add_edge(_node_bottom(oe), _node_top(fork_node),
-					UITheme.FORK_EDGE if from_fork else UITheme.EDGE)
-			cur_y += NODE_HEIGHT + V_GAP
-
-			# Compute path widths (recursive measure).
-			var paths: Array = item.get("paths", [])
-			var path_widths: Array = []
-			for path in paths:
-				path_widths.append(max(_measure_items_width(path.get("items", [])), NODE_WIDTH))
-
-			var total_w: float = 0.0
-			for w in path_widths:
-				total_w += w
-			if paths.size() > 1:
-				total_w += (paths.size() - 1) * H_GAP
-			max_w = max(max_w, total_w)
-
-			# Place each path column, collecting each path's final nodes.
-			var col_x: float  = x_center - total_w * 0.5
-			var max_branch_y: float = cur_y
-			var all_path_ends: Array = []
-
-			for pi in paths.size():
-				var path: Dictionary     = paths[pi]
-				var pw: float            = path_widths[pi]
-				var path_cx: float       = col_x + pw * 0.5
-
-				var label_node: Control = _make_path_label(path, paths, pi)
-				label_node.position = Vector2(path_cx - NODE_WIDTH * 0.5, cur_y)
-				_canvas.add_child(label_node)
-				_add_edge(_node_bottom(fork_node), _node_top(label_node), UITheme.FORK_EDGE)
-
-				var path_items: Array = path.get("items", [])
-				var sub: Dictionary   = _layout_items(path_items, path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP)
-
-				if not path_items.is_empty():
-					var first_item_node: Control = _find_first_node_at_x(path_cx, cur_y + PATH_LABEL_HEIGHT + V_GAP)
-					if first_item_node != null:
-						_add_edge(_node_bottom(label_node), _node_top(first_item_node), UITheme.EDGE)
-
-				max_branch_y = max(max_branch_y, sub["size"].y)
-				all_path_ends.append_array(sub["last_nodes"])
-				col_x += pw + H_GAP
-
-			cur_y     = max_branch_y
-			# Path ends become the new open ends — the next item at this level
-			# receives merge arrows from all of them.
-			open_ends = all_path_ends
-			from_fork = true
-
-		else:
-			# ── Non-fork node ────────────────────────────────────────────────
-			var is_term: bool  = _terminal_items.any(func(ti: Dictionary) -> bool: return is_same(item, ti))
-			var node: Control  = _make_node(item, items, i, is_term)
-			node.position = Vector2(x_center - NODE_WIDTH * 0.5, cur_y)
-			_canvas.add_child(node)
-			# Draw edge(s) from all open ends into this node.
-			for oe in open_ends:
-				_add_edge(_node_bottom(oe), _node_top(node),
-					UITheme.FORK_EDGE if from_fork else UITheme.EDGE)
-			open_ends = [node]
-			from_fork = false
-			cur_y += NODE_HEIGHT + V_GAP
-
-		# Insert button in the gap AFTER this item (idx = i+1).
-		_place_insert_btn(items, i + 1, x_center, cur_y - V_GAP * 0.5)
-
-	return {"size": Vector2(max_w, cur_y), "last_nodes": open_ends}
-
-
-# Returns all items (by reference) that would end the run — i.e., no item in
-# the journey flow comes after them. Called once per refresh().
-#
-# has_successor_after: true when the caller knows something follows this items[]
-# array in the parent scope (e.g. the fork that contains this path has a sibling
-# item after it at the outer level).
-func _collect_terminal_items(items: Array, has_successor_after: bool) -> Array:
-	if items.is_empty():
-		return []
-	var last: Dictionary = items[-1]
-	var item_type: String = last.get("type", "round")
-	if item_type == "fork":
-		if has_successor_after:
-			# Fork converges into a successor — the fork's paths are not terminal.
-			return []
-		# Fork is the last item with nothing after it: recurse into each path.
-		var result: Array = []
-		for path: Dictionary in last.get("paths", []):
-			result.append_array(_collect_terminal_items(path.get("items", []), false))
-		return result
-	else:
-		# Non-fork last item.
-		if has_successor_after:
-			return []
-		return [last]
 
 
 # Recursively measures the width an items[] array will consume at layout time.
@@ -331,69 +562,12 @@ func _measure_items_width(items: Array) -> float:
 	return max_w
 
 
-func _find_first_node_at_x(x_center: float, y: float) -> Control:
-	# Linear scan through canvas children to find the node placed at this position.
-	for c in _canvas.get_children():
-		if c.position.y == y and abs(c.position.x - (x_center - NODE_WIDTH * 0.5)) < 0.5:
-			return c
-	return null
-
-
-# Places a small "+" button centered at (x_center, mid_y) that, when clicked,
-# requests an insert into `arr` at the given index.
-func _place_insert_btn(arr: Array, idx: int, x_center: float, mid_y: float) -> void:
-	if map_mode:
-		return  # no editing affordances in the player-facing map
-	var btn: Button = Button.new()
-	btn.text = "+"
-	btn.size = Vector2(INSERT_BTN_SIZE, INSERT_BTN_SIZE)
-	btn.custom_minimum_size = Vector2(INSERT_BTN_SIZE, INSERT_BTN_SIZE)
-	btn.position = Vector2(x_center - INSERT_BTN_SIZE * 0.5, mid_y - INSERT_BTN_SIZE * 0.5)
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.add_theme_color_override("font_color",         UITheme.PURPLE_MID)
-	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", Color.BLACK)
-	btn.add_theme_font_size_override("font_size", 16)
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(0.02, 0.0, 0.04, 0.95)
-	s.border_color = UITheme.PURPLE_MID
-	s.border_width_left   = 1; s.border_width_right  = 1
-	s.border_width_top    = 1; s.border_width_bottom = 1
-	s.corner_radius_top_left     = 11
-	s.corner_radius_top_right    = 11
-	s.corner_radius_bottom_left  = 11
-	s.corner_radius_bottom_right = 11
-	s.content_margin_left   = 0; s.content_margin_right  = 0
-	s.content_margin_top    = 0; s.content_margin_bottom = 0
-	btn.add_theme_stylebox_override("normal", s)
-
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.PURPLE_BRIGHT.r, UITheme.PURPLE_BRIGHT.g, UITheme.PURPLE_BRIGHT.b, 0.35)
-	s_hover.border_color = UITheme.PURPLE_BRIGHT
-	btn.add_theme_stylebox_override("hover", s_hover)
-
-	var s_pressed: StyleBoxFlat = s.duplicate()
-	s_pressed.bg_color = UITheme.PURPLE_BRIGHT
-	btn.add_theme_stylebox_override("pressed", s_pressed)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
-	btn.pressed.connect(func() -> void:
-		# Report the button's screen-space position so the popup appears near it.
-		var screen_pos: Vector2 = btn.get_global_rect().position + Vector2(INSERT_BTN_SIZE, 0)
-		emit_signal("insert_requested", arr, idx, screen_pos)
-	)
-
-	_canvas.add_child(btn)
-
-
 # ---------------------------------------------------------------------------
 # Node makers
 # ---------------------------------------------------------------------------
 
 # is_terminal: true when this node ends the run (no path leads beyond it).
-func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = false) -> Control:
+func _make_node(item: Dictionary, is_terminal: bool = false) -> Control:
 	var item_type: String = item.get("type", "round")
 	var round_type: String = item.get("round_type", "normal") if item_type == "round" else ""
 	var is_boss: bool = round_type == "boss"
@@ -422,24 +596,12 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 	# Map mode: nodes ignore the mouse so clicks pass through to pan/zoom.
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE if map_mode else Control.MOUSE_FILTER_STOP
 
-	# Use is_same() (reference identity) — Dictionary's == does deep equality,
-	# so two newly-created nodes with identical default fields would compare
-	# equal and both light up as "selected".
-	var is_selected: bool = _is_selected(item)
+	# Selected nodes get a heavier border via _node_stylebox.
+	var is_selected: bool = _current_layout_node_id in _selected_ids
 	panel.add_theme_stylebox_override("panel", _node_stylebox(accent, is_selected, is_terminal))
 
-	# Stash the model link so marquee hit-testing can map a node back to its
-	# (item, parent array) without re-walking the tree.
+	# Stash the display item so content_bounds / fit-to-view can identify node panels.
 	panel.set_meta("graph_item", item)
-	panel.set_meta("graph_arr",  arr)
-
-	# Live validation: a non-empty summary means this node has a problem the
-	# author would otherwise only discover at save time.
-	var issue: String = ""
-	if not map_mode and validity_fn.is_valid():
-		issue = validity_fn.call(item)
-	if issue != "":
-		panel.tooltip_text = issue
 
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left",   10)
@@ -487,86 +649,21 @@ func _make_node(item: Dictionary, arr: Array, _idx: int, is_terminal: bool = fal
 	secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(secondary_lbl)
 
-	# Warning badge — sits at the right edge (the labels column expands to push
-	# it there). Hovering the node shows the issue via panel.tooltip_text.
-	if issue != "":
+	# Soft validation: an author-facing ⚠ at the right edge of a node with a problem (a round with no
+	# funscript, a moved source file, an unreachable island, …). The builder supplies the text via
+	# warning_provider; never present in map mode. Added to `row` (a real container child, so it always
+	# lays out); the glyph ignores the mouse like the rest of the node, and the detail shows as the
+	# node's hover tooltip (the panel already stops the mouse in the editor).
+	var warning: String = str(item.get("warning", ""))
+	if warning != "":
+		panel.tooltip_text = warning
 		var warn_lbl: Label = Label.new()
 		warn_lbl.text = "⚠"
-		warn_lbl.add_theme_color_override("font_color", UITheme.ERROR_SOFT)
+		warn_lbl.add_theme_color_override("font_color", UITheme.AMBER)
 		warn_lbl.add_theme_font_size_override("font_size", 18)
 		warn_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		warn_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(warn_lbl)
-
-	# Click selection (editor only). Shift+click selects the range from the anchor;
-	# Ctrl+click toggles membership; a plain click selects just this node. Skipped
-	# entirely in map mode — the player view has no selection.
-	if not map_mode:
-		panel.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton:
-				var mb := event as InputEventMouseButton
-				if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-					if mb.shift_pressed:
-						_range_select(item, arr)
-					elif mb.ctrl_pressed:
-						_toggle_selection(item, arr)
-					else:
-						_select_single(item, arr)
-					accept_event()
-		)
-
-	return panel
-
-
-func _make_path_label(path: Dictionary, paths_arr: Array, path_idx: int) -> Control:
-	var panel: PanelContainer = PanelContainer.new()
-	panel.size = Vector2(NODE_WIDTH, PATH_LABEL_HEIGHT)
-	panel.custom_minimum_size = Vector2(NODE_WIDTH, PATH_LABEL_HEIGHT)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var selected: bool = is_same(path, _selected_path)
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.22 if selected else 0.10)
-	s.border_color = UITheme.MAGENTA
-	var bw: int = 3 if selected else 1
-	s.border_width_left   = bw
-	s.border_width_right  = bw
-	s.border_width_top    = bw
-	s.border_width_bottom = bw
-	s.corner_radius_top_left     = 14
-	s.corner_radius_top_right    = 14
-	s.corner_radius_bottom_left  = 14
-	s.corner_radius_bottom_right = 14
-	s.content_margin_left   = 12
-	s.content_margin_right  = 12
-	s.content_margin_top    = 4
-	s.content_margin_bottom = 4
-	if selected:
-		s.shadow_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.50)
-		s.shadow_size  = 8
-	panel.add_theme_stylebox_override("panel", s)
-
-	var name_text: String = path.get("name", "Path %d" % (path_idx + 1))
-	if (name_text as String).strip_edges() == "":
-		name_text = "Path %d" % (path_idx + 1)
-
-	var lbl: Label = Label.new()
-	lbl.text = "↳ " + name_text.to_upper()
-	lbl.add_theme_color_override("font_color", UITheme.MAGENTA)
-	lbl.add_theme_font_size_override("font_size", 11)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(lbl)
-
-	# Click selects this branch as an insertion target (new/pasted items go to
-	# the top of the path).
-	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			var mb := event as InputEventMouseButton
-			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-				_select_branch(path)
-				accept_event()
-	)
 
 	return panel
 
@@ -683,143 +780,46 @@ func _fork_type_label(resolution: String) -> String:
 # Edges
 # ---------------------------------------------------------------------------
 
-func _add_edge(from: Vector2, to: Vector2, color: Color) -> void:
-	_edges.append({"from": from, "to": to, "color": color})
+# Appends an orthogonal edge that leaves the source and enters the target on whichever faces point
+# toward each other (top / bottom / left / right) — so a sideways or upward connection lands on the
+# side or bottom of the node instead of always routing into its top.
+func _add_edge_between(src: Control, tgt: Control, color: Color) -> void:
+	var route: Dictionary = _edge_route(src, tgt)
+	_edges.append({"points": route["points"], "arrow_dir": route["arrow_dir"], "color": color})
 
 
-func _node_top(node: Control) -> Vector2:
-	return node.position + Vector2(node.size.x * 0.5, 0.0)
-
-
-func _node_bottom(node: Control) -> Vector2:
-	return node.position + Vector2(node.size.x * 0.5, node.size.y)
-
-
-# ---------------------------------------------------------------------------
-# Selection
-# ---------------------------------------------------------------------------
-
-func _is_selected(item: Dictionary) -> bool:
-	for s: Dictionary in _selected_items:
-		if is_same(item, s):
-			return true
-	return false
-
-
-func _emit_selection() -> void:
-	emit_signal("selection_changed", _selected_items, _selected_arr)
-
-
-# Replaces the selection with a single node (plain click / programmatic select).
-func _select_single(item: Dictionary, arr: Array) -> void:
-	_selected_items = [item]
-	_selected_arr   = arr
-	_selected_path  = {}
-	_anchor_item    = item   # becomes the fixed end of a later Shift+click range
-	_anchor_arr     = arr
-	_emit_selection()
-	refresh()
-
-
-# Index of `item` in `arr` by reference identity, or -1.
-func _index_of(arr: Array, item: Dictionary) -> int:
-	for i in arr.size():
-		if is_same(arr[i], item):
-			return i
-	return -1
-
-
-# Shift+click: selects the inclusive range between the anchor and `item` within
-# the same branch. With no valid anchor (or a different branch), falls back to a
-# plain single select.
-func _range_select(item: Dictionary, arr: Array) -> void:
-	var a_idx: int = -1
-	if not _anchor_item.is_empty() and is_same(arr, _anchor_arr):
-		a_idx = _index_of(arr, _anchor_item)
-	var c_idx: int = _index_of(arr, item)
-	if a_idx < 0 or c_idx < 0:
-		_select_single(item, arr)
-		return
-	var lo: int = min(a_idx, c_idx)
-	var hi: int = max(a_idx, c_idx)
-	var items: Array = []
-	for i in range(lo, hi + 1):
-		items.append(arr[i])
-	_selected_items = items
-	_selected_arr   = arr
-	_selected_path  = {}
-	# Anchor stays put so the range can be re-stretched with another Shift+click.
-	_emit_selection()
-	refresh()
-
-
-# Selects a fork branch (path) as an insertion target — new/pasted items go to
-# the top of the path. Mutually exclusive with node selection.
-func _select_branch(path: Dictionary) -> void:
-	_selected_items = []
-	_selected_arr   = []
-	_selected_path  = path
-	emit_signal("branch_selected", path)
-	refresh()
-
-
-# Ctrl+click: toggle a node in/out of the selection. Selecting in a different
-# branch than the current selection starts a fresh selection there (same-branch
-# constraint keeps group ops unambiguous).
-func _toggle_selection(item: Dictionary, arr: Array) -> void:
-	if not _selected_items.is_empty() and not is_same(arr, _selected_arr):
-		_select_single(item, arr)
-		return
-	var found: int = -1
-	for i in _selected_items.size():
-		if is_same(_selected_items[i], item):
-			found = i
-			break
-	if found >= 0:
-		_selected_items.remove_at(found)
-		if _selected_items.is_empty():
-			_selected_arr = []
+# Builds an orthogonal 3-segment route between two node rects. The exit/entry faces are chosen by
+# which face the centre-to-centre line crosses (aspect-ratio aware, so wide nodes still prefer a
+# vertical exit); the route leaves straight out of the exit face, runs perpendicular, then turns
+# straight into the entry face. arrow_dir is the unit heading at the entry (for the arrowhead).
+func _edge_route(src: Control, tgt: Control) -> Dictionary:
+	var ss: Vector2 = src.size
+	var ts: Vector2 = tgt.size
+	var sc: Vector2 = src.position + ss * 0.5
+	var tc: Vector2 = tgt.position + ts * 0.5
+	var delta: Vector2 = tc - sc
+	var approach: float = 20.0   # how far before the entry face the route makes its final turn
+	var from: Vector2
+	var to: Vector2
+	var arrow_dir: Vector2
+	var pts: PackedVector2Array = PackedVector2Array()
+	# Vertical when the centre line exits the top/bottom face rather than a side: compare slopes
+	# scaled by the half-extents, i.e. |dy|/halfH vs |dx|/halfW → |dy|*W vs |dx|*H.
+	if absf(delta.y) * ss.x >= absf(delta.x) * ss.y:
+		if delta.y >= 0.0:   # target below → leave bottom, enter top
+			from = Vector2(sc.x, src.position.y + ss.y); to = Vector2(tc.x, tgt.position.y);        arrow_dir = Vector2(0, 1)
+		else:                # target above → leave top, enter bottom
+			from = Vector2(sc.x, src.position.y);        to = Vector2(tc.x, tgt.position.y + ts.y); arrow_dir = Vector2(0, -1)
+		var bend_y: float = clampf(to.y - arrow_dir.y * approach, minf(from.y, to.y), maxf(from.y, to.y))
+		pts.append(from); pts.append(Vector2(from.x, bend_y)); pts.append(Vector2(to.x, bend_y)); pts.append(to)
 	else:
-		_selected_items.append(item)
-		_selected_arr = arr
-	_selected_path = {}
-	_anchor_item   = item   # extend a future Shift+click range from here
-	_anchor_arr    = arr
-	_emit_selection()
-	refresh()
-
-
-# Sets the selection to an explicit set of items (all expected to live in `arr`).
-# Used by the builder after group move/paste to re-highlight the same items.
-func set_selection(items: Array, arr: Array) -> void:
-	_selected_items = items.duplicate()
-	_selected_arr   = arr if not items.is_empty() else []
-	_selected_path  = {}
-	_emit_selection()
-	refresh()
-
-
-# Programmatically select the item at arr[idx]. Used by side-panel editors
-# after a structural change so both the graph and the editor re-render.
-func select_item(arr: Array, idx: int) -> void:
-	if idx < 0 or idx >= arr.size():
-		clear_selection()
-		return
-	_select_single(arr[idx], arr)
-
-
-func clear_selection() -> void:
-	if _selected_items.is_empty() and _selected_path.is_empty():
-		# Force the signal so consumers can update on a forced clear.
-		_emit_selection()
-		return
-	_selected_items = []
-	_selected_arr   = []
-	_selected_path  = {}
-	_anchor_item    = {}
-	_anchor_arr     = []
-	_emit_selection()
-	refresh()
+		if delta.x >= 0.0:   # target right → leave right, enter left
+			from = Vector2(src.position.x + ss.x, sc.y); to = Vector2(tgt.position.x, tc.y);        arrow_dir = Vector2(1, 0)
+		else:                # target left → leave left, enter right
+			from = Vector2(src.position.x, sc.y);        to = Vector2(tgt.position.x + ts.x, tc.y); arrow_dir = Vector2(-1, 0)
+		var bend_x: float = clampf(to.x - arrow_dir.x * approach, minf(from.x, to.x), maxf(from.x, to.x))
+		pts.append(from); pts.append(Vector2(bend_x, from.y)); pts.append(Vector2(bend_x, to.y)); pts.append(to)
+	return {"points": pts, "arrow_dir": arrow_dir}
 
 
 # ---------------------------------------------------------------------------
@@ -845,11 +845,11 @@ func _gui_input(event: InputEvent) -> void:
 				_panning = mb.pressed
 				_last_mouse = mb.position
 				accept_event()
-			# Left press reaching GraphView (not a node) starts a marquee drag.
-			# A press+release without movement collapses to "clear selection".
 			elif mb.pressed:
+				# Left press on empty canvas (not a node) → start a marquee box-select. A press+release
+				# with no real drag collapses to "clear selection".
 				_marquee_active   = true
-				_marquee_additive = mb.ctrl_pressed
+				_marquee_additive = mb.ctrl_pressed or mb.shift_pressed
 				_marquee_start    = mb.position
 				_marquee_end      = mb.position
 				accept_event()
@@ -869,65 +869,44 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 
 
-# Draws the marquee selection rectangle (screen space, on top of the graph).
+# Draws the marquee box (screen space, over the graph).
 func _draw() -> void:
-	if not _marquee_active:
-		return
-	var rect: Rect2 = Rect2(_marquee_start, Vector2.ZERO).expand(_marquee_end)
-	var accent: Color = UITheme.PURPLE_BRIGHT
-	draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.12), true)
-	draw_rect(rect, accent, false, 1.5)
+	if _marquee_active:
+		var rect: Rect2 = Rect2(_marquee_start, Vector2.ZERO).expand(_marquee_end)
+		var accent: Color = UITheme.PURPLE_BRIGHT
+		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.12), true)
+		draw_rect(rect, accent, false, 1.5)
+	if _connect_drag_active:
+		# Rubber-band from the handle to the cursor, in GraphView-screen space (canvas-local × zoom +
+		# pan). Red over an invalid target (the source or an ancestor → would loop), else edge colour.
+		var bad: bool = _connect_drag_target != "" and (_connect_drag_target == _connect_drag_source or _connect_drag_invalid.has(_connect_drag_target))
+		var col: Color = UITheme.ERROR_SOFT if bad else (UITheme.FORK_EDGE if _connect_drag_edge_idx >= 0 else UITheme.EDGE)
+		var from_s: Vector2 = _canvas.position + _connect_drag_from * _zoom
+		var to_s: Vector2 = _canvas.position + _connect_drag_to * _zoom
+		draw_line(from_s, to_s, col, 2.0)
+		draw_circle(to_s, 4.0, col)
+		if _connect_drag_target != "" and _node_ctrls.has(_connect_drag_target):
+			var tc: Control = _node_ctrls[_connect_drag_target]
+			draw_rect(Rect2(_canvas.position + tc.position * _zoom, tc.size * _zoom), col, false, 2.0)
 
 
-# Finalizes a marquee drag: selects every node whose on-screen rect intersects
-# the marquee box, constrained to a single branch (the first hit's parent array).
-# A drag too small to count is treated as a plain click → clear selection.
+# Finalizes a marquee: selects every node whose on-screen rect intersects the box (additive when
+# Ctrl/Shift was held at start). A drag too small to count is a click on empty canvas → clear.
 func _finish_marquee() -> void:
 	_marquee_active = false
 	var rect: Rect2 = Rect2(_marquee_start, Vector2.ZERO).expand(_marquee_end)
 	queue_redraw()
-
 	if rect.size.length() < MARQUEE_DRAG_THRESHOLD:
 		if not _marquee_additive:
-			clear_selection()
+			_set_selection([])
 		return
-
-	var hit_items: Array = []
-	var hit_arrs:  Array = []
-	for c: Node in _canvas.get_children():
-		if not (c is Control) or not c.has_meta("graph_item"):
-			continue
-		var node: Control = c as Control
-		var screen_rect: Rect2 = Rect2(_canvas.position + node.position * _zoom, node.size * _zoom)
-		if rect.intersects(screen_rect):
-			hit_items.append(node.get_meta("graph_item"))
-			hit_arrs.append(node.get_meta("graph_arr"))
-
-	if hit_items.is_empty():
-		if not _marquee_additive:
-			clear_selection()
-		return
-
-	# Same-branch: keep only hits sharing the first hit's parent array.
-	var target_arr: Array = hit_arrs[0]
-	var items: Array = []
-	if _marquee_additive and not _selected_items.is_empty() and is_same(_selected_arr, target_arr):
-		items = _selected_items.duplicate()
-	for i in hit_items.size():
-		if is_same(hit_arrs[i], target_arr):
-			var already: bool = false
-			for s: Dictionary in items:
-				if is_same(s, hit_items[i]):
-					already = true
-					break
-			if not already:
-				items.append(hit_items[i])
-
-	_selected_items = items
-	_selected_arr   = target_arr
-	_selected_path  = {}
-	_emit_selection()
-	refresh()
+	var ids: Array = _selected_ids.duplicate() if _marquee_additive else []
+	for id: String in _node_ctrls:
+		var c: Control = _node_ctrls[id]
+		var screen_rect: Rect2 = Rect2(_canvas.position + c.position * _zoom, c.size * _zoom)
+		if rect.intersects(screen_rect) and not ids.has(id):
+			ids.append(id)
+	_set_selection(ids)
 
 
 func _zoom_at(focus: Vector2, new_zoom: float) -> void:
@@ -1008,27 +987,12 @@ func frame_for_capture(scale: float, margin: float) -> Vector2:
 
 # ── Journey-map marker (map mode) ────────────────────────────────────────────
 
-# Finds the laid-out node for a stable map key (item["_map_key"]). When a key
-# repeats across fork levels, prefers the first match at or below `min_y` (canvas
-# Y) so the marker advances monotonically; falls back to any match.
-func _find_map_node(key: String, min_y: float = -INF) -> Control:
+# Finds the laid-out node for a stable map key. In the graph the key IS the node id,
+# so resolve it directly against the node controls (ids are unique).
+func _find_map_node(key: String) -> Control:
 	if key == "":
 		return null
-	var best: Control = null
-	var best_y: float = INF
-	var any: Control = null
-	for c: Node in _canvas.get_children():
-		if not (c is Control) or not c.has_meta("graph_item"):
-			continue
-		var it: Dictionary = c.get_meta("graph_item")
-		if str(it.get("_map_key", "")) != key:
-			continue
-		var node: Control = c as Control
-		any = node
-		if node.position.y >= min_y and node.position.y < best_y:
-			best = node
-			best_y = node.position.y
-	return best if best != null else any
+	return _node_ctrls.get(key, null)
 
 
 # Canvas-space centre of the node for `key`, or Vector2.INF when not found.
@@ -1047,13 +1011,12 @@ func set_marker_color(c: Color) -> void:
 
 # Snaps the marker onto the node for `key` (no animation).
 func set_marker_at(key: String) -> void:
-	var n: Control = _find_map_node(key, _marker_y)
+	var n: Control = _find_map_node(key)
 	if n == null:
 		return
 	_ensure_marker()
 	_marker.visible = true
 	_marker.position = n.position - Vector2(MARKER_PAD, MARKER_PAD)
-	_marker_y = n.position.y
 
 
 # Pans (no zoom change) so the node for `key` sits at the viewport centre.
@@ -1095,5 +1058,3 @@ func reset_view() -> void:
 	_zoom = 1.0
 	_pan_offset = Vector2(size.x * 0.5, VIEW_TOP_MARGIN)
 	_apply_transform()
-
-
