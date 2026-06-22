@@ -96,6 +96,61 @@ func test_to_json_from_json_round_trip() -> void:
 	assert_str(b["out"][0]["name"]).is_equal("P0")
 
 
+# Node positions (pos) survive to_json → from_json — the editor's saved layout round-trips.
+func test_node_positions_round_trip() -> void:
+	var g := JourneyGraph.build_graph(_fork_journey())
+	GraphLayout.seed_positions(g)
+	for id in g["nodes"]:
+		assert_bool((g["nodes"][id] as Dictionary).has("pos")).is_true()   # every node seeded
+	var restored := JourneyGraph.from_json(JourneyGraph.to_json(g))
+	for id in g["nodes"]:
+		assert_vector(restored["nodes"][id]["pos"]).is_equal(g["nodes"][id]["pos"])
+
+
+# The editor save↔load contract end-to-end: a graph with round data + positions + journey meta,
+# assembled the way the builder save will (meta + to_json) and read back via parse_graph_for_editor,
+# preserves structure, resolved paths, node data, layout, and meta.
+func test_editor_save_load_round_trip() -> void:
+	var g := JourneyGraph.build_graph({
+		"rounds": [
+			{"order": 0, "name": "A", "node_id": "a", "funscript_path": "content/a.funscript",
+			 "coins": 5, "round_type": "normal", "action_count": 3, "length_ms": 1000},
+			{"order": 1, "name": "B", "node_id": "b", "funscript_path": "content/b.funscript",
+			 "coins": 0, "round_type": "boss",   "action_count": 2, "length_ms": 500},
+		],
+		"shops": [], "storyboards": [], "forks": [],
+	})
+	GraphLayout.seed_positions(g)
+	var jj := JourneyGraph.to_json(g)            # node block …
+	jj["Name"] = "RT"; jj["Author"] = "Mara"; jj["MapEnabled"] = false   # … + journey meta
+	_write_journey(jj)
+
+	var loaded := JourneyScanner.parse_graph_for_editor(_jdir(), JOURNEY)
+	assert_array(_walk(loaded, [])).is_equal(["round:A", "round:B"])      # structure
+	assert_str(loaded["title"]).is_equal("RT")                            # meta
+	assert_bool(loaded["map_enabled"]).is_false()
+	var a: Dictionary = loaded["nodes"]["a"]
+	assert_str(a["data"]["funscript_path"]).is_equal(_jdir() + "/content/a.funscript")   # path resolved
+	assert_int(int(a["data"]["coins"])).is_equal(5)                       # data preserved (JSON loads numbers as float; consumers coerce)
+	assert_vector(a["pos"]).is_equal(g["nodes"]["a"]["pos"])              # layout preserved
+	assert_str((loaded["nodes"]["b"] as Dictionary)["data"]["round_type"]).is_equal("boss")
+
+
+# A legacy tree journey (no Nodes, no pos) loads through the editor entry with positions seeded,
+# so a migrated journey opens laid-out and editable.
+func test_editor_load_seeds_legacy_positions() -> void:
+	_write_journey({
+		"Name": "Legacy", "Rounds": [
+			{"Name": "A", "FolderName": "r1", "ActionCount": 1, "LengthMs": 100, "Order": 0},
+			{"Name": "B", "FolderName": "r2", "ActionCount": 1, "LengthMs": 100, "Order": 1},
+		], "Forks": [], "Shops": [], "Storyboards": [],
+	})
+	var g := JourneyScanner.parse_graph_for_editor(_jdir(), JOURNEY)
+	assert_array(_walk(g, [])).is_equal(["round:A", "round:B"])
+	for id in g["nodes"]:
+		assert_bool((g["nodes"][id] as Dictionary).has("pos")).is_true()   # seeded on migrate
+
+
 # Through disk: a fork + its edges survive JSON.stringify → file → parse_graph.
 func test_disk_round_trip_preserves_fork() -> void:
 	_write_journey(JourneyGraph.to_json(JourneyGraph.build_graph(_fork_journey())))
@@ -166,6 +221,61 @@ func test_parse_graph_preserves_node_ids() -> void:
 	# Edges wire by the stable ids: A → F (interleaved after A), F's lone path → X.
 	assert_str(nodes["n_a"]["out"][0]["to"]).is_equal("n_f")
 	assert_str(nodes["n_f"]["out"][0]["to"]).is_equal("n_x")
+
+
+# ── Redirect overlay (Phase 3 step 2) ───────────────────────────────────────
+# parse_graph composes the journey.json "Redirects" map onto the migrated graph via
+# apply_redirects, keyed by the stable node ids — the skip / converge / end authoring.
+
+# A redirect makes a node continue to a later node, skipping its default next.
+func test_parse_graph_applies_redirect_skip() -> void:
+	_write_journey({
+		"Name": "Redir",
+		"Rounds": [
+			{"Name": "A", "NodeId": "n_a", "FolderName": "r1", "ActionCount": 1, "LengthMs": 100, "Order": 0},
+			{"Name": "B", "NodeId": "n_b", "FolderName": "r2", "ActionCount": 1, "LengthMs": 100, "Order": 1},
+			{"Name": "C", "NodeId": "n_c", "FolderName": "r3", "ActionCount": 1, "LengthMs": 100, "Order": 2},
+		],
+		"Forks": [], "Shops": [], "Storyboards": [],
+		"Redirects": {"n_a": "n_c"},   # A skips B → C
+	})
+	assert_array(_walk(JourneyScanner.parse_graph(_jdir(), JOURNEY), [])).is_equal(["round:A", "round:C"])
+
+
+# A redirect to "" ends the journey early through the full scan path.
+func test_parse_graph_applies_redirect_to_end() -> void:
+	_write_journey({
+		"Name": "RedirEnd",
+		"Rounds": [
+			{"Name": "A", "NodeId": "n_a", "FolderName": "r1", "ActionCount": 1, "LengthMs": 100, "Order": 0},
+			{"Name": "B", "NodeId": "n_b", "FolderName": "r2", "ActionCount": 1, "LengthMs": 100, "Order": 1},
+		],
+		"Forks": [], "Shops": [], "Storyboards": [],
+		"Redirects": {"n_a": ""},   # end after A
+	})
+	assert_array(_walk(JourneyScanner.parse_graph(_jdir(), JOURNEY), [])).is_equal(["round:A"])
+
+
+# Both fork-path tails redirect onto a later node, skipping the default rejoin (B) and
+# converging on C — the headline "join anywhere" capability, end-to-end through the scan.
+func test_parse_graph_redirect_converges_fork_paths() -> void:
+	_write_journey({
+		"Name": "Converge",
+		"Rounds": [
+			{"Name": "A", "NodeId": "n_a", "FolderName": "r1", "ActionCount": 1, "LengthMs": 100, "Order": 0},
+			{"Name": "B", "NodeId": "n_b", "FolderName": "r2", "ActionCount": 1, "LengthMs": 100, "Order": 1},
+			{"Name": "C", "NodeId": "n_c", "FolderName": "r3", "ActionCount": 1, "LengthMs": 100, "Order": 2},
+		],
+		"Forks": [{"AfterOrder": 0, "Title": "F", "NodeId": "n_f", "Resolution": "choice", "Paths": [
+			{"Name": "P0", "Rounds": [{"Name": "X", "NodeId": "n_x", "FolderName": "fx", "ActionCount": 1, "LengthMs": 100, "Order": 0}], "Shops": [], "Storyboards": [], "Forks": []},
+			{"Name": "P1", "Rounds": [{"Name": "Z", "NodeId": "n_z", "FolderName": "fz", "ActionCount": 1, "LengthMs": 100, "Order": 0}], "Shops": [], "Storyboards": [], "Forks": []},
+		]}],
+		"Shops": [], "Storyboards": [],
+		"Redirects": {"n_x": "n_c", "n_z": "n_c"},   # both tails skip default rejoin B → converge on C
+	})
+	var graph := JourneyScanner.parse_graph(_jdir(), JOURNEY)
+	assert_array(_walk(graph, [0])).is_equal(["round:A", "fork:F", "round:X", "round:C"])
+	assert_array(_walk(graph, [1])).is_equal(["round:A", "fork:F", "round:Z", "round:C"])
 
 
 # New-format parse_graph carries journey meta + a DAG total alongside the graph.

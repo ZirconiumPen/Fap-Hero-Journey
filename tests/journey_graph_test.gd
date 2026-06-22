@@ -261,3 +261,170 @@ func test_build_graph_guards_duplicate_ids() -> void:
 	})
 	assert_int((g["nodes"] as Dictionary).size()).is_equal(2)   # both survived
 	assert_array(_walk(g, [])).is_equal(["round:A", "round:B"])
+
+
+# ── Graph editor: position seam (overhaul L1) ───────────────────────────────
+# GraphLayout.seed_positions lays nodes out in layers by longest-path depth from start,
+# non-overlapping — the initial placement a migrated journey opens with.
+func test_seed_positions_layers_by_depth() -> void:
+	# A, FORK(P0=[X], P1=[Z]), B  →  depths A=0, fork=1, X=Z=2, B=3 (longest path A,F,X/Z,B).
+	var fork := _fork(0, "F", [
+		{"name": "P0", "rounds": [{"order": 0, "name": "X", "node_id": "x"}], "shops": [], "storyboards": [], "forks": []},
+		{"name": "P1", "rounds": [{"order": 0, "name": "Z", "node_id": "z"}], "shops": [], "storyboards": [], "forks": []},
+	])
+	var g := JourneyGraph.build_graph({
+		"rounds": [{"order": 0, "name": "A", "node_id": "a"}, {"order": 1, "name": "B", "node_id": "b"}],
+		"shops": [], "storyboards": [], "forks": [fork],
+	})
+	GraphLayout.seed_positions(g)
+	assert_float(g["nodes"]["a"]["pos"].y).is_less(g["nodes"]["b"]["pos"].y)        # rows follow flow depth
+	assert_float(g["nodes"]["x"]["pos"].y).is_equal(g["nodes"]["z"]["pos"].y)       # siblings share a row
+	assert_float(g["nodes"]["x"]["pos"].x).is_not_equal(g["nodes"]["z"]["pos"].x)   # …in different columns
+
+
+# GraphLayout.auto_layout (Sugiyama "Arrange") layers by longest-path depth, keeps a row's nodes
+# COL_W apart, and is deterministic (re-running yields identical positions).
+func test_auto_layout_layers_and_no_overlap() -> void:
+	var fork := _fork(0, "F", [
+		{"name": "P0", "rounds": [{"order": 0, "name": "X", "node_id": "x"}], "shops": [], "storyboards": [], "forks": []},
+		{"name": "P1", "rounds": [{"order": 0, "name": "Z", "node_id": "z"}], "shops": [], "storyboards": [], "forks": []},
+	])
+	var g := JourneyGraph.build_graph({
+		"rounds": [{"order": 0, "name": "A", "node_id": "a"}, {"order": 1, "name": "B", "node_id": "b"}],
+		"shops": [], "storyboards": [], "forks": [fork],
+	})
+	GraphLayout.auto_layout(g)
+	assert_float(g["nodes"]["a"]["pos"].y).is_less(g["nodes"]["x"]["pos"].y)        # rows follow flow depth
+	assert_float(g["nodes"]["x"]["pos"].y).is_equal(g["nodes"]["z"]["pos"].y)       # siblings share a row
+	assert_float(g["nodes"]["x"]["pos"].y).is_less(g["nodes"]["b"]["pos"].y)        # convergence sits below
+	assert_float(absf(g["nodes"]["x"]["pos"].x - g["nodes"]["z"]["pos"].x)).is_greater_equal(GraphLayout.COL_W - 0.01)
+	var px: float = g["nodes"]["x"]["pos"].x                                        # deterministic re-arrange
+	GraphLayout.auto_layout(g)
+	assert_float(g["nodes"]["x"]["pos"].x).is_equal(px)
+
+
+# ── Catalogue preview reconstruction (detail-modal forks) ───────────────────
+# parse_graph rebuilds an approximate nested tree from the graph so the JourneySelect
+# detail modal shows the real fork structure (not a flat round list). The inverse of the
+# migration walk: tree → build_graph → _graph_catalogue_sequence reproduces the fork.
+
+# Names (or titles) of a rounds/paths list, for order-sensitive structure assertions.
+func _names(items: Array) -> Array:
+	var out: Array = []
+	for it: Dictionary in items:
+		out.append(it.get("name", it.get("title", "")))
+	return out
+
+
+# A reconverging fork rebuilds as round A → FORK(P0=[X,Y] / P1=[Z]) → round B, with B (the
+# rejoin) placed exactly once at the top level and round numbers staying contiguous.
+func test_catalogue_sequence_reconstructs_fork() -> void:
+	var g := JourneyGraph.build_graph(_fork_journey())
+	var seq := JourneyScanner._graph_catalogue_sequence(g)
+	assert_array(_names(seq["rounds"])).is_equal(["A", "B"])   # B not duplicated into each path
+	assert_int(seq["rounds"][0]["order"]).is_equal(0)
+	assert_int(seq["rounds"][1]["order"]).is_equal(1)          # contiguous: the fork takes no number
+	assert_int((seq["forks"] as Array).size()).is_equal(1)
+	var fork: Dictionary = seq["forks"][0]
+	assert_str(fork["title"]).is_equal("F")
+	assert_int(fork["after_order"]).is_equal(0)                # anchored just after round A
+	var paths: Array = fork["paths"]
+	assert_array(_names(paths)).is_equal(["P0", "P1"])
+	assert_array(_names(paths[0]["rounds"])).is_equal(["X", "Y"])
+	assert_array(_names(paths[1]["rounds"])).is_equal(["Z"])
+
+
+# A fork whose paths never reconverge (each runs to an end) still rebuilds with both paths;
+# there is no post-fork continuation to place.
+func test_catalogue_sequence_fork_without_rejoin() -> void:
+	var g := JourneyGraph.build_graph({
+		"rounds": [_round(0, "A")], "shops": [], "storyboards": [],
+		"forks": [_fork(0, "F", [_path("P0", [_round(0, "X")]), _path("P1", [_round(0, "Z")])])],
+	})
+	var seq := JourneyScanner._graph_catalogue_sequence(g)
+	assert_array(_names(seq["rounds"])).is_equal(["A"])
+	var paths: Array = (seq["forks"][0] as Dictionary)["paths"]
+	assert_array(_names(paths[0]["rounds"])).is_equal(["X"])
+	assert_array(_names(paths[1]["rounds"])).is_equal(["Z"])
+
+
+# A shop authored between two rounds anchors after round A (after_order 0) without consuming a
+# round number — B stays round 1, matching how the legacy nested preview numbers.
+func test_catalogue_sequence_shop_keeps_numbering_contiguous() -> void:
+	var g := JourneyGraph.build_graph({
+		"rounds": [_round(0, "A"), _round(1, "B")],
+		"shops": [{"after_order": 0, "title": "S"}],
+		"storyboards": [], "forks": [],
+	})
+	var seq := JourneyScanner._graph_catalogue_sequence(g)
+	assert_array(_names(seq["rounds"])).is_equal(["A", "B"])
+	assert_int(seq["rounds"][1]["order"]).is_equal(1)          # not bumped to 2 by the shop
+	assert_int((seq["shops"] as Array).size()).is_equal(1)
+	assert_int(seq["shops"][0]["after_order"]).is_equal(0)
+
+
+# Snapping to the grid is idempotent and lands on grid multiples.
+func test_grid_snap() -> void:
+	var snapped := GraphLayout.snap(Vector2(31.0, 7.0))
+	assert_vector(snapped).is_equal(GraphLayout.snap(snapped))                      # idempotent
+	assert_float(fmod(snapped.x, GraphLayout.GRID)).is_equal(0.0)
+
+
+# ── Structural validation (overhaul L4) ─────────────────────────────────────
+# validate_graph catches the invalid graphs free-form authoring allows but the tree couldn't:
+# missing start, edges to deleted nodes, cycles, and orphans. Pure, so it's fully unit-tested;
+# the builder blocks saving on start/dangling/cycle (orphans are a normal mid-authoring state).
+
+func _g(start: String, nodes: Dictionary) -> Dictionary:
+	return {"start": start, "nodes": nodes}
+
+func _n(type: String, outs: Array) -> Dictionary:
+	var out: Array = []
+	for t: String in outs:
+		out.append({"to": t})
+	return {"type": type, "data": {}, "out": out}
+
+func _has_kind(graph: Dictionary, kind: String) -> bool:
+	for i: Dictionary in JourneyGraph.validate_graph(graph):
+		if i["kind"] == kind:
+			return true
+	return false
+
+
+# A clean linear DAG and an empty graph both validate with no issues.
+func test_validate_clean_dag_and_empty() -> void:
+	var g := _g("a", {"a": _n("round", ["b"]), "b": _n("round", ["c"]), "c": _n("round", [])})
+	assert_array(JourneyGraph.validate_graph(g)).is_empty()
+	assert_array(JourneyGraph.validate_graph(_g("", {}))).is_empty()
+
+
+# A back-edge (b → a) is flagged as a cycle.
+func test_validate_flags_cycle() -> void:
+	var g := _g("a", {"a": _n("round", ["b"]), "b": _n("round", ["a"])})
+	assert_bool(_has_kind(g, "cycle")).is_true()
+
+
+# An out-edge to a non-existent node is flagged dangling, naming the bad target.
+func test_validate_flags_dangling() -> void:
+	var g := _g("a", {"a": _n("round", ["ghost"])})
+	var hit := false
+	for i: Dictionary in JourneyGraph.validate_graph(g):
+		if i["kind"] == "dangling" and i.get("to", "") == "ghost":
+			hit = true
+	assert_bool(hit).is_true()
+
+
+# A start id that isn't a node is flagged (and suppresses the reachability pass).
+func test_validate_flags_no_start() -> void:
+	assert_bool(_has_kind(_g("missing", {"a": _n("round", [])}), "no_start")).is_true()
+
+
+# An island node is flagged unreachable; the (reachable) start never is.
+func test_validate_flags_unreachable_not_start() -> void:
+	var g := _g("a", {"a": _n("round", []), "b": _n("round", [])})   # b has no in-edge
+	var unreachable_ids: Array = []
+	for i: Dictionary in JourneyGraph.validate_graph(g):
+		if i["kind"] == "unreachable":
+			unreachable_ids.append(i["id"])
+	assert_bool(unreachable_ids.has("b")).is_true()
+	assert_bool(unreachable_ids.has("a")).is_false()

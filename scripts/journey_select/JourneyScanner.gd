@@ -73,6 +73,8 @@ static func parse_journey(path: String, folder: String) -> Dictionary:
 		# Journey-level: author can disable the player map to enforce surprise.
 		# Absent → true so the whole pre-existing catalogue keeps the map.
 		"map_enabled":     bool(data.get("MapEnabled", true)),
+		# Redirect overlay (skip/converge/end), composed onto the graph in parse_graph.
+		"redirects":       data.get("Redirects", {}),
 		"rounds":          [],
 		"forks":           [],
 		"shops":           [],
@@ -250,6 +252,15 @@ static func parse_graph(path: String, folder: String) -> Dictionary:
 		var result: Dictionary = _graph_meta(data, path, folder)
 		result["start"] = graph["start"]
 		result["nodes"] = graph["nodes"]
+		# Detail-modal preview: reconstruct an approximate nested tree (rounds / shops / storyboards /
+		# forks-with-paths) from the graph — Format-2 journeys carry their structure in nodes (the
+		# nested arrays _graph_meta leaves empty). Each fork's branches are walked up to their rejoin,
+		# so the modal shows the real fork structure (see _graph_catalogue_sequence).
+		var seq_lists: Dictionary = _graph_catalogue_sequence(graph)
+		result["rounds"]      = seq_lists["rounds"]
+		result["shops"]       = seq_lists["shops"]
+		result["storyboards"] = seq_lists["storyboards"]
+		result["forks"]       = seq_lists["forks"]
 		# DAG totals: the longest round path is the most a player can hit; node sums
 		# feed the catalogue (see _graph_node_totals for the Phase-3 refinement note).
 		result["total_rounds"] = JourneyGraph.longest_round_path(graph, str(graph["start"]))
@@ -265,9 +276,41 @@ static func parse_graph(path: String, folder: String) -> Dictionary:
 	if tree.is_empty():
 		return {}
 	var g: Dictionary = JourneyGraph.build_graph(tree)
+	# Compose author redirects (skip / converge / end early) onto the migrated graph —
+	# the hybrid's overlay half. A no-op for journeys with no Redirects map.
+	JourneyGraph.apply_redirects(g, tree.get("redirects", {}))
 	tree["start"] = g["start"]
 	tree["nodes"] = g["nodes"]
 	return tree
+
+
+# Editor entry point (graph builder): the composed graph from parse_graph with a position
+# guaranteed on every node — read from disk for a saved Format-2 graph, or seeded via GraphLayout
+# for a freshly migrated legacy journey. The runtime keeps using parse_graph (positions unused
+# there); only the builder needs the layout.
+static func parse_graph_for_editor(path: String, folder: String) -> Dictionary:
+	var graph: Dictionary = parse_graph(path, folder)
+	if graph.is_empty():
+		return {}
+	# Legacy journeys (pre-VideoPath, with rNNN/ round folders) store the video only on disk, not in
+	# journey.json — the runtime folder-scans for it at play time, but the EDITOR needs an explicit
+	# video_path so the round shows its video and a re-save preserves it (the graph save reads
+	# video_path directly, with no folder-scan fallback — without this it would silently drop the
+	# video). The funscript is already resolved by the scanner (_resolve_round_stats); this closes the
+	# matching gap for video. Round nodes carry an absolute `folder` (the rNNN path) to scan.
+	for id: String in graph.get("nodes", {}):
+		var n: Dictionary = graph["nodes"][id]
+		if n.get("type", "") == "round":
+			var d: Dictionary = n.get("data", {})
+			if str(d.get("video_path", "")) == "":
+				var vid: String = JourneyData.find_video_in_round(str(d.get("folder", "")))
+				if vid != "":
+					d["video_path"] = vid
+	for id: String in graph.get("nodes", {}):
+		if not (graph["nodes"][id] as Dictionary).has("pos"):
+			GraphLayout.seed_positions(graph)   # any node missing a pos → (re)seed the whole graph
+			break
+	return graph
 
 
 # Journey-level meta for a new (graph-format) journey.json — mirrors parse_journey's
@@ -302,6 +345,159 @@ static func _graph_node_totals(graph: Dictionary) -> Dictionary:
 			actions += int((n.get("data", {}) as Dictionary).get("action_count", 0))
 			length  += int((n.get("data", {}) as Dictionary).get("length_ms", 0))
 	return {"actions": actions, "length_ms": length}
+
+
+# Catalogue sequence for a Format-2 (graph) journey's detail modal — reconstructs an approximate
+# nested tree (rounds / shops / storyboards / forks-with-paths) from the graph by walking from start,
+# so the preview shows the real fork structure. Each fork's branches are walked up to their rejoin
+# (the earliest node ≥2 branches reach), which becomes the post-fork continuation. graph→tree is
+# lossy where branches share nodes, so this is best-effort: every node is placed exactly once.
+static func _graph_catalogue_sequence(graph: Dictionary) -> Dictionary:
+	var depth: Dictionary = _longest_depths(graph)
+	var visited: Dictionary = {}
+	var lists: Dictionary = _walk_level(graph, str(graph.get("start", "")), {}, visited, depth)
+	# Defensive: append any node the walk never reached (a disconnected island) flat at the end so
+	# nothing vanishes from the preview.
+	var nodes: Dictionary = graph.get("nodes", {})
+	var leftover: Array = nodes.keys()
+	leftover.sort()
+	var extra: int = 100000
+	for id: String in leftover:
+		if not visited.has(id):
+			visited[id] = true
+			_append_node(nodes[id], lists, extra)
+			extra += 1
+	return lists
+
+
+# Builds one level's {rounds, shops, storyboards, forks} by walking the linear chain from `start_id`
+# until it hits `stop`, an already-placed node, or the end. A fork recurses each branch (stopping at
+# the fork's rejoin) and continues the level from that rejoin. order/after_order = position in the
+# level, so _add_seq_to_list sorts the level back into walk order.
+static func _walk_level(graph: Dictionary, start_id: String, stop: Dictionary, visited: Dictionary, depth: Dictionary) -> Dictionary:
+	var nodes: Dictionary = graph.get("nodes", {})
+	var lists: Dictionary = {"rounds": [], "shops": [], "storyboards": [], "forks": []}
+	# `pos` indexes the next NUMBERED item (round / storyboard) in this level. Shops and forks are
+	# between-item markers anchored to `pos - 1` (the preceding numbered item), so the renderer
+	# (_add_seq_to_list) slots them just after it without consuming a number — round numbers stay
+	# contiguous, matching the legacy nested preview.
+	var pos: int = 0
+	var id: String = start_id
+	while id != "" and nodes.has(id) and not stop.has(id) and not visited.has(id):
+		visited[id] = true
+		var n: Dictionary = nodes[id]
+		var out: Array = n.get("out", [])
+		var ntype: String = str(n.get("type", ""))
+		if ntype == "fork":
+			var merge: String = _fork_merge(graph, id, stop, depth)
+			var branch_stop: Dictionary = stop.duplicate()
+			if merge != "":
+				branch_stop[merge] = true
+			var paths: Array = []
+			for e: Dictionary in out:
+				var branch: Dictionary = _walk_level(graph, str(e.get("to", "")), branch_stop, visited, depth)
+				paths.append({
+					"name":        str(e.get("name", "")),
+					"rounds":      branch["rounds"],
+					"shops":       branch["shops"],
+					"storyboards": branch["storyboards"],
+					"forks":       branch["forks"],
+				})
+			(lists["forks"] as Array).append({"title": (n.get("data", {}) as Dictionary).get("title", ""), "paths": paths, "after_order": pos - 1})
+			id = merge
+		else:
+			_append_node(n, lists, pos)
+			if ntype == "round" or ntype == "storyboard":
+				pos += 1
+			id = str((out[0] as Dictionary).get("to", "")) if not out.is_empty() else ""
+	return lists
+
+
+# Appends a round / shop / storyboard node to a level's lists. `pos` is this numbered item's index:
+# rounds/storyboards use it as their `order`; a shop (a between-item marker) anchors to `pos - 1` so
+# it renders just after the preceding numbered item without consuming a number.
+static func _append_node(n: Dictionary, lists: Dictionary, pos: int) -> void:
+	var d: Dictionary = n.get("data", {})
+	match str(n.get("type", "")):
+		"round":
+			(lists["rounds"] as Array).append({
+				"name": d.get("name", ""), "round_type": d.get("round_type", "normal"),
+				"coins": int(d.get("coins", 0)), "action_count": int(d.get("action_count", 0)),
+				"length_ms": int(d.get("length_ms", 0)), "order": pos,
+			})
+		"shop":
+			(lists["shops"] as Array).append({"title": d.get("title", ""), "after_order": pos - 1})
+		"storyboard":
+			(lists["storyboards"] as Array).append({"lines": d.get("lines", []), "coins": int(d.get("coins", 0)), "order": pos})
+
+
+# The rejoin node for a fork: the earliest (min longest-path depth) node reachable from ≥2 of the
+# fork's branches and outside `stop`, or "" when the branches don't reconverge.
+static func _fork_merge(graph: Dictionary, fork_id: String, stop: Dictionary, depth: Dictionary) -> String:
+	var out: Array = (graph["nodes"][fork_id] as Dictionary).get("out", [])
+	var reach_count: Dictionary = {}
+	for e: Dictionary in out:
+		for nid: String in _reachable(graph, str(e.get("to", ""))):
+			reach_count[nid] = int(reach_count.get(nid, 0)) + 1
+	var best: String = ""
+	var best_depth: int = 0x7fffffff
+	for nid: String in reach_count:
+		if int(reach_count[nid]) >= 2 and nid != fork_id and not stop.has(nid):
+			var dpt: int = int(depth.get(nid, 0))
+			if dpt < best_depth:
+				best_depth = dpt
+				best = nid
+	return best
+
+
+# Forward-reachable node-id set from `from_id` (inclusive).
+static func _reachable(graph: Dictionary, from_id: String) -> Dictionary:
+	var nodes: Dictionary = graph.get("nodes", {})
+	var seen: Dictionary = {}
+	var stack: Array = [from_id]
+	while not stack.is_empty():
+		var id: String = stack.pop_back()
+		if id == "" or not nodes.has(id) or seen.has(id):
+			continue
+		seen[id] = true
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			stack.append(str(e.get("to", "")))
+	return seen
+
+
+# Longest-path depth from start per node (Kahn topological order); a node not reached defaults to 0.
+static func _longest_depths(graph: Dictionary) -> Dictionary:
+	var nodes: Dictionary = graph.get("nodes", {})
+	var indeg: Dictionary = {}
+	var succ: Dictionary = {}
+	for id: String in nodes:
+		indeg[id] = 0
+		succ[id] = []
+	for id: String in nodes:
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			var to: String = str(e.get("to", ""))
+			if to != "" and nodes.has(to):
+				(succ[id] as Array).append(to)
+				indeg[to] = int(indeg[to]) + 1
+	var depth: Dictionary = {}
+	var queue: Array = []
+	for id: String in nodes:
+		if int(indeg[id]) == 0:
+			depth[id] = 0
+			queue.append(id)
+	var qi: int = 0
+	while qi < queue.size():
+		var cur: String = queue[qi]
+		qi += 1
+		for to: String in (succ[cur] as Array):
+			depth[to] = maxi(int(depth.get(to, 0)), int(depth[cur]) + 1)
+			indeg[to] = int(indeg[to]) - 1
+			if int(indeg[to]) == 0:
+				queue.append(to)
+	for id: String in nodes:
+		if not depth.has(id):
+			depth[id] = 0
+	return depth
 
 
 # Recursively parses a fork's JSON dict. Each path can contain nested forks

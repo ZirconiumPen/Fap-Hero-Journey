@@ -1537,7 +1537,20 @@ func _build_map() -> void:
 	_map_view.offset_left = 16; _map_view.offset_right = -16
 	_map_overlay.add_child(_map_view)
 	_map_view.set_marker_color(accent)
-	_map_view.set_items(JourneyData.parse_journey(GameState.Journey).get("items", []) as Array)
+	# Render the map from the journey GRAPH (the same DAG the runtime walks). Edges show the real
+	# flow — including authored skips / converges / islands the old nested render couldn't draw —
+	# so there's no separate redirect overlay any more. Format-2 journeys carry the author's node
+	# positions; legacy (migrated) ones don't, so seed the layout the same way the editor does.
+	# Copy the nodes first so seeding never mutates GameState.Journey.
+	var map_graph: Dictionary = {
+		"start": str(GameState.Journey.get("start", "")),
+		"nodes": (GameState.Journey.get("nodes", {}) as Dictionary).duplicate(true),
+	}
+	for nid: String in map_graph["nodes"]:
+		if not (map_graph["nodes"][nid] as Dictionary).has("pos"):
+			GraphLayout.seed_positions(map_graph)   # any node missing a pos → seed the whole graph
+			break
+	_map_view.set_graph(map_graph)
 
 	var title: Label = Label.new()
 	title.text = "◇  JOURNEY MAP"
@@ -1577,17 +1590,6 @@ func _build_map() -> void:
 	map_btn.mouse_entered.connect(_show_hud)
 
 
-# Stable map key for the CURRENT sequence item — mirrors JourneyData's _map_key
-# stamping so the marker can find the node.
-func _current_map_key() -> String:
-	match GameState.CurrentItemType():
-		"round":      return JourneyData.map_key("round", str(GameState.CurrentRound().get("folder", "")))
-		"shop":       return JourneyData.map_key("shop", GameState.CurrentShop().get("after_order", 0))
-		"storyboard": return JourneyData.map_key("storyboard", GameState.CurrentStoryboard().get("order", 0))
-		"fork":       return JourneyData.map_key("fork", GameState.CurrentFork().get("after_order", 0))
-	return ""
-
-
 func _on_map_pressed() -> void:
 	if _map_open:
 		_close_map_viewer()
@@ -1604,9 +1606,10 @@ func _open_map_viewer() -> void:
 	# mouse_filter does NOT block). The map's own modal handling stays in GameLoop.
 	_set_overlay_input_enabled(false)
 	_map_close_btn.visible = true
-	var key: String = _current_map_key()
-	_map_view.set_marker_at(key)
-	_map_view.center_on(key)
+	# The graph map highlights the current node by its stable id (GameState walks the DAG by id).
+	var node_id: String = GameState.CurrentNodeId()
+	_map_view.set_marker_at(node_id)
+	_map_view.center_on(node_id)
 	_map_overlay.modulate.a = 0.0
 	_map_overlay.visible = true
 	create_tween().tween_property(_map_overlay, "modulate:a", 1.0, 0.18)

@@ -16,7 +16,6 @@ extends RefCounted
 # Used by JourneyBuilder.gd via class-name calls:
 #   JourneyData.parse_journey(j)            – inflate from saved JSON dict
 #   JourneyData.validate(items, name)       – returns "" or first error
-#   JourneyData.items_have_any_video(items) – any round in the tree has a video?
 #   JourneyData.find_video_in_round(folder) – first video file in a folder
 # ---------------------------------------------------------------------------
 
@@ -38,15 +37,6 @@ const AXIS_SUFFIXES: Dictionary = {
 const VIB_SUFFIXES: Dictionary = {
 	"vib1": "vibe1", "vib2": "vibe2",
 }
-
-# Stable per-item key for the journey map's "you are here" correlation. Rounds use
-# their globally-unique folder slug; other item types use their order/after_order.
-# Computed identically on the graph side (stamped as `_map_key` by parse_journey)
-# and the runtime side (GameLoop), so the marker can find the node for the current
-# sequence item. NOTE: non-round keys can collide across fork levels — the map
-# resolves that by advancing the marker monotonically down the graph.
-static func map_key(item_type: String, id: Variant) -> String:
-	return "%s:%s" % [item_type, str(id)]
 
 # Curse catalog — the GAMEPLAY afflictions a cursed round can apply (they change
 # the device output, the economy, or the controls). Non-gameplay visual/audio
@@ -128,58 +118,68 @@ const BLESSING_CATALOG: Array = [
 
 # ── Round serialization ──────────────────────────────────────────────────────
 
-# The authored (non-media) journey.json fields for a round, derived purely from
-# the builder item model — the gameplay config shared by top-level and fork-path
-# rounds. The save flow merges in the media/slug fields (Name, FolderName, Order,
-# FunscriptPath, AxisScripts, VibScripts, BossImage, ActionCount, LengthMs) it
-# computes while copying files. Single source for the bug-prone curse/boon/sensory/
-# boss key set; JourneyScanner.parse_journey reads these keys back.
-static func round_to_json(item: Dictionary) -> Dictionary:
-	return {
-		"CoinsAwarded":     int(item.get("coins", 0)),
-		"RoundType":        round_type_label(item.get("round_type", "normal")),
-		"IsCheckpoint":     bool(item.get("is_checkpoint", false)),
-		"CurseReward":      int(item.get("curse_reward", 0)),
-		"CleanseCost":      int(item.get("cleanse_cost", 50)),
-		"CurseRandom":      bool(item.get("curse_random", true)),
-		"Curses":           item.get("curses", []),
-		"BoonRandom":       bool(item.get("boon_random", true)),
-		"Boons":            item.get("boons", []),
-		"GiftItem":         item.get("gift_item", ""),
-		"BossTagline":      item.get("boss_tagline", ""),
-		"BossModifiers":    boss_modifiers_json(item.get("boss_modifiers", [])),
-		"Sensory":          item.get("sensory", []),
-		"SensoryInPool":    bool(item.get("sensory_in_pool", false)),
-		"SensoryIntensity": item.get("sensory_intensity", {}),
-		"ShowReveal":       bool(item.get("show_reveal", true)),
-	}
-
-
-# Internal round_type → journey.json label. JourneyScanner lowercases on parse.
-static func round_type_label(round_type: String) -> String:
-	match round_type:
-		"boss":    return "Boss"
-		"cursed":  return "Cursed"
-		"blessed": return "Blessed"
-		_:         return "Normal"
-
-
-# Internal boss modifiers ({kind, factor?/min?/max?}) → journey.json form
-# ({Kind, Factor?/Min?/Max?}). Only the keys relevant to the kind are written.
-static func boss_modifiers_json(modifiers: Array) -> Array:
-	var out: Array = []
-	for mod in modifiers:
-		if not mod is Dictionary:
-			continue
-		var entry: Dictionary = {"Kind": mod.get("kind", "")}
-		if mod.has("factor"):
-			entry["Factor"] = mod["factor"]
-		if mod.has("min"):
-			entry["Min"] = mod["min"]
-		if mod.has("max"):
-			entry["Max"] = mod["max"]
-		out.append(entry)
+# Normalizes a graph node's in-editor `data` into its canonical on-disk (Format-2) form: the
+# lowercase field set the runtime + scanner expect, with every field typed. Two jobs:
+#   1. Guarantee the BASELINE fields a node always carries (a never-edited new node has only
+#      a couple of keys; the runtime should still get a complete, fully-populated record).
+#   2. Re-coerce numerics: JSON loads every number as float, so coins/costs round-trip as 5.0
+#      unless re-coerced to int here — the "coins lesson" (HANDOFF §1a).
+# Any EXTRA keys already on `data` (e.g. boss_modifiers, future fields) pass through via the
+# initial deep copy. The save walk rewrites the MEDIA-path fields AFTER this. Pure → unit-tested.
+static func coerce_node_save_data(type: String, data: Dictionary) -> Dictionary:
+	var out: Dictionary = data.duplicate(true)
+	out.erase("type")     # node-level — lives outside data on disk
+	out.erase("node_id")  # node-level — the node's dict key IS its id
+	out.erase("paths")    # legacy tree key; fork choices are out-edges in the graph
+	# Scalars get coercing overwrites (value types — no aliasing). Collection fields (arrays /
+	# dicts) are ALREADY deep-copied into `out`; only fill a default when ABSENT — reassigning
+	# `out[k] = data.get(k, …)` would re-alias the source's live array/dict and let a later
+	# mutation of the save-data bleed back into the editor node.
+	match type:
+		"round":
+			# The full round field set, lowercase. Media paths (funscript/video/boss/axis/vib) +
+			# action_count/length_ms + folder are overwritten afterwards by _save_round_node_media.
+			out["coins"]           = int(data.get("coins", 0))
+			out["round_type"]      = str(data.get("round_type", "normal"))
+			out["is_checkpoint"]   = bool(data.get("is_checkpoint", false))
+			out["curse_reward"]    = int(data.get("curse_reward", 0))
+			out["cleanse_cost"]    = int(data.get("cleanse_cost", 50))
+			out["curse_random"]    = bool(data.get("curse_random", true))
+			out["boon_random"]     = bool(data.get("boon_random", true))
+			out["gift_item"]       = str(data.get("gift_item", ""))
+			out["boss_tagline"]    = str(data.get("boss_tagline", ""))
+			out["sensory_in_pool"] = bool(data.get("sensory_in_pool", false))
+			out["show_reveal"]     = bool(data.get("show_reveal", true))
+			_fill_default(out, "curses", [])
+			_fill_default(out, "boons", [])
+			_fill_default(out, "boss_modifiers", [])   # lowercase {kind,…}; deep-copied pass-through
+			_fill_default(out, "sensory", [])
+			_fill_default(out, "sensory_intensity", {})
+		"shop":
+			out["title"]            = str(data.get("title", ""))
+			out["mode"]             = str(data.get("mode", "pool"))
+			out["count"]            = int(data.get("count", 3))
+			out["price_multiplier"] = float(data.get("price_multiplier", 1.0))
+			_fill_default(out, "items", [])
+		"storyboard":
+			# image + lines are overwritten by _save_storyboard_node_media.
+			out["coins"] = int(data.get("coins", 0))
+			out["item"]  = str(data.get("item", ""))
+		"fork":
+			out["title"]        = str(data.get("title", ""))
+			out["description"]  = str(data.get("description", ""))
+			out["resolution"]   = str(data.get("resolution", "choice"))
+			out["cond_metric"]  = str(data.get("cond_metric", "score"))
+			out["default_path"] = int(data.get("default_path", 0))
+			out["after_order"]  = int(data.get("after_order", 0))
 	return out
+
+
+# Sets out[key] = default only when key is absent. Used for collection fields whose present
+# value is already deep-copied into `out`, so we must not reassign and re-alias the source.
+static func _fill_default(out: Dictionary, key: String, default: Variant) -> void:
+	if not out.has(key):
+		out[key] = default
 
 
 # ── Item templates ───────────────────────────────────────────────────────────
@@ -286,7 +286,6 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 				"coins":           r.get("coins", 0),
 				"original_folder": r.get("folder", ""),
 				"node_id":         r.get("node_id", ""),
-				"_map_key":        map_key("round", r.get("folder", "")),
 			},
 		})
 	for sb: Dictionary in storyboards:
@@ -299,7 +298,6 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 				"image": sb.get("image", ""),
 				"lines": sb.get("lines", []),
 				"node_id": sb.get("node_id", ""),
-				"_map_key": map_key("storyboard", sb.get("order", 0)),
 			},
 		})
 	for sh: Dictionary in shops:
@@ -336,13 +334,11 @@ static func parse_journey(journey: Dictionary) -> Dictionary:
 		"cover_path":     cover_path,
 		"tags":           journey.get("tags", []),
 		"map_enabled":    bool(journey.get("map_enabled", true)),
+		"redirects":      journey.get("redirects", {}),
 		"items":          items,
 	}
 
 
-# Recursively converts a parsed-journey fork dict into the builder _items model
-# (which uses a single mixed items[] array per path rather than separate
-# rounds/storyboards/shops/forks arrays).
 # Inflates a scanned shop dict into the builder's shop item model.
 static func _build_shop_item(sh: Dictionary) -> Dictionary:
 	return {
@@ -353,7 +349,6 @@ static func _build_shop_item(sh: Dictionary) -> Dictionary:
 		"items":            (sh.get("items", []) as Array).duplicate(),
 		"price_multiplier": float(sh.get("price_multiplier", 1.0)),
 		"node_id":          sh.get("node_id", ""),
-		"_map_key":         map_key("shop", sh.get("after_order", 0)),
 	}
 
 
@@ -379,7 +374,6 @@ static func _build_fork_item(f: Dictionary) -> Dictionary:
 		"default_path": int(f.get("default_path", 0)),
 		"paths":        paths_out,
 		"node_id":      f.get("node_id", ""),
-		"_map_key":     map_key("fork", f.get("after_order", 0)),
 	}
 
 
@@ -416,7 +410,6 @@ static func _build_path_items(p: Dictionary) -> Array:
 				"coins":           pr.get("coins", 0),
 				"original_folder": pr.get("folder", ""),
 				"node_id":         pr.get("node_id", ""),
-				"_map_key":        map_key("round", pr.get("folder", "")),
 			},
 		})
 	for psb: Dictionary in p.get("storyboards", []):
@@ -429,7 +422,6 @@ static func _build_path_items(p: Dictionary) -> Array:
 				"image": psb.get("image", ""),
 				"lines": psb.get("lines", []),
 				"node_id": psb.get("node_id", ""),
-				"_map_key": map_key("storyboard", psb.get("order", 0)),
 			},
 		})
 	for ps: Dictionary in p.get("shops", []):
@@ -699,19 +691,28 @@ static func read_funscript_stats(path: String) -> Dictionary:
 	return result
 
 
-# Recursively scans a items[] tree (including nested fork paths) for any
-# round that has a video_path attached.
-static func items_have_any_video(items: Array) -> bool:
-	for it in items:
-		match it.get("type", "round"):
-			"round":
-				if it.get("video_path", "") != "":
-					return true
-			"fork":
-				for p in it.get("paths", []):
-					if items_have_any_video(p.get("items", [])):
-						return true
+# True when any round node in the graph carries a video_path. Drives the save's transcode
+# plan + whether to show the streaming modal.
+static func graph_has_any_video(graph: Dictionary) -> bool:
+	for id: String in graph.get("nodes", {}):
+		var n: Dictionary = graph["nodes"][id]
+		if str(n.get("type", "")) == "round" \
+				and str((n.get("data", {}) as Dictionary).get("video_path", "")) != "":
+			return true
 	return false
+
+
+# Unique video source paths across every round node, for transcode probing (a source reused
+# across rounds is probed once — identity by path).
+static func graph_video_sources(graph: Dictionary) -> Array:
+	var sources: Array = []
+	for id: String in graph.get("nodes", {}):
+		var n: Dictionary = graph["nodes"][id]
+		if str(n.get("type", "")) == "round":
+			var v: String = str((n.get("data", {}) as Dictionary).get("video_path", ""))
+			if v != "" and not sources.has(v):
+				sources.append(v)
+	return sources
 
 
 # Sanitize an arbitrary string into a filesystem-safe folder name.

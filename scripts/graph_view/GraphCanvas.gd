@@ -24,13 +24,22 @@ func _draw() -> void:
 		# result is identical; for cross-column long arrows it keeps the line
 		# below all intermediate nodes instead of cutting through them.
 		# max(from.y + 2) guards against upward segments on very short edges.
+		var dashed: bool  = e.get("dashed", false)
 		var bend_y: float = max(from.y + 2.0, to.y - 20.0)
 		var p2: Vector2 = Vector2(from.x, bend_y)
 		var p3: Vector2 = Vector2(to.x,   bend_y)
-		draw_line(from, p2, color, 2.0, true)
-		draw_line(p2,   p3, color, 2.0, true)
-		draw_line(p3,   to, color, 2.0, true)
-		# Small arrowhead at the destination.
+		_edge_seg(from, p2, color, dashed)
+		_edge_seg(p2,   p3, color, dashed)
+		_edge_seg(p3,   to, color, dashed)
+		# Small arrowhead at the destination (always solid).
 		var a: float = 6.0
 		draw_line(to, to + Vector2(-a, -a), color, 2.0, true)
 		draw_line(to, to + Vector2( a, -a), color, 2.0, true)
+
+
+# One edge segment, solid for normal flow or dashed for a redirect (a non-default jump).
+func _edge_seg(a: Vector2, b: Vector2, color: Color, dashed: bool) -> void:
+	if dashed:
+		draw_dashed_line(a, b, color, 2.0, 6.0)
+	else:
+		draw_line(a, b, color, 2.0, true)

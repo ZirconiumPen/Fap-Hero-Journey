@@ -83,6 +83,10 @@ public partial class GameState : Node
 
 	public Dictionary CurrentItem() => NodeOf(_currentId);
 
+	// The current node's stable id (its graph key) — drives the journey-map marker, which
+	// highlights the node by id. "" when the journey is done.
+	public string CurrentNodeId() => _currentId;
+
 	// The current node's type ("round"/"shop"/"storyboard"/"fork"); "" when the journey is
 	// done. Drives GameLoop's dispatch and the map keying.
 	public string CurrentItemType() => TypeOf(_currentId);

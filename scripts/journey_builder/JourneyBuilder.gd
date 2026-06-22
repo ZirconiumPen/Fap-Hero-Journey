@@ -41,6 +41,11 @@ const CAUSE_SRC_UNREADABLE:     String = "src_unreadable"
 const CAUSE_DST_UNWRITABLE:     String = "dst_unwritable"
 const CAUSE_TRANSCODE_FAILED:   String = "transcode_failed"
 const CAUSE_UNKNOWN_COPY_ERROR: String = "unknown_copy_error"
+# Graph-editor structural causes (L4 validation).
+const CAUSE_NO_START:           String = "no_start"
+const CAUSE_DANGLING_EDGE:      String = "dangling_edge"
+const CAUSE_CYCLE:              String = "cycle"
+const CAUSE_UNREACHABLE:        String = "unreachable"
 
 const GraphViewScene = preload("res://scenes/graph_view/GraphView.tscn")
 
@@ -76,46 +81,26 @@ var _original_journey_folder: String = ""
 var _cover_path:    String       = ""
 var _cover_texture: ImageTexture = null  # cached so the journey-info view can re-show the preview without re-reading from disk
 
-var _items:      Array  = []  # Array[Dictionary] — {type:"round"|"fork"|"shop"|"storyboard", ...}
-
 var _graph: Control = null  # GraphView instance, host inside _graph_host
-# Single-selection mirror of GraphView (valid only when exactly one node is
-# selected). Drives the per-node side-panel editor. When 0 or 2+ nodes are
-# selected, _selected_item is {} and _selected_idx is -1.
-var _selected_item: Dictionary = {}  # The lone selected item, or {}.
-var _selected_arr:  Array      = []  # The array the selection lives in (any size).
-var _selected_idx:  int        = -1  # Index of the lone selected item, or -1.
 
-# Full selection set mirror (1+ items, all in _selected_arr). Group operations
-# (copy / cut / delete / move) act on this.
-var _selected_items: Array = []
+# The free-form GRAPH editor model (GRAPH_EDITOR_OVERHAUL.md) — the journey as nodes + edges.
+var _graph_model: Dictionary = {}   # {start, nodes:{id:{type,data,pos,out}}}
+var _selected_graph_node_id: String = ""   # the lone selected node id, or "" when 0 or 2+ are selected
+var _selected_graph_node_ids: Array = []   # the full selection set (mirrors GraphView; drives group ops)
+var _connecting_from: String = ""          # source node while wiring an edge (click-to-connect), else ""
+var _connecting_edge_idx: int = -1         # while wiring: the fork choice index to wire, or -1 for a regular node's single out-edge
 
-# Fork-branch selection (mutually exclusive with node selection): when true,
-# new/pasted items are inserted at the TOP of _branch_arr (a fork path's items).
-var _has_branch: bool  = false
-var _branch_arr: Array = []
-
-# Module-level copy/paste clipboard. Holds deep duplicates of the copied item(s)
-# (round / shop / storyboard / fork-with-subtree, or several at once). Paste
-# inserts fresh deep duplicates so the same entry can be pasted repeatedly
-# without the pastes sharing references. Image/script paths inside the copies
-# resolve to the same source files, so a paste + save re-copies the media into
-# the new spot — this is what lets a fully-built storyboard (speaker images and
-# all) move to another branch, which plain text paste could never do. Empty ==
-# nothing copied.
-var _clipboard_items: Array = []
-
-# ── Undo / redo ─────────────────────────────────────────────────────────────
-# Snapshot-based undo of the journey STRUCTURE only. Each stack entry is a deep
-# copy of the whole _items tree taken just before a structural mutation (add /
-# delete / move / duplicate / paste of modules, fork paths, storyboard lines).
-# In-field text edits are deliberately NOT snapshotted — they keep their own
-# native LineEdit/TextEdit undo, and snapshotting per keystroke would be noise.
-# Undo never touches disk, so it can't (and never needs to) resurrect deleted
-# image files; that's why image/field removals stay out of scope.
-var _undo_stack: Array = []  # Array[Array] — past states, most recent last.
-var _redo_stack: Array = []  # Array[Array] — undone states available to redo.
+# Undo / redo of the graph STRUCTURE (not in-field text edits). Each entry is a deep _graph_model
+# snapshot taken just before a structural mutation; recent last.
+var _undo_stack: Array = []
+var _redo_stack: Array = []
 const UNDO_LIMIT: int = 50
+
+# Node clipboard (copy / cut / paste / duplicate). Holds deep copies of nodes as [{id, node}] so
+# paste can remap the edges between copied nodes. _paste_count cascades the offset on repeated paste.
+var _node_clipboard: Array = []
+var _paste_count: int = 0
+const PASTE_OFFSET: Vector2 = Vector2(48, 48)
 
 # Side panel renderer — owns no state of its own; reads/mutates this controller.
 var _side_renderer: BuilderSidePanel = null
@@ -123,9 +108,9 @@ var _side_renderer: BuilderSidePanel = null
 var _transcode_cancel: bool = false
 var _transcode_pid:    int  = -1
 
-# Set true when a video copy/transcode is cancelled mid-save inside a fork path,
-# so the recursive _save_fork/_save_path chain can unwind and _on_save_pressed
-# can abort the whole save cleanly.
+# Set true when a media copy/transcode fails or is cancelled mid-save (by _copy_file or
+# _save_round_node_media), so the _save_graph_nodes walk can stop and _on_save_pressed
+# aborts the whole save cleanly.
 var _save_aborted: bool = false
 
 # Detailed failure info captured during a fork-path copy so the top-level
@@ -143,14 +128,13 @@ var _save_abort_error: Dictionary = {}
 # the new "FolderName" field and is what the catalogue reads on load.
 var _round_folder_counter: int = 0
 
-# Save-wide map of non-H.264 video source paths → {codec, duration}. Built
-# once at the start of _on_save_pressed by walking the whole journey tree,
-# then consulted in both the top-level round save AND the recursive
-# _save_path so that videos inside fork paths get transcoded too.
+# Save-wide map of non-H.264 video source paths → {codec, duration}. Built once by
+# _build_transcode_plan (walking the graph's round nodes), then consulted per round in
+# _save_round_node_media.
 var _transcode_plan: Dictionary = {}
 
 # Shared content-pool state for the current save. Reset at the start of
-# _save_all_items. `_pooled_media` maps a source fingerprint → its journey-root-
+# _save_graph_nodes. `_pooled_media` maps a source fingerprint → its journey-root-
 # relative pooled path (content/m_<fp>.<ext>); the second+ round to reference a
 # source reuses the path and skips the transcode/copy. `_pooled_fs_stats` caches
 # funscript {count,length_ms} per fingerprint so a reused script isn't re-parsed.
@@ -197,7 +181,7 @@ func _ready() -> void:
 	_setup_graph_view()
 	if not edit_journey.is_empty():
 		_original_journey_folder = edit_journey.get("folder", "")
-		_load_journey(edit_journey)
+		_load_graph(edit_journey)
 		edit_journey = {}
 	_side_renderer.show_journey_info_panel()
 	# Check for leftover staging folders from interrupted saves (crash, force-
@@ -207,77 +191,28 @@ func _ready() -> void:
 	call_deferred("_check_for_stale_staging_folders")
 
 
-# Builds the GraphView inside the GraphHost slot, wires its selection / insert
-# signals to the side panel.
+# Builds the GraphView inside the GraphHost slot and wires its node-selected
+# signal to the side panel.
 func _setup_graph_view() -> void:
 	_graph = GraphViewScene.instantiate()
 	_graph.anchor_right  = 1.0
 	_graph.anchor_bottom = 1.0
 	_graph_host.add_child(_graph)
-	_graph.selection_changed.connect(_on_graph_selection_changed)
-	_graph.branch_selected.connect(_on_graph_branch_selected)
-	_graph.insert_requested.connect(_on_graph_insert_requested)
-	# Live per-node validation badges (evaluated at layout time).
-	_graph.validity_fn = _item_issue_summary
-	# Initial state: render current _items (empty for a new journey).
-	_graph.call_deferred("set_items", _items)
+	# Rendered from _graph_model, populated IN PLACE by _load_graph (existing journey) before this
+	# deferred call fires; empty for a new journey. Selection drives the side panel; a click while
+	# wiring picks the edge target; a drag-start snapshots for undo.
+	_graph.graph_selection_changed.connect(_on_graph_selection_changed)
+	_graph.connect_target_picked.connect(_on_connect_target_picked)
+	_graph.nodes_drag_started.connect(_push_undo)
+	_graph.edge_drawn.connect(_on_edge_drawn)
+	_graph.call_deferred("set_graph", _graph_model)
 
 
-# Reacts to a selection change from the graph. Keeps both the single-selection
-# mirror (for the per-node editor) and the full set mirror (for group ops) in
-# sync, then renders the matching side panel: journey info (0), node editor (1),
-# or the multi-select panel (2+).
-func _on_graph_selection_changed(items: Array, arr: Array) -> void:
-	# Any node/empty selection ends a branch selection.
-	_has_branch = false
-	_branch_arr = []
-	_selected_items = items
-	_selected_arr   = arr
-	if items.size() == 1:
-		_selected_item = items[0]
-		_selected_idx  = _index_in_arr(arr, items[0])
-		_side_renderer.show_node_editor(_selected_item, arr, _selected_idx)
-	else:
-		_selected_item = {}
-		_selected_idx  = -1
-		if items.is_empty():
-			_side_renderer.show_journey_info_panel()
-		else:
-			_side_renderer.show_multi_select_panel(items, arr)
-
-
-# A fork branch (path) was clicked. Becomes the insertion target — new/pasted
-# items land at the top of the path. Clears node selection (mutually exclusive).
-func _on_graph_branch_selected(path: Dictionary) -> void:
-	if not path.has("items"):
-		path["items"] = []
-	_selected_items = []
-	_selected_arr   = []
-	_selected_item  = {}
-	_selected_idx   = -1
-	_has_branch = true
-	_branch_arr = path["items"]
-	_side_renderer.show_branch_panel(path)
-
-
-# Index of `item` within `arr` by reference identity (Dictionary == is deep
-# equality, which is unreliable for look-alike items). Returns -1 if absent.
-func _index_in_arr(arr: Array, item: Dictionary) -> int:
-	for i in arr.size():
-		if is_same(arr[i], item):
-			return i
-	return -1
-
-
-func _on_graph_insert_requested(arr: Array, idx: int, screen_pos: Vector2) -> void:
-	_side_renderer.show_insert_popup(self, _graph, arr, idx, screen_pos)
-
-
-# Replaces _refresh_items()'s former role: rebuild the graph from _items.
-# Called after structural changes (load, drop import, etc).
+# Rebuilds the graph view from _graph_model. Called after a structural change.
 func _refresh_graph() -> void:
-	if _graph:
-		_graph.set_items(_items)
+	if not _graph:
+		return
+	_graph.set_graph(_graph_model)
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +313,15 @@ func _setup_toolbar_buttons() -> void:
 	_top_bar.add_child(fit_btn)
 	_top_bar.move_child(fit_btn, _save_btn.get_index())
 
+	var arrange_btn: Button = Button.new()
+	arrange_btn.text = "⊞ ARRANGE"
+	arrange_btn.focus_mode = Control.FOCUS_NONE
+	arrange_btn.tooltip_text = "Auto-arrange the graph into tidy layers (Sugiyama). Undoable with Ctrl+Z."
+	UITheme.style_button(arrange_btn, UITheme.PURPLE_MID)
+	arrange_btn.pressed.connect(_on_arrange_pressed)
+	_top_bar.add_child(arrange_btn)
+	_top_bar.move_child(arrange_btn, _save_btn.get_index())
+
 	var img_btn: Button = Button.new()
 	img_btn.text = "📷 IMAGE"
 	img_btn.focus_mode = Control.FOCUS_NONE
@@ -397,6 +341,19 @@ func _setup_toolbar_buttons() -> void:
 	_top_bar.move_child(keys_btn, _save_btn.get_index())
 
 
+# Auto-arranges the whole graph into tidy Sugiyama layers (rows by depth, crossings reduced, x
+# aligned to neighbours). One undo step; frames the result. Manual positions are replaced — Ctrl+Z
+# restores them.
+func _on_arrange_pressed() -> void:
+	if not _graph or (_graph_model.get("nodes", {}) as Dictionary).is_empty():
+		return
+	_push_undo()
+	GraphLayout.auto_layout(_graph_model)
+	_refresh_graph()
+	_graph.call_deferred("fit_to_view")
+	_show_status("Arranged the graph into layers. Ctrl+Z to undo.", false)
+
+
 # ---------------------------------------------------------------------------
 # Export image — high-res PNG of the whole journey layout (for sharing)
 # ---------------------------------------------------------------------------
@@ -410,7 +367,7 @@ const CAPTURE_JPEG_QUALITY:   float = 0.9             # used when a PNG would bl
 
 
 func _on_export_image_pressed() -> void:
-	if _items.is_empty():
+	if (_graph_model.get("nodes", {}) as Dictionary).is_empty():
 		_show_status("Nothing to capture — add a round first.", true)
 		return
 	_show_status("Rendering layout image…", false)
@@ -421,7 +378,7 @@ func _on_export_image_pressed() -> void:
 	_save_capture_with_dialog(_encode_for_sharing(img))
 
 
-# Renders a FRESH GraphView of the current items into an offscreen SubViewport at
+# Renders a FRESH GraphView of the current graph into an offscreen SubViewport at
 # full content size (× CAPTURE_SCALE) on a dark background, and reads it back as an
 # Image. The live builder graph is a separate instance and stays untouched.
 # Returns null on an empty graph / failure.
@@ -438,10 +395,11 @@ func _render_graph_image() -> Image:
 
 	var g: GraphView = GraphViewScene.instantiate()
 	g.anchor_right = 1.0; g.anchor_bottom = 1.0
+	g.map_mode = true   # render the journey clean — no editor chrome (out-handles, selection wiring)
 	svp.add_child(g)
 	add_child(svp)   # offscreen — a bare SubViewport still renders to its texture
 
-	g.set_items(_items)
+	g.set_graph(_graph_model)
 	# Wait for the deferred layout chain (refresh → _do_layout → centre) to settle.
 	var tries: int = 0
 	while g.content_bounds().is_empty() and tries < 30:
@@ -539,7 +497,7 @@ func _save_capture_with_dialog(result: Dictionary) -> void:
 # Centered modal listing every builder keyboard / mouse shortcut. Closeable via
 # the Close button or the backdrop.
 func _show_shortcuts_overlay() -> void:
-	var parts: Dictionary = UITheme.build_centered_modal("⌨  SHORTCUTS", UITheme.PURPLE_BRIGHT, Vector2i(580, 640))
+	var parts: Dictionary = UITheme.build_centered_modal("⌨  SHORTCUTS", UITheme.PURPLE_BRIGHT, Vector2i(580, 740))
 	var modal: Control = parts["modal"]
 	var vbox: VBoxContainer = parts["vbox"]
 	add_child(modal)
@@ -558,38 +516,43 @@ func _show_shortcuts_overlay() -> void:
 	scroll.add_child(list)
 
 	var groups: Array = [
-		["EDITING", [
-			["Ctrl + C", "Copy selected module(s)"],
-			["Ctrl + X", "Cut selected module(s)"],
-			["Ctrl + V", "Paste after selection"],
+		["EDIT", [
+			["Ctrl + S", "Save journey"],
 			["Ctrl + Z", "Undo"],
 			["Ctrl + Y  /  Ctrl + Shift + Z", "Redo"],
-			["Backspace  /  Delete", "Delete selected module(s)"],
-			["Ctrl + S", "Save journey"],
+			["Delete  /  Backspace", "Delete the selected node(s)"],
 		]],
-		["ADD", [
+		["CLIPBOARD", [
+			["Ctrl + C", "Copy the selected node(s)"],
+			["Ctrl + X", "Cut (copy + delete)"],
+			["Ctrl + V", "Paste (fresh ids, offset)"],
+			["Ctrl + D", "Duplicate the selection"],
+		]],
+		["ADD NODE  (near the selection)", [
 			["Ctrl + 1", "Add a round"],
 			["Ctrl + 2", "Add a shop"],
 			["Ctrl + 3", "Add a storyboard"],
 			["Ctrl + 4", "Add a fork"],
 		]],
-		["SELECTION", [
-			["Click", "Select a node"],
-			["Click a fork branch", "Target it — add/paste to the top of that path"],
-			["Shift + Click", "Select a range of nodes (same branch)"],
-			["Ctrl + Click", "Add / remove a node from selection"],
-			["Drag on empty canvas", "Marquee-select (same branch)"],
-			["Ctrl + A", "Select all in the current branch"],
-			["Escape", "Clear selection"],
+		["SELECT & MOVE", [
+			["Click a node", "Select it (edit it in the side panel)"],
+			["Ctrl + click", "Add / remove a node from the selection"],
+			["Shift + click", "Add a node to the selection"],
+			["Drag a box on empty space", "Marquee-select nodes"],
+			["Drag a node", "Move it — or the whole selection"],
+			["Escape", "Cancel a wire in progress, or clear the selection"],
 		]],
-		["NAVIGATION", [
+		["WIRE EDGES", [
+			["Drag a node's bottom handle → a node", "Connect them (line turns red if it would loop)"],
+			["Select  →  🔗 Connect  →  click", "Same, button-driven (the accessible fallback)"],
+		]],
+		["NAVIGATE", [
 			["Middle-drag", "Pan the graph"],
 			["Mouse wheel", "Zoom in / out"],
 			["⊡ Fit button", "Frame the whole journey"],
 		]],
 		["IMPORT", [
-			["Drop files on the graph", "Auto-create rounds (paired by name)"],
-			["Drop a folder on the graph", "Recursively import every scene"],
+			["Drop videos / a folder on the canvas", "Auto-create chained round nodes (matched by name)"],
 		]],
 	]
 
@@ -650,6 +613,7 @@ func _show_shortcuts_overlay() -> void:
 func _connect_signals() -> void:
 	_back_btn.pressed.connect(_on_back_pressed)
 	_save_btn.pressed.connect(_on_save_pressed)
+	# Bulk import: files / a folder dropped on the canvas → auto-create chained round nodes.
 	get_viewport().files_dropped.connect(_on_viewport_files_dropped)
 
 
@@ -657,38 +621,28 @@ func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
 		return
 	var k := event as InputEventKey
-	# Only fresh key-down events; ignore key-up and auto-repeat (echo). The echo
-	# guard also stops a held Backspace/Delete from chain-deleting nodes.
+	# Only fresh key-down events; ignore key-up and auto-repeat (echo). The echo guard also stops a
+	# held Delete from chain-deleting nodes.
 	if not k.pressed or k.echo:
 		return
 
 	if k.ctrl_pressed:
-		# ── Ctrl-modified shortcuts ──────────────────────────────────────────
 		match k.keycode:
 			KEY_S:
+				# Save is global — fires even from inside a text field.
 				if not _save_btn.disabled:
 					_on_save_pressed()
 				get_viewport().set_input_as_handled()
-			KEY_C:
-				# Defer to native text copy when a text field is focused — do NOT
-				# consume the event in that case, or the LineEdit/TextEdit never
-				# sees it.
+			KEY_1, KEY_2, KEY_3, KEY_4:
+				# Quick-create a node by type, placed near the current selection. Stand down inside a
+				# text field (the author may be typing, and Ctrl+digit can be a native shortcut).
 				if _focus_is_text_field():
 					return
-				_copy_selection()
-				get_viewport().set_input_as_handled()
-			KEY_X:
-				if _focus_is_text_field():
-					return
-				_cut_selection()
-				get_viewport().set_input_as_handled()
-			KEY_V:
-				if _focus_is_text_field():
-					return
-				_paste_clipboard_after_selection()
+				_create_graph_node({KEY_1: "round", KEY_2: "shop", KEY_3: "storyboard", KEY_4: "fork"}[k.keycode])
 				get_viewport().set_input_as_handled()
 			KEY_Z:
-				# Ctrl+Shift+Z is the common redo alias; plain Ctrl+Z undoes.
+				# Ctrl+Shift+Z = redo (common alias); plain Ctrl+Z = undo. Defer to native text undo
+				# inside a focused field.
 				if _focus_is_text_field():
 					return
 				if k.shift_pressed:
@@ -701,304 +655,54 @@ func _input(event: InputEvent) -> void:
 					return
 				_redo()
 				get_viewport().set_input_as_handled()
-			KEY_A:
-				# Defer to native "select all" inside a text field.
+			KEY_C:
 				if _focus_is_text_field():
 					return
-				_select_all_in_branch()
+				_copy_selection()
 				get_viewport().set_input_as_handled()
-			KEY_1:
+			KEY_X:
 				if _focus_is_text_field():
 					return
-				_insert_new_item("round")
+				_cut_selection()
 				get_viewport().set_input_as_handled()
-			KEY_2:
+			KEY_V:
 				if _focus_is_text_field():
 					return
-				_insert_new_item("shop")
+				_paste_clipboard()
 				get_viewport().set_input_as_handled()
-			KEY_3:
+			KEY_D:
 				if _focus_is_text_field():
 					return
-				_insert_new_item("storyboard")
-				get_viewport().set_input_as_handled()
-			KEY_4:
-				if _focus_is_text_field():
-					return
-				_insert_new_item("fork")
+				_duplicate_selection()
 				get_viewport().set_input_as_handled()
 		return
 
-	# ── Unmodified shortcuts ─────────────────────────────────────────────────
 	match k.keycode:
 		KEY_BACKSPACE, KEY_DELETE:
-			# Must yield to text editing — Backspace/Delete still edit characters
-			# inside a focused LineEdit/TextEdit.
-			if _focus_is_text_field():
+			# Delete the selected node. Must yield to text editing — Backspace/Delete still edit
+			# characters inside a focused LineEdit/TextEdit.
+			if _focus_is_text_field() or _selected_graph_node_ids.is_empty():
 				return
-			_delete_selection()
+			_delete_selected_nodes()
 			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
-			# Clear the current selection (node set or fork branch). Only consume
-			# the event when there was something to clear.
-			if _focus_is_text_field() or (_selected_items.is_empty() and not _has_branch):
+			# Cancel an in-progress edge wire, else drop the node selection. Only consume the event
+			# when there was actually something to cancel/clear.
+			if _focus_is_text_field():
 				return
-			if _graph:
-				_graph.clear_selection()
-			get_viewport().set_input_as_handled()
+			if _connecting_from != "":
+				_cancel_connect()
+				get_viewport().set_input_as_handled()
+			elif not _selected_graph_node_ids.is_empty():
+				_deselect_node()
+				get_viewport().set_input_as_handled()
 
 
-# True when the keyboard focus is inside a text-entry control, so module
-# copy/paste shortcuts should stand down and let normal text editing happen.
+# True when the keyboard focus is inside a text-entry control, so the node shortcuts (create /
+# delete / deselect) stand down and let normal text editing happen.
 func _focus_is_text_field() -> bool:
 	var f: Control = get_viewport().gui_get_focus_owner()
 	return f is LineEdit or f is TextEdit
-
-
-# Where a new/pasted item should go, as {arr, at}:
-#   • a node selection → right after the last selected item (same branch)
-#   • a fork-branch selection → the top of that path
-#   • nothing selected → the end of the top level
-func _insertion_target() -> Dictionary:
-	if not _selected_items.is_empty():
-		return {"arr": _selected_arr, "at": _selected_indices_sorted()[-1] + 1}
-	if _has_branch:
-		return {"arr": _branch_arr, "at": 0}
-	return {"arr": _items, "at": _items.size()}
-
-
-# Ctrl+1–4 — inserts a new item of `type` at the current insertion target. The
-# new node becomes the selection so its editor opens immediately.
-func _insert_new_item(type: String) -> void:
-	var item: Dictionary = JourneyData.new_item(type)
-	var target: Dictionary = _insertion_target()
-	var arr: Array = target["arr"]
-	var at: int    = target["at"]
-	_push_undo()
-	arr.insert(at, item)
-	_refresh_graph()
-	_graph.call_deferred("select_item", arr, at)
-	_show_status("Added %s." % _item_type_label(item), false)
-
-
-# Ctrl+A — selects every node in the current branch: the node selection's parent
-# array, the selected fork branch's items, or the top level when nothing's
-# selected. Does not descend into fork paths.
-func _select_all_in_branch() -> void:
-	var arr: Array = _items
-	if not _selected_arr.is_empty():
-		arr = _selected_arr
-	elif _has_branch:
-		arr = _branch_arr
-	if arr.is_empty():
-		return
-	_graph.set_selection(arr.duplicate(), arr)
-
-
-# Indices of the current selection within _selected_arr, ascending. Identity-
-# based (look-alike dicts would confuse ==).
-func _selected_indices_sorted() -> Array:
-	var idxs: Array = []
-	for it: Dictionary in _selected_items:
-		var i: int = _index_in_arr(_selected_arr, it)
-		if i >= 0:
-			idxs.append(i)
-	idxs.sort()
-	return idxs
-
-
-# Selected items ordered by their position in the sequence (so copy/paste keeps
-# authoring order regardless of click order).
-func _selected_items_in_order() -> Array:
-	var out: Array = []
-	for i: int in _selected_indices_sorted():
-		out.append(_selected_arr[i])
-	return out
-
-
-# Removes every selected item from _selected_arr (descending index so earlier
-# removals don't shift later ones).
-func _remove_selected_from_arr() -> void:
-	var idxs: Array = _selected_indices_sorted()
-	idxs.reverse()
-	for i: int in idxs:
-		_selected_arr.remove_at(i)
-
-
-# Label for the clipboard contents: the type when one item, else a count.
-func _clipboard_label() -> String:
-	if _clipboard_items.size() == 1:
-		return _item_type_label(_clipboard_items[0])
-	return "%d modules" % _clipboard_items.size()
-
-
-# Ctrl+C — copies the whole selection (deep; a fork brings its subtree) into the
-# shared clipboard, in sequence order. No-op with a hint when nothing's selected.
-func _copy_selection() -> void:
-	if _selected_items.is_empty():
-		_show_status("Nothing selected to copy. Click a module first.", true)
-		return
-	_clipboard_items = []
-	for it: Dictionary in _selected_items_in_order():
-		_clipboard_items.append(it.duplicate(true))
-	_show_status("Copied %s — press Ctrl+V to paste." % _clipboard_label(), false)
-
-
-# Ctrl+X — copies the selection to the clipboard, then removes it (one undo
-# step). The classic "move" gesture: cut here, then paste elsewhere.
-func _cut_selection() -> void:
-	if _selected_items.is_empty():
-		_show_status("Nothing selected to cut. Click a module first.", true)
-		return
-	_clipboard_items = []
-	for it: Dictionary in _selected_items_in_order():
-		_clipboard_items.append(it.duplicate(true))
-	var label: String = _clipboard_label()
-	_push_undo()
-	_remove_selected_from_arr()
-	_refresh_graph()
-	if _graph:
-		_graph.clear_selection()
-	_show_status("Cut %s — press Ctrl+V to paste elsewhere (Ctrl+Z to undo)." % label, false)
-
-
-# Backspace / Delete — removes the whole selection after snapshotting for undo.
-func _delete_selection() -> void:
-	if _selected_items.is_empty():
-		_show_status("Nothing selected to delete. Click a module first.", true)
-		return
-	var label: String = ("%d modules" % _selected_items.size()) if _selected_items.size() > 1 else _item_type_label(_selected_items[0])
-	_push_undo()
-	_remove_selected_from_arr()
-	_refresh_graph()
-	if _graph:
-		_graph.clear_selection()
-	_show_status("Deleted %s. Press Ctrl+Z to undo." % label, false)
-
-
-# Shifts the selected block by one position within its branch (delta -1 up / +1
-# down). Blocked when the block already touches that end. Selection is preserved.
-func _move_selection(delta: int) -> void:
-	if _selected_items.is_empty():
-		return
-	var idxs: Array = _selected_indices_sorted()
-	if delta < 0 and idxs[0] <= 0:
-		return
-	if delta > 0 and idxs[-1] >= _selected_arr.size() - 1:
-		return
-	_push_undo()
-	if delta < 0:
-		for i: int in idxs:  # ascending — each swaps up into the freed slot
-			var tmp: Variant = _selected_arr[i]
-			_selected_arr[i]     = _selected_arr[i - 1]
-			_selected_arr[i - 1] = tmp
-	else:
-		idxs.reverse()       # descending — swap down without clobbering
-		for i: int in idxs:
-			var tmp: Variant = _selected_arr[i]
-			_selected_arr[i]     = _selected_arr[i + 1]
-			_selected_arr[i + 1] = tmp
-	_refresh_graph()
-	# Same item references, new positions — re-highlight them.
-	_graph.set_selection(_selected_items, _selected_arr)
-
-
-# Inserts fresh deep duplicates of the clipboard into `arr` at `idx`, as one undo
-# step, and selects the pasted block. The single paste primitive shared by every
-# entry point (Ctrl+V, the insert-menu Paste, and top-level Paste).
-func _paste_clipboard_into(arr: Array, idx: int) -> void:
-	if _clipboard_items.is_empty():
-		_show_status("Clipboard is empty. Copy a module first (Ctrl+C).", true)
-		return
-	_push_undo()
-	for i in _clipboard_items.size():
-		arr.insert(idx + i, _clipboard_items[i].duplicate(true))
-	var pasted: Array = []
-	for i in _clipboard_items.size():
-		pasted.append(arr[idx + i])
-	# Pasted nodes are new logical nodes — mint fresh ids (recursing into fork
-	# paths) so they don't collide with the originals still in the tree, or with
-	# a second paste of the same clipboard.
-	_ensure_node_ids(pasted, true)
-	_refresh_graph()
-	_graph.call_deferred("set_selection", pasted, arr)
-
-
-# Ctrl+V — pastes at the current insertion target (after a node selection, the
-# top of a selected branch, or the end of the top level).
-func _paste_clipboard_after_selection() -> void:
-	var target: Dictionary = _insertion_target()
-	_paste_clipboard_into(target["arr"], target["at"])
-
-
-# Guarantees every item in `items` — and, recursively, every item nested in a fork
-# path — carries a stable node_id. force=false backfills only items that lack one
-# (legacy load, or an item built without an id); force=true re-mints every id
-# (paste/duplicate: the clipboard holds the originals' ids, and reusing them would
-# collide in the graph, silently dropping a node). The id is what build_graph keys
-# nodes by and what redirect edges / Test-From-Here reference.
-func _ensure_node_ids(items: Array, force: bool) -> void:
-	for item: Dictionary in items:
-		if force or str(item.get("node_id", "")) == "":
-			item["node_id"] = JourneyData.new_node_id()
-		if item.get("type", "") == "fork":
-			for path: Dictionary in item.get("paths", []):
-				_ensure_node_ids(path.get("items", []), force)
-
-
-# Records the current journey structure so the next mutation can be undone.
-# MUST be called *before* a structural change is applied (and only when the
-# change will actually happen — e.g. after a move's bounds guard). Clears the
-# redo stack, since a fresh edit forks history away from any undone states.
-func _push_undo() -> void:
-	_undo_stack.append(_items.duplicate(true))
-	if _undo_stack.size() > UNDO_LIMIT:
-		_undo_stack.pop_front()
-	_redo_stack.clear()
-
-
-# Ctrl+Z — reverts to the structure captured by the last _push_undo().
-func _undo() -> void:
-	if _undo_stack.is_empty():
-		_show_status("Nothing to undo.", false)
-		return
-	_redo_stack.append(_items.duplicate(true))
-	_restore_snapshot(_undo_stack.pop_back())
-	_show_status("Undid last change.", false)
-
-
-# Ctrl+Y (or Ctrl+Shift+Z) — re-applies the most recently undone structure.
-func _redo() -> void:
-	if _redo_stack.is_empty():
-		_show_status("Nothing to redo.", false)
-		return
-	_undo_stack.append(_items.duplicate(true))
-	_restore_snapshot(_redo_stack.pop_back())
-	_show_status("Redid change.", false)
-
-
-# Swaps the live _items tree for a snapshot. Mutates in place rather than
-# reassigning, because GraphView and the open side-panel editors close over the
-# _items array reference (and its sub-arrays); replacing the reference would
-# leave them pointing at the stale tree. Selection is cleared afterwards since
-# the old selection's array/index may no longer be valid in the restored tree.
-func _restore_snapshot(snapshot: Array) -> void:
-	_items.clear()
-	for it in snapshot:
-		_items.append(it)
-	if _graph:
-		_graph.set_items(_items)
-		_graph.clear_selection()
-
-
-# Short uppercase label for an item's type, for status messages.
-func _item_type_label(item: Dictionary) -> String:
-	match item.get("type", "round"):
-		"round":      return "ROUND"
-		"shop":       return "SHOP"
-		"storyboard": return "STORYBOARD"
-		"fork":       return "FORK"
-	return "ITEM"
 
 
 func _on_back_pressed() -> void:
@@ -1034,28 +738,16 @@ func _open_journey_folder() -> void:
 	OS.shell_open(media_abs if DirAccess.dir_exists_absolute(media_abs) else abs)
 
 
-# Funscript filename suffixes that mark a secondary axis or a vibrator channel.
-# Kept in sync with _detect_funscript_axis / _detect_vib_channel — used to strip
-# the suffix so "scene1", "scene1_L1", "scene1.vib1" all share a round key during
-# bulk import.
-const SCRIPT_SUFFIXES: Array[String] = [
-	"_l1", ".l1", "_l2", ".l2", "_r0", ".r0", "_r1", ".r1", "_r2", ".r2",
-	"_surge", ".surge", "_sway", ".sway", "_twist", ".twist", "_roll", ".roll", "_pitch", ".pitch",
-	".vib1", "_vib1", ".vibe1", "_vibe1", ".vib2", "_vib2", ".vibe2", "_vibe2",
-]
+# ── Bulk import (drop videos / a folder on the canvas → chained round nodes) ──
+
+const BULK_IMPORT_ROW:     float = 140.0   # vertical spacing between imported round nodes
+const BULK_IMPORT_COL_GAP: float = 360.0   # gap to the right of existing content for the new column
 
 
+# Viewport file-drop router. A folder always bulk-imports (expanded recursively). A file drop over
+# the side panel is left to the per-field DropZones; over the canvas it bulk-imports rounds, falling
+# back to accepting a lone image as the journey cover.
 func _on_viewport_files_dropped(files: PackedStringArray) -> void:
-	# Two drop surfaces with distinct intents:
-	#   • Side panel  → "edit the selected node": multi-axis routing into the
-	#     selected round, or a cover image when nothing is selected. (Single-file
-	#     drops are handled by the DropZone controls themselves, which listen to
-	#     the same viewport signal and only act when the mouse is over them.)
-	#   • Graph canvas → "create rounds": bulk-import a round per video/funscript
-	#     group, matched by filename.
-	# Folder drop: a dropped directory can't target a single DropZone or be a
-	# cover, so always treat it as a bulk import — expand it (recursively) into
-	# its videos/funscripts and route straight to the importer.
 	var has_folder: bool = false
 	for f: String in files:
 		if DirAccess.dir_exists_absolute(f):
@@ -1063,22 +755,20 @@ func _on_viewport_files_dropped(files: PackedStringArray) -> void:
 			break
 	if has_folder:
 		var expanded: PackedStringArray = _expand_dropped_paths(files)
-		if _bulk_import_rounds(expanded):
+		if _bulk_import_graph_rounds(expanded):
 			return
-		# Import created nothing. If the folder held no media at all, say so; if it
-		# held only funscripts, _bulk_import_rounds already showed that message.
 		if expanded.is_empty():
 			_show_status("No videos or funscripts found in the dropped folder(s).", true)
 		return
 
-	var mouse: Vector2 = get_viewport().get_mouse_position()
-	if _side_panel.get_global_rect().has_point(mouse):
+	# A drop landing on the side panel: the per-field DropZones handle a single-file drop; this routes
+	# a multi-funscript drop into the selected round's axis/vib slots, or an image → the cover.
+	if _side_panel.get_global_rect().has_point(get_viewport().get_mouse_position()):
 		_handle_side_panel_drop(files)
 		return
 
-	# Canvas drop. Try a bulk round import first; if there was nothing round-like
-	# in the drop, fall back to accepting an image as the journey cover.
-	if not _bulk_import_rounds(files):
+	# Canvas drop: bulk round import, else accept an image as the journey cover.
+	if not _bulk_import_graph_rounds(files):
 		for f: String in files:
 			if f.get_extension().to_lower() in JourneyData.IMAGE_EXTENSIONS:
 				_cover_path = f
@@ -1086,58 +776,53 @@ func _on_viewport_files_dropped(files: PackedStringArray) -> void:
 				return
 
 
-# Side-panel drop behavior (unchanged from the original handler): auto-route
-# multiple funscripts into the selected round's axis/vib slots, else accept a
-# dropped image as the cover when nothing is selected.
+# Side-panel drop: when a round node is selected and MORE THAN ONE funscript is dropped, auto-route
+# them into the node's funscript / axis / vib slots by suffix (the per-field DropZones only take one
+# file each). Otherwise, with nothing selected, accept a dropped image as the journey cover.
 func _handle_side_panel_drop(files: PackedStringArray) -> void:
-	if _selected_item.get("type", "") == "round" and _selected_idx >= 0:
+	var node: Dictionary = (_graph_model.get("nodes", {}) as Dictionary).get(_selected_graph_node_id, {})
+	if _selected_graph_node_id != "" and node.get("type", "") == "round":
 		var fs_files: Array = []
 		for f: String in files:
 			if f.get_extension().to_lower() in JourneyData.FUNSCRIPT_EXTENSIONS:
 				fs_files.append(f)
-
 		if fs_files.size() > 1:
-			if not _selected_arr[_selected_idx].has("axis_scripts"):
-				_selected_arr[_selected_idx]["axis_scripts"] = {}
-			if not _selected_arr[_selected_idx].has("vib_scripts"):
-				_selected_arr[_selected_idx]["vib_scripts"] = {}
+			var data: Dictionary = node.get("data", {})
+			if not data.has("axis_scripts"): data["axis_scripts"] = {}
+			if not data.has("vib_scripts"):  data["vib_scripts"] = {}
 			for f: String in fs_files:
 				var vib_ch: String = _detect_vib_channel(f)
 				if vib_ch != "":
-					_selected_arr[_selected_idx]["vib_scripts"][vib_ch] = f
+					data["vib_scripts"][vib_ch] = f
 				else:
 					var axis: String = _detect_funscript_axis(f)
 					if axis == "L0":
-						_selected_arr[_selected_idx]["funscript_path"] = f
-						if (_selected_arr[_selected_idx].get("name", "") as String).strip_edges() == "":
-							_selected_arr[_selected_idx]["name"] = f.get_file().get_basename()
+						data["funscript_path"] = f
+						if str(data.get("name", "")).strip_edges() == "":
+							data["name"] = f.get_file().get_basename()
 					else:
-						_selected_arr[_selected_idx]["axis_scripts"][axis] = f
-			# Refresh the side panel so the new paths show up in the DropZones.
-			_graph.call_deferred("select_item", _selected_arr, _selected_idx)
+						data["axis_scripts"][axis] = f
+			# Rebuild the canvas + side panel (deferred, so it lands after the per-field DropZones have
+			# also processed this same drop) to show the routed paths.
+			_graph.call_deferred("select_graph_node", _selected_graph_node_id)
 			return
 
-	if not _selected_item.is_empty():
-		return
-	for f: String in files:
-		if f.get_extension().to_lower() in JourneyData.IMAGE_EXTENSIONS:
-			_cover_path = f
-			_update_cover_preview()
-			return
+	# Nothing selected → a dropped image becomes the journey cover.
+	if _selected_graph_node_id == "":
+		for f: String in files:
+			if f.get_extension().to_lower() in JourneyData.IMAGE_EXTENSIONS:
+				_cover_path = f
+				_update_cover_preview()
+				return
 
 
-# Bulk-import handler. Groups the dropped files by folder + base name and builds
-# one round per group — main funscript + video + any secondary axis / vib
-# scripts, matched by suffix. A group MUST end up with a video to become a round:
-# funscript-only groups (with no matching video on disk) are skipped, while a
-# video with no funscript still becomes a round. New rounds land after the
-# current selection (or at the end of the top level when nothing is selected).
-# Returns true if it created at least one round, false otherwise (so the caller
-# can fall back to cover-image handling). The whole import is one undo step.
-func _bulk_import_rounds(files: PackedStringArray) -> bool:
-	var groups: Dictionary = {}  # round_key -> {video, funscript, axis:{}, vib:{}, name}
-	var order:  Array      = []  # round_keys in first-seen order
-
+# Groups dropped files by folder + base name (a video + its matched scripts → one round), then
+# creates a chained column of round nodes to the right of the existing graph. A group needs a video
+# to become a round (funscript-only groups are skipped). One undo step. Returns true if it created
+# at least one round.
+func _bulk_import_graph_rounds(files: PackedStringArray) -> bool:
+	var groups: Dictionary = {}   # round_key -> {video, funscript, axis:{}, vib:{}, name}
+	var order:  Array      = []   # round_keys in first-seen order
 	for f: String in files:
 		var ext: String = f.get_extension().to_lower()
 		var key: String = _round_group_key(f)
@@ -1159,71 +844,83 @@ func _bulk_import_rounds(files: PackedStringArray) -> bool:
 						groups[key]["name"] = f.get_file().get_basename()
 				else:
 					groups[key]["axis"][axis] = f
-		# Non-round files (images, etc.) are ignored here.
-
 	if order.is_empty():
 		return false
 
-	var new_rounds: Array = []
+	# Each round's node data = the full round template + the group's media, then autofill any missing
+	# siblings from disk. A round without a video isn't playable, so it's skipped.
+	var rounds: Array = []
 	var skipped_no_video: int = 0
 	for key: String in order:
 		var g: Dictionary = groups[key]
-		var rname: String = g["name"] if g["name"] != "" else key
-		var rd: Dictionary = {
-			"type":           "round",
-			"name":           rname,
-			"funscript_path": g["funscript"],
-			"video_path":     g["video"],
-			"coins":          0,
-			"axis_scripts":   g["axis"],
-			"vib_scripts":    g["vib"],
-			"node_id":        JourneyData.new_node_id(),
-		}
-		# Fill any slots the drop didn't include (e.g. axes left on disk) from
-		# same-named siblings next to whichever file the group does have.
+		var data: Dictionary = JourneyData.new_item("round").duplicate(true)
+		data.erase("type"); data.erase("node_id"); data.erase("paths")
+		data["name"] = (g["name"] as String) if (g["name"] as String) != "" else key
+		data["funscript_path"] = g["funscript"]
+		data["video_path"] = g["video"]
+		data["axis_scripts"] = g["axis"]
+		data["vib_scripts"] = g["vib"]
 		var anchor: String = _group_anchor_path(g)
 		if anchor != "":
-			_autofill_round_siblings(rd, anchor)
-		# A round must have a video. Funscript-only groups (no matching video on
-		# disk either) are skipped entirely — a script with no video isn't a
-		# playable round. A video with no funscript still becomes a round.
-		if (rd["video_path"] as String) == "":
+			_autofill_round_siblings(data, anchor)
+		if str(data.get("video_path", "")) == "":
 			skipped_no_video += 1
 			continue
-		new_rounds.append(rd)
+		rounds.append(data)
 
-	if new_rounds.is_empty():
+	if rounds.is_empty():
 		if skipped_no_video > 0:
 			_show_status("No rounds created — found %d funscript%s with no matching video." % [
 				skipped_no_video, "s" if skipped_no_video != 1 else ""], true)
 		return false
 
 	_push_undo()
-
-	# Placement: after the selected node (into its branch), else top-level append.
-	var target_arr: Array = _items
-	var insert_base: int  = _items.size()
-	if _selected_idx >= 0 and _selected_idx < _selected_arr.size():
-		target_arr  = _selected_arr
-		insert_base = _selected_idx + 1
-
-	for i in new_rounds.size():
-		target_arr.insert(insert_base + i, new_rounds[i])
-
-	_refresh_graph()
-	# Select the last imported round so the user lands on the newest content.
-	_graph.call_deferred("select_item", target_arr, insert_base + new_rounds.size() - 1)
-	var msg: String = "Imported %d round%s." % [new_rounds.size(), "s" if new_rounds.size() != 1 else ""]
+	if not _graph_model.has("nodes"):
+		_graph_model["nodes"] = {}
+	var nodes: Dictionary = _graph_model["nodes"]
+	var origin: Vector2 = _bulk_import_origin()
+	var prev_id: String = ""
+	var created: Array = []
+	for i in rounds.size():
+		var node_id: String = JourneyData.new_node_id()
+		nodes[node_id] = {
+			"type": "round",
+			"data": rounds[i],
+			"pos":  GraphLayout.snap(origin + Vector2(0.0, float(i) * BULK_IMPORT_ROW)),
+			"out":  [],
+		}
+		if prev_id != "":
+			(nodes[prev_id] as Dictionary)["out"] = [{"to": node_id}]
+		if str(_graph_model.get("start", "")) == "":
+			_graph_model["start"] = node_id
+		prev_id = node_id
+		created.append(node_id)
+	_graph.set_selection(created)
+	var msg: String = "Imported %d round%s (chained)." % [created.size(), "" if created.size() == 1 else "s"]
 	if skipped_no_video > 0:
 		msg += " Skipped %d funscript%s with no video." % [skipped_no_video, "s" if skipped_no_video != 1 else ""]
-	msg += " Press Ctrl+Z to undo."
+	msg += " Ctrl+Z to undo."
 	_show_status(msg, false)
 	return true
 
 
-# Expands a dropped path list: directories are walked recursively and replaced
-# by the video/funscript files inside them; plain files pass through unchanged.
-# The result is sorted so rounds come out in a stable, predictable order.
+# Top-left for the imported round column: just right of the existing graph (so the chain doesn't
+# overlap), or the origin for an empty graph.
+func _bulk_import_origin() -> Vector2:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if nodes.is_empty():
+		return Vector2.ZERO
+	var max_x: float = -INF
+	var min_y: float = INF
+	for id: String in nodes:
+		var p: Vector2 = (nodes[id] as Dictionary).get("pos", Vector2.ZERO)
+		max_x = maxf(max_x, p.x)
+		min_y = minf(min_y, p.y)
+	return Vector2(max_x + BULK_IMPORT_COL_GAP, min_y)
+
+
+# Expands a dropped path list: directories are walked recursively and replaced by the
+# video/funscript files inside; plain files pass through. Sorted for a stable round order.
 func _expand_dropped_paths(files: PackedStringArray) -> PackedStringArray:
 	var out: PackedStringArray = []
 	for f: String in files:
@@ -1235,8 +932,7 @@ func _expand_dropped_paths(files: PackedStringArray) -> PackedStringArray:
 	return out
 
 
-# Recursively appends every video/funscript file under `dir` (and its
-# subdirectories) into `out`. Other file types are skipped.
+# Recursively appends every video/funscript file under `dir` into `out`.
 func _collect_files_recursive(dir: String, out: PackedStringArray) -> void:
 	var d: DirAccess = DirAccess.open(dir)
 	if d == null:
@@ -1256,16 +952,14 @@ func _collect_files_recursive(dir: String, out: PackedStringArray) -> void:
 	d.list_dir_end()
 
 
-# Round grouping key for bulk import: directory + base name (suffix stripped),
-# lowercased. Including the directory keeps same-name files in different folders
-# as separate rounds while still pairing a video with its scripts in one folder.
+# Round grouping key: directory + base name (suffix stripped), lowercased — so a video and its
+# scripts in one folder pair up, while same-named files in different folders stay separate rounds.
 func _round_group_key(f: String) -> String:
 	return ("%s/%s" % [f.get_base_dir(), _strip_script_suffix(f)]).to_lower()
 
 
-# Returns any one real file path from an import group (video preferred, then
-# main funscript, then a secondary axis, then a vib script), or "" if the group
-# somehow holds none. Used to anchor the disk scan for sibling autofill.
+# Any one real path from an import group (video, then funscript, then an axis, then a vib), or "".
+# Anchors the disk scan for sibling autofill.
 func _group_anchor_path(g: Dictionary) -> String:
 	if g["video"] != "":
 		return g["video"]
@@ -1278,12 +972,22 @@ func _group_anchor_path(g: Dictionary) -> String:
 	return ""
 
 
-# Creates an empty import group for `key` (preserving first-seen order) if it
-# doesn't exist yet.
+# Creates an empty import group for `key` (preserving first-seen order) if absent.
 func _ensure_import_group(groups: Dictionary, order: Array, key: String) -> void:
 	if not groups.has(key):
 		groups[key] = {"video": "", "funscript": "", "axis": {}, "vib": {}, "name": ""}
 		order.append(key)
+
+
+# Funscript filename suffixes that mark a secondary axis or a vibrator channel.
+# Kept in sync with _detect_funscript_axis / _detect_vib_channel — used to strip
+# the suffix so "scene1", "scene1_L1", "scene1.vib1" all share a round key during
+# bulk import.
+const SCRIPT_SUFFIXES: Array[String] = [
+	"_l1", ".l1", "_l2", ".l2", "_r0", ".r0", "_r1", ".r1", "_r2", ".r2",
+	"_surge", ".surge", "_sway", ".sway", "_twist", ".twist", "_roll", ".roll", "_pitch", ".pitch",
+	".vib1", "_vib1", ".vibe1", "_vibe1", ".vib2", "_vib2", ".vibe2", "_vibe2",
+]
 
 
 # Returns the file's basename with any recognised axis/vib suffix removed, so a
@@ -1452,7 +1156,7 @@ func _update_cover_preview() -> void:
 			_cover_texture = ImageTexture.create_from_image(img)
 	# Rebuild journey-info panel so the preview widget picks up the new texture
 	# (only if no node is currently selected).
-	if _selected_item.is_empty():
+	if _selected_graph_node_ids.is_empty():
 		_side_renderer.show_journey_info_panel()
 
 
@@ -1460,9 +1164,10 @@ func _update_cover_preview() -> void:
 # Load existing journey for editing
 # ---------------------------------------------------------------------------
 
-func _load_journey(journey: Dictionary) -> void:
-	# Parse all data via JourneyData; copy fields into our member vars so the
-	# existing UI handlers can continue to read/write them directly.
+# Graph-editor load (L1): journey-level meta (same source as the tree loader) + the composed
+# graph with positions (Format 2 read, or legacy migrated + seeded). Mutates _graph_model IN
+# PLACE so the deferred set_graph from _setup_graph_view renders the populated graph.
+func _load_graph(journey: Dictionary) -> void:
 	var parsed: Dictionary = JourneyData.parse_journey(journey)
 	_journey_name           = parsed["name"]
 	_journey_author         = parsed["author"]
@@ -1473,27 +1178,415 @@ func _load_journey(journey: Dictionary) -> void:
 	if (parsed["cover_path"] as String) != "":
 		_cover_path = parsed["cover_path"]
 		_update_cover_preview()
-	# Mutate in place rather than replacing the reference — _setup_graph_view
-	# has already done call_deferred("set_items", _items), which captures the
-	# array reference. If we reassign _items here, that deferred call fires
-	# after _load_journey with the stale (empty) reference and clears the graph.
-	_items.clear()
-	for item in parsed["items"]:
-		_items.append(item)
-	# Legacy journeys (and any item created without one) get stable ids here, so
-	# every node carries a persistent NodeId before the first save / Test-From-Here.
-	_ensure_node_ids(_items, false)
-	_refresh_items()
+	var folder: String = journey.get("folder", "")
+	var loaded: Dictionary = JourneyScanner.parse_graph_for_editor(
+		folder, journey.get("folder_name", (folder as String).get_file()))
+	# Seed positions from the TREE layout (compact + centered on x=0, the layout the author knows),
+	# keyed by node_id. For a saved Format-2 journey parse_journey yields no items, so tree_pos is
+	# empty and the positions read from disk are kept.
+	var tree_pos: Dictionary = _graph.tree_positions(parsed.get("items", []))
+	for id: String in loaded.get("nodes", {}):
+		if tree_pos.has(id):
+			(loaded["nodes"][id] as Dictionary)["pos"] = tree_pos[id]
+	_graph_model.clear()
+	_graph_model.merge(loaded, true)
 
 
-# ---------------------------------------------------------------------------
-# Round list
-# ---------------------------------------------------------------------------
+# Graph editor: the selection set changed (click / ctrl/shift-click / marquee / clear / programmatic).
+# Mirror it and show the matching side panel — journey info (0), the node editor (1), or the
+# multi-select panel (2+).
+func _on_graph_selection_changed(ids: Array) -> void:
+	_selected_graph_node_ids = ids.duplicate()
+	_selected_graph_node_id = str(ids[0]) if ids.size() == 1 else ""
+	match ids.size():
+		0:
+			_side_renderer.show_journey_info_panel()
+		1:
+			_side_renderer.show_graph_node_editor(str(ids[0]))
+		_:
+			_side_renderer.show_graph_multi_select_panel(ids)
 
-func _refresh_items() -> void:
-	# Now an alias for the graph-rebuild path. The function name is kept
-	# because many internal handlers still call it after mutating _items.
-	_refresh_graph()
+
+# Graph editor: a node was clicked while wiring an edge — it's the connect target.
+func _on_connect_target_picked(node_id: String) -> void:
+	if _connecting_from != "":
+		_finish_connect(node_id)
+
+
+# Graph editor: an out-handle was dragged onto a target node — wire source→target through the same
+# validation + undo as the button-driven connect.
+func _on_edge_drawn(source_id: String, edge_idx: int, target_id: String) -> void:
+	_connecting_from = source_id
+	_connecting_edge_idx = edge_idx
+	_finish_connect(target_id)
+
+
+# Graph editor: create a fresh node of `type`, placed near the selection (grid-snapped) and
+# unconnected — the author wires it with edges (slice 3c). Becomes the start if it's the first node.
+func _create_graph_node(type: String) -> void:
+	_push_undo()
+	if not _graph_model.has("nodes"):
+		_graph_model["nodes"] = {}
+	var nodes: Dictionary = _graph_model["nodes"]
+	var template: Dictionary = JourneyData.new_item(type)
+	var node_id: String = str(template.get("node_id", JourneyData.new_node_id()))
+	var data: Dictionary = template.duplicate(true)
+	data.erase("type"); data.erase("node_id"); data.erase("paths")   # node-level / edge-level keys
+	var out: Array = []
+	if type == "fork":
+		for p: Dictionary in template.get("paths", []):
+			out.append({"to": "", "name": p.get("name", ""), "description": p.get("description", ""),
+				"image_path": "", "weight": int(p.get("weight", 1)), "threshold": int(p.get("threshold", 0)),
+				"required_item": str(p.get("required_item", "")), "cost": int(p.get("cost", 0))})
+	var pos: Vector2 = Vector2.ZERO
+	if _selected_graph_node_id != "" and nodes.has(_selected_graph_node_id):
+		pos = (nodes[_selected_graph_node_id] as Dictionary).get("pos", Vector2.ZERO) + Vector2(240.0, 0.0)
+	nodes[node_id] = {"type": type, "data": data, "pos": GraphLayout.snap(pos), "out": out}
+	if str(_graph_model.get("start", "")) == "":
+		_graph_model["start"] = node_id
+	_graph.select_graph_node(node_id)
+
+
+# Graph editor: delete a node and every edge pointing at it. Re-homes the start if needed.
+func _delete_graph_node(node_id: String) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(node_id):
+		return
+	_push_undo()
+	nodes.erase(node_id)
+	for id: String in nodes:
+		var kept: Array = []
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			if str(e.get("to", "")) != node_id:
+				kept.append(e)
+		(nodes[id] as Dictionary)["out"] = kept
+	if str(_graph_model.get("start", "")) == node_id:
+		_graph_model["start"] = (nodes.keys()[0] as String) if not nodes.is_empty() else ""
+	_deselect_node()
+
+
+# Drops the current node selection. clear_graph_selection emits graph_selection_changed([]), which
+# (via _on_graph_selection_changed) clears the mirror and returns the side panel to journey info.
+func _deselect_node() -> void:
+	_graph.clear_graph_selection()
+
+
+# Deletes every node in the current selection — the Delete shortcut and the multi-select panel — as
+# one undoable action. (Single-node delete from the node editor's button stays on _delete_graph_node.)
+func _delete_selected_nodes() -> void:
+	if _selected_graph_node_ids.is_empty():
+		return
+	_push_undo()
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	var doomed: Array = _selected_graph_node_ids.duplicate()
+	for nid: String in doomed:
+		nodes.erase(nid)
+	# Strip every edge that pointed at a deleted node.
+	for id: String in nodes:
+		var kept: Array = []
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			if str(e.get("to", "")) not in doomed:
+				kept.append(e)
+		(nodes[id] as Dictionary)["out"] = kept
+	if str(_graph_model.get("start", "")) in doomed:
+		_graph_model["start"] = (nodes.keys()[0] as String) if not nodes.is_empty() else ""
+	_deselect_node()
+
+
+# ── Clipboard (copy / cut / paste / duplicate) ───────────────────────────────
+
+# Builds a clipboard-shaped list ([{id, node}] deep copies) from the current selection.
+func _snapshot_selection() -> Array:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	var entries: Array = []
+	for id: String in _selected_graph_node_ids:
+		if nodes.has(id):
+			entries.append({"id": id, "node": (nodes[id] as Dictionary).duplicate(true)})
+	return entries
+
+
+# Ctrl+C — copy the selected node(s) to the clipboard.
+func _copy_selection() -> void:
+	if _selected_graph_node_ids.is_empty():
+		return
+	_node_clipboard = _snapshot_selection()
+	_paste_count = 0
+	_show_status("Copied %d node%s — Ctrl+V to paste." % [_node_clipboard.size(), "" if _node_clipboard.size() == 1 else "s"], false)
+
+
+# Ctrl+X — copy the selection, then delete it (one undoable action via _delete_selected_nodes).
+func _cut_selection() -> void:
+	if _selected_graph_node_ids.is_empty():
+		return
+	_node_clipboard = _snapshot_selection()
+	_paste_count = 0
+	_delete_selected_nodes()
+
+
+# Ctrl+V — paste the clipboard, cascading the offset on repeated pastes.
+func _paste_clipboard() -> void:
+	if _node_clipboard.is_empty():
+		return
+	_paste_count += 1
+	_paste_nodes(_node_clipboard, _paste_count)
+
+
+# Ctrl+D — duplicate the selection in place (without disturbing the clipboard).
+func _duplicate_selection() -> void:
+	_paste_nodes(_snapshot_selection(), 1)
+
+
+# Creates fresh nodes from a clipboard-shaped list, offset by `offset_mult` grid steps. Edges between
+# copied nodes are remapped to the new ids; an edge leaving the copied set is dropped (regular node)
+# or unwired (fork choice, so the fork keeps all its slots). Pushes undo and selects the new nodes.
+func _paste_nodes(entries: Array, offset_mult: int) -> void:
+	if entries.is_empty():
+		return
+	_push_undo()
+	if not _graph_model.has("nodes"):
+		_graph_model["nodes"] = {}
+	var nodes: Dictionary = _graph_model["nodes"]
+	var offset: Vector2 = PASTE_OFFSET * float(offset_mult)
+	# Fresh id per copied node, so internal edges can be remapped.
+	var id_map: Dictionary = {}
+	for entry: Dictionary in entries:
+		id_map[str(entry["id"])] = JourneyData.new_node_id()
+	var pasted_ids: Array = []
+	for entry: Dictionary in entries:
+		var src: Dictionary = entry["node"]
+		var new_id: String = str(id_map[str(entry["id"])])
+		var src_type: String = str(src.get("type", "round"))
+		var out: Array = []
+		if src_type == "fork":
+			for e: Dictionary in src.get("out", []):
+				var ne: Dictionary = (e as Dictionary).duplicate(true)
+				var fto: String = str(e.get("to", ""))
+				ne["to"] = str(id_map[fto]) if id_map.has(fto) else ""
+				out.append(ne)
+		else:
+			for e: Dictionary in src.get("out", []):
+				var to: String = str(e.get("to", ""))
+				if id_map.has(to):
+					var ne2: Dictionary = (e as Dictionary).duplicate(true)
+					ne2["to"] = str(id_map[to])
+					out.append(ne2)
+		var data: Dictionary = (src.get("data", {}) as Dictionary).duplicate(true)
+		data.erase("type"); data.erase("node_id"); data.erase("paths")   # node/edge-level keys never live in data
+		nodes[new_id] = {
+			"type": src_type,
+			"data": data,
+			"pos":  GraphLayout.snap((src.get("pos", Vector2.ZERO) as Vector2) + offset),
+			"out":  out,
+		}
+		if str(_graph_model.get("start", "")) == "":
+			_graph_model["start"] = new_id
+		pasted_ids.append(new_id)
+	_graph.set_selection(pasted_ids)
+	_show_status("Pasted %d node%s." % [pasted_ids.size(), "" if pasted_ids.size() == 1 else "s"], false)
+
+
+# Graph editor click-to-connect: arm/cancel connect mode from `source_id` (a regular node's
+# single out-edge). While armed, the next node click on the canvas is the target (see
+# _on_connect_target_picked → _finish_connect).
+func _begin_connect(source_id: String) -> void:
+	if _connecting_from == source_id and _connecting_edge_idx == -1:
+		_connecting_from = ""
+		_graph.set_connect_mode(false)
+		_show_status("Connect cancelled.", false)
+	else:
+		_connecting_from = source_id
+		_connecting_edge_idx = -1
+		_graph.set_connect_mode(true)
+		_show_status("Connect: click the target node on the graph (or press Cancel).", false)
+	_side_renderer.show_graph_node_editor(source_id)
+
+
+# Graph editor (fork out-edges): arm/cancel connect mode for a specific fork CHOICE (out-edge
+# index) rather than a regular node's single edge. The next node click wires that choice's target.
+func _begin_connect_fork_edge(fork_id: String, edge_idx: int) -> void:
+	if _connecting_from == fork_id and _connecting_edge_idx == edge_idx:
+		_connecting_from = ""
+		_connecting_edge_idx = -1
+		_graph.set_connect_mode(false)
+		_show_status("Connect cancelled.", false)
+	else:
+		_connecting_from = fork_id
+		_connecting_edge_idx = edge_idx
+		_graph.set_connect_mode(true)
+		_show_status("Connect: click the target node for this choice (or press Cancel).", false)
+	_side_renderer.show_graph_node_editor(fork_id)
+
+
+# Completes a click-to-connect: wires the armed source to `target_id` — either a fork choice's
+# out-edge (when _connecting_edge_idx >= 0) or a regular node's single out-edge. Rejects a
+# self-link or anything that would form a cycle (the runtime is a DAG). Re-selects the source.
+func _finish_connect(target_id: String) -> void:
+	var source: String = _connecting_from
+	var edge_idx: int = _connecting_edge_idx
+	_connecting_from = ""
+	_connecting_edge_idx = -1
+	_graph.set_connect_mode(false)
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if source == "" or not nodes.has(source):
+		return
+	if target_id == source or not nodes.has(target_id):
+		_show_status("Connect cancelled (can't link a node to itself).", true)
+		_graph.select_graph_node(source)
+		return
+	if JourneyGraph.reachable_ids(_graph_model, target_id).has(source):
+		_show_status("Can't connect — that would create a loop.", true)
+		_graph.select_graph_node(source)
+		return
+	# A fork can't point two of its choices at the same node — one choice per target.
+	if edge_idx >= 0:
+		var src_out: Array = (nodes[source] as Dictionary).get("out", [])
+		for j in src_out.size():
+			if j != edge_idx and str((src_out[j] as Dictionary).get("to", "")) == target_id:
+				_show_status("That fork already has a choice leading to this node.", true)
+				_graph.select_graph_node(source)
+				return
+	_push_undo()
+	if edge_idx >= 0:
+		# Fork choice — wire just this out-edge, leaving the fork's other choices untouched.
+		var edges: Array = (nodes[source] as Dictionary).get("out", [])
+		if edge_idx < edges.size():
+			(edges[edge_idx] as Dictionary)["to"] = target_id
+	else:
+		(nodes[source] as Dictionary)["out"] = [{"to": target_id}]
+	_graph.select_graph_node(source)
+
+
+# Drops an armed click-to-connect (the Escape shortcut), restoring the source node's editor.
+func _cancel_connect() -> void:
+	var src: String = _connecting_from
+	_connecting_from = ""
+	_connecting_edge_idx = -1
+	_graph.set_connect_mode(false)
+	_show_status("Connect cancelled.", false)
+	if src != "" and (_graph_model.get("nodes", {}) as Dictionary).has(src):
+		_side_renderer.show_graph_node_editor(src)
+	else:
+		_deselect_node()
+
+
+# Graph editor: clear a regular node's out-edge so it ends the run here.
+func _disconnect_graph_node(node_id: String) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(node_id):
+		return
+	_push_undo()
+	(nodes[node_id] as Dictionary)["out"] = []
+	_graph.select_graph_node(node_id)
+
+
+# Graph editor: clear a single fork CHOICE's target (the choice still exists but ends the run
+# when taken). Distinct from _remove_fork_edge, which deletes the choice entirely.
+func _clear_fork_edge(fork_id: String, edge_idx: int) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(fork_id):
+		return
+	var edges: Array = (nodes[fork_id] as Dictionary).get("out", [])
+	if edge_idx >= 0 and edge_idx < edges.size():
+		_push_undo()
+		(edges[edge_idx] as Dictionary)["to"] = ""
+	_graph.select_graph_node(fork_id)
+
+
+# Graph editor: append a new unconnected choice (out-edge) to a fork — the author then wires its
+# target. Mirrors the tree fork's "+ ADD PATH" default fields.
+func _add_fork_edge(fork_id: String) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(fork_id):
+		return
+	_push_undo()
+	var edges: Array = (nodes[fork_id] as Dictionary).get("out", [])
+	edges.append({
+		"to": "", "name": "Path %s" % char(65 + edges.size()), "description": "", "image_path": "",
+		"weight": 1, "threshold": 0, "required_item": "", "cost": 0,
+	})
+	(nodes[fork_id] as Dictionary)["out"] = edges
+	_graph.select_graph_node(fork_id)
+
+
+# Graph editor: delete a fork choice (out-edge) entirely. Keeps the conditional fallback index
+# (default_path) in range after the removal. Re-renders.
+func _remove_fork_edge(fork_id: String, edge_idx: int) -> void:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(fork_id):
+		return
+	var node: Dictionary = nodes[fork_id]
+	var edges: Array = node.get("out", [])
+	if edge_idx < 0 or edge_idx >= edges.size():
+		return
+	_push_undo()
+	edges.remove_at(edge_idx)
+	var data: Dictionary = node.get("data", {})
+	if int(data.get("default_path", 0)) >= edges.size():
+		data["default_path"] = max(0, edges.size() - 1)
+	_graph.select_graph_node(fork_id)
+
+
+# ── Undo / redo (graph structure) ───────────────────────────────────────────
+# Snapshot-based undo of the GRAPH STRUCTURE — node create / delete, edge wire / clear, fork-choice
+# add / remove. Each entry is a deep copy of _graph_model (start + nodes) taken just before a
+# structural mutation. In-field text edits (names, coins, …) are deliberately NOT snapshotted —
+# they keep their own native LineEdit/TextEdit undo. Drag-reposition isn't covered yet.
+
+# Deep snapshot of the graph model for the undo stack.
+func _graph_snapshot() -> Dictionary:
+	return {
+		"start": str(_graph_model.get("start", "")),
+		"nodes": (_graph_model.get("nodes", {}) as Dictionary).duplicate(true),
+	}
+
+
+# Records the current graph state so the next mutation can be undone. A fresh action invalidates the
+# redo future; the stack is bounded so a long session can't grow it without limit.
+func _push_undo() -> void:
+	_undo_stack.append(_graph_snapshot())
+	if _undo_stack.size() > UNDO_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+
+
+# Ctrl+Z — reverts to the structure captured by the last _push_undo().
+func _undo() -> void:
+	if _undo_stack.is_empty():
+		return
+	_redo_stack.append(_graph_snapshot())
+	_restore_graph_snapshot(_undo_stack.pop_back())
+	_show_status("Undo.", false)
+
+
+# Ctrl+Y / Ctrl+Shift+Z — reapplies the most recently undone structure.
+func _redo() -> void:
+	if _redo_stack.is_empty():
+		return
+	_undo_stack.append(_graph_snapshot())
+	_restore_graph_snapshot(_redo_stack.pop_back())
+	_show_status("Redo.", false)
+
+
+# Restores a snapshot IN PLACE (clear + repopulate with a fresh deep copy, so the entry left on the
+# other stack stays independent) — the deferred set_graph + GraphView keep sharing the _graph_model
+# reference (see GOTCHAS). Cancels any armed wire; re-selects the previously-selected node if it
+# survived, else returns to the journey-info panel.
+func _restore_graph_snapshot(snap: Dictionary) -> void:
+	_connecting_from = ""
+	_connecting_edge_idx = -1
+	_graph.set_connect_mode(false)
+	_graph_model.clear()
+	_graph_model["start"] = str(snap.get("start", ""))
+	_graph_model["nodes"] = (snap.get("nodes", {}) as Dictionary).duplicate(true)
+	# Re-apply the selection, dropping any node the restore removed.
+	var survivors: Array = []
+	for id: String in _selected_graph_node_ids:
+		if (_graph_model["nodes"] as Dictionary).has(id):
+			survivors.append(id)
+	if survivors.is_empty():
+		_deselect_node()
+	else:
+		_graph.set_selection(survivors)
 
 
 # ---------------------------------------------------------------------------
@@ -1526,7 +1619,6 @@ func _on_save_pressed() -> void:
 # `_arr` (the node's containing array) is no longer needed to locate it.
 # _reset_save_state clears the pending location, so it's set *after* the reset.
 func _save_and_test_from(item: Dictionary, _arr: Array) -> void:
-	_ensure_node_ids(_items, false)
 	var node_id: String = str(item.get("node_id", ""))
 	if node_id == "":
 		_show_status("Test play: couldn't identify that node.", true)
@@ -1566,7 +1658,7 @@ func _launch_test_play(paths: Dictionary) -> void:
 
 	# Handshake metas read (and cleared) by GameLoop._ready. The return journey is the
 	# combined dict the builder reloads when the test exits — it still carries the nested
-	# catalogue model for legacy journeys, which _load_journey reads.
+	# catalogue model for legacy journeys, which _load_graph migrates on reload.
 	GameState.set_meta("_test_mode", true)
 	GameState.set_meta("_test_return_journey", journey)
 	GameState.set_meta("_test_seed_score", _test_seed_score)
@@ -1588,7 +1680,7 @@ func _do_save() -> bool:
 	var paths: Dictionary = _setup_save_folders()
 	var modal: Control    = _create_save_progress_modal_if_needed()
 
-	var data: Dictionary = await _save_all_items(paths, modal)
+	var data: Dictionary = await _save_graph_nodes(paths, modal)
 	if modal:
 		modal.queue_free()
 
@@ -1655,7 +1747,7 @@ const SAFE_PIX_FMTS: Array[String] = ["yuv420p", "yuvj420p"]
 # so the save never produces a silently-unplayable video.
 func _build_transcode_plan() -> bool:
 	_transcode_plan = {}
-	if not JourneyData.items_have_any_video(_items):
+	if not JourneyData.graph_has_any_video(_graph_model):
 		return true
 
 	# Auto-transcode disabled: copy every video verbatim and require nothing of
@@ -1678,8 +1770,7 @@ func _build_transcode_plan() -> bool:
 			"Set a custom ffmpeg location in Options → Transcoding (a folder containing ffmpeg and ffprobe), or install ffmpeg on your PATH. If your videos are already H.264, you can instead turn off Auto-Transcode in Options → Transcoding to use them as-is. (Under Wine, the bundled Windows ffmpeg may not launch — a system ffmpeg path usually fixes this.)")
 		return false
 
-	var all_video_sources: Array = []
-	_collect_video_sources(_items, all_video_sources)
+	var all_video_sources: Array = JourneyData.graph_video_sources(_graph_model)
 
 	# Probe every unique source. Same source used in multiple rounds is identity-
 	# by-path so we only probe once; the plan is consulted at every save site.
@@ -1768,250 +1859,249 @@ func _setup_save_folders() -> Dictionary:
 # transfer video bytes. Returns null when there are no videos to save (no
 # point in flashing a modal that immediately dismisses).
 func _create_save_progress_modal_if_needed() -> Control:
-	if not JourneyData.items_have_any_video(_items):
+	if not JourneyData.graph_has_any_video(_graph_model):
 		return null
 	var modal: Control = _create_transcode_modal()
 	add_child(modal)
 	return modal
 
 
-# Walks _items, dispatching each to its per-type handler and accumulating the
-# four output arrays (rounds, forks, shops, storyboards). Returns the
-# journey.json data on success or an empty Dictionary on cancel/I-O failure;
-# in the latter case the user-facing error modal is already shown and the
-# staging folder is already cleaned up.
-# Maps the in-memory round_type to its journey.json label.
-func _save_all_items(paths: Dictionary, modal: Control) -> Dictionary:
-	# Pull the paths-dict entries into the locals the loop body already uses,
-	# so the legacy code below doesn't have to be reflowed to dict access.
-	var abs_dir: String       = paths["abs_dir"]
-	var abs_media_dir: String = paths["abs_media_dir"]
+# Graph-editor save: walks _graph_model into the Format-2 journey.json shape
+# ({…meta…, Format, Start, Nodes:[{id,type,data,pos,out}]}) node-by-node — REUSING the shared
+# media copy/pool/transcode primitives, emitting lowercase node.data + out-edges. Returns the
+# journey.json dict, or {} on cancel/I-O failure (the error modal + staging cleanup happen in
+# _do_save).
+func _save_graph_nodes(paths: Dictionary, modal: Control) -> Dictionary:
+	var abs_dir: String           = paths["abs_dir"]
+	var abs_media_dir: String     = paths["abs_media_dir"]
 	var copied_images: Dictionary = paths["copied_images"]
 
-	# Fresh content pool for this save — staging is rebuilt from scratch each time,
-	# so there's no cross-save state to carry (no refcount/GC needed).
+	# Fresh content pool for this save (staging is rebuilt from scratch — no cross-save state).
 	_pooled_media = {}
 	_pooled_fs_stats = {}
 
-	var rounds_json:      Array = []
-	var forks_json:       Array = []
-	var shops_json:       Array = []
-	var storyboards_json: Array = []
-	var rorder: int = 0
-	# Monotonic authoring position — incremented for EVERY item so each gets a
-	# unique, strictly-increasing sort anchor. Items sort by (pos*3 [+1 shop /
-	# +2 fork]); since consecutive positions differ by 3 the offsets never
-	# collide, so authored order is preserved exactly — including a shop placed
-	# *after* a fork (which the old "anchor to the previous round" scheme could
-	# not express: shop's +1 sorted before the fork's +2 at the same anchor).
-	var pos: int = 0
-	var total_main_rounds: int = _items.filter(func(item: Dictionary) -> bool: return item.get("type","round") == "round").size()
+	var nodes_in: Dictionary = _graph_model.get("nodes", {})
+	var out_nodes: Dictionary = {}
 
-	for i in _items.size():
-		# Early bail: a previous iteration's _copy_file (funscript / axis /
-		# vib / boss image / storyboard image) may have failed and set
-		# _save_aborted. The error is surfaced after the loop.
+	# Round count drives the transcode modal's "Round x / N" label.
+	var total_rounds: int = 0
+	for id: String in nodes_in:
+		if str((nodes_in[id] as Dictionary).get("type", "")) == "round":
+			total_rounds += 1
+	var round_seen: int = 0
+
+	for id: String in nodes_in:
 		if _save_aborted:
 			break
-		var item: Dictionary = _items[i]
-		var item_type: String = item.get("type","round")
-		pos += 1
-		if item_type == "shop":
-			shops_json.append({
-				"AfterOrder":      pos,
-				"NodeId":          item.get("node_id", ""),
-				"Title":           item.get("title",""),
-				"Mode":            item.get("mode", "pool"),
-				"Count":           item.get("count", 3),
-				"Items":           item.get("items", []),
-				"PriceMultiplier": item.get("price_multiplier", 1.0),
-			})
-			continue
-		if item_type == "storyboard":
-			rorder += 1
-			var sb_slug: String = "storyboard_%d" % rorder
-			var sb_img_src: String = item.get("image", "")
-			var sb_img_fname: String = ""
-			if sb_img_src != "":
-				var sb_ext: String = sb_img_src.get_extension().to_lower()
-				var sb_f: String = _copy_image_deduped(sb_img_src, abs_media_dir, sb_slug + "." + sb_ext, copied_images)
-				sb_img_fname = "media/" + sb_f if sb_f != "" else ""
-			var sb_lines_json: Array = []
-			for sb_li_idx in (item.get("lines", []) as Array).size():
-				var sb_li: Dictionary = item["lines"][sb_li_idx]
-				var li_img_src: String = sb_li.get("image", "")
-				var li_img_fname: String = ""
-				if li_img_src != "":
-					var li_ext: String = li_img_src.get_extension().to_lower()
-					var li_f: String = _copy_image_deduped(li_img_src, abs_media_dir, sb_slug + "_line_%d.%s" % [sb_li_idx, li_ext], copied_images)
-					li_img_fname = "media/" + li_f if li_f != "" else ""
-				sb_lines_json.append({
-					"Speaker": sb_li.get("speaker", ""),
-					"Text":    sb_li.get("text",    ""),
-					"Image":   li_img_fname,
-				})
-			storyboards_json.append({
-				"Order":        pos,
-				"NodeId":       item.get("node_id", ""),
-				"CoinsAwarded": item.get("coins", 0) as int,
-				"Item":         item.get("item", ""),
-				"Image":        sb_img_fname,
-				"Lines":        sb_lines_json,
-			})
-			continue
-		if item_type == "round":
-			rorder += 1
+		var node: Dictionary = nodes_in[id]
+		var node_type: String = str(node.get("type", "round"))
+		var data_in: Dictionary = node.get("data", {})
+		var saved_data: Dictionary = JourneyData.coerce_node_save_data(node_type, data_in)
+		var saved_out: Array = _clean_regular_out(node.get("out", []))
 
-			# Human-readable name kept in journey.json's "Name" for display. The
-			# short slug (r001, r002, …) is still written as FolderName — a stable
-			# logical round id and the legacy folder-scan fallback key — but no
-			# per-round folder is created any more: all playback assets are pooled
-			# into content/ by hash.
-			var round_name: String = (item.get("name","") as String).strip_edges()
-			var round_slug: String = _next_round_folder_slug()
+		match node_type:
+			"round":
+				round_seen += 1
+				saved_data = await _save_round_node_media(saved_data, data_in, abs_dir, modal, round_seen, total_rounds)
+				if saved_data.is_empty():
+					return {}   # transcode/copy failure: modal already shown
+			"storyboard":
+				saved_data = _save_storyboard_node_media(saved_data, data_in, abs_media_dir, id, copied_images)
+			"fork":
+				saved_out = _save_fork_node_edges(node.get("out", []), abs_media_dir, id, copied_images)
+			"shop":
+				pass   # no media
 
-			var fs_src: String = item.get("funscript_path","")
-			# Funscript goes into the shared content pool (content/m_<fp>.<ext>) — a
-			# script reused across rounds is stored and parsed once. Stats are cached
-			# per fingerprint so a reused script is not re-read.
-			var funscript_rel: String = ""
-			var fs_stats: Dictionary = {"count": 0, "length_ms": 0}
-			if fs_src != "":
-				var fs_pool: Dictionary = _assign_pooled_media(fs_src, fs_src.get_extension())
-				funscript_rel = fs_pool["rel"]
-				if fs_pool["copy"]:
-					var fs_dst: String = abs_dir + "/" + funscript_rel
-					_copy_file(fs_src, fs_dst)
-					fs_stats = JourneyData.read_funscript_stats(fs_dst)
-					_pooled_fs_stats[fs_pool["fingerprint"]] = fs_stats
-				else:
-					fs_stats = _pooled_fs_stats.get(fs_pool["fingerprint"], fs_stats)
+		# A non-video copy (funscript / axis / vib / boss / image) failed somewhere above.
+		if _save_aborted:
+			var sr: Dictionary = _save_abort_error.get("result", {"reason": CAUSE_UNKNOWN_COPY_ERROR})
+			var si: String     = _save_abort_error.get("item",   "File copy")
+			_show_copy_failure_modal(sr, si)
+			return {}
 
-			# Secondary-axis scripts — pooled into content/ (deduped), keyed by axis.
-			var axis_scripts_in: Dictionary = item.get("axis_scripts", {})
-			var axis_scripts_rel: Dictionary = {}
-			for axis: String in axis_scripts_in:
-				var ax_src: String = axis_scripts_in[axis]
-				var ax_rel: String = _pool_small_file(ax_src, abs_dir, _channel_pool_ext(JourneyData.AXIS_SUFFIXES.get(axis, ""), ax_src))
-				if ax_rel != "":
-					axis_scripts_rel[axis] = ax_rel
+		var saved_node: Dictionary = {"type": node_type, "data": saved_data, "out": saved_out}
+		if node.has("pos"):
+			saved_node["pos"] = node["pos"]
+		out_nodes[id] = saved_node
 
-			# Vibrator-channel scripts — pooled into content/, keyed by channel.
-			var vib_scripts_in: Dictionary = item.get("vib_scripts", {})
-			var vib_scripts_rel: Dictionary = {}
-			for ch_key: String in vib_scripts_in:
-				var vib_src: String = vib_scripts_in[ch_key]
-				var vib_rel: String = _pool_small_file(vib_src, abs_dir, _channel_pool_ext(JourneyData.VIB_SUFFIXES.get(ch_key, ""), vib_src))
-				if vib_rel != "":
-					vib_scripts_rel[ch_key] = vib_rel
-
-			# Boss-round config — pool the optional intro image into content/.
-			var round_type: String = item.get("round_type", "normal")
-			var boss_image_rel: String = ""
-			if round_type == "boss":
-				boss_image_rel = _pool_small_file(item.get("boss_image", ""), abs_dir)
-
-			# Journey-root-relative video path written as VideoPath. Pooled under
-			# content/ and shared across rounds that reuse the same source clip; stays
-			# "" when the round has no video. The pooled file is transcoded/copied only
-			# the first time the source is seen this save (_assign_pooled_media).
-			var video_rel: String = ""
-			var vid_src: String = item.get("video_path","")
-			if vid_src != "":
-				var is_transcode: bool = _transcode_plan.has(vid_src)
-				var vid_ext: String = "mp4" if is_transcode else vid_src.get_extension()
-				var vid_pool: Dictionary = _assign_pooled_media(vid_src, vid_ext)
-				video_rel = vid_pool["rel"]
-				if vid_pool["copy"]:
-					var vid_dst: String = abs_dir + "/" + video_rel
-					if is_transcode:
-						var info: Dictionary = _transcode_plan[vid_src]
-						_update_modal_round(modal, rorder, total_main_rounds, round_name, info["codec"])
-						var ok: bool = await _transcode_video(vid_src, vid_dst, info["duration"], modal)
-						if not ok:
-							# _transcode_cancel distinguishes user cancel from ffmpeg
-							# failure (e.g. bad input file). Same return-value path,
-							# different remediation. Modal + staging cleanup happen
-							# in _do_save when we return {}.
-							if _transcode_cancel:
-								_show_save_error_single(
-									"SAVE CANCELLED",
-									CAUSE_CANCELLED,
-									"Round %d \"%s\"" % [rorder, round_name],
-									"You cancelled the transcode while round \"%s\" was being processed." % round_name,
-									"Press Save again to retry. Nothing on disk was changed.")
-							else:
-								_show_save_error_single(
-									"SAVE FAILED",
-									CAUSE_TRANSCODE_FAILED,
-									"Round %d \"%s\"" % [rorder, round_name],
-									"ffmpeg failed to transcode video \"%s\" (codec %s → h264)." % [vid_src.get_file(), info["codec"]],
-									"The source video may be corrupt or use an unsupported variant. Try re-encoding it to H.264 .mp4 outside the editor, then re-drag it into this round.")
-							return {}
-					else:
-						_update_modal_label(modal, "Round %d / %d — %s  (copying video)" % [rorder, total_main_rounds, round_name])
-						var copy_result: Dictionary = await _copy_file_chunked(
-							vid_src, vid_dst,
-							func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
-						if not copy_result["ok"]:
-							_show_copy_failure_modal(copy_result, "Round %d \"%s\"" % [rorder, round_name])
-							return {}
-
-			# (Renamed-round cleanup happens implicitly at swap time: the old
-			# journey folder is deleted wholesale, taking any stale round
-			# subfolders with it. Touching the live folder mid-save would break
-			# the staging rollback on a later failure.)
-
-			# Authored gameplay fields come from the shared serializer; the media /
-			# slug fields are merged in from what this save loop computed.
-			var round_json: Dictionary = JourneyData.round_to_json(item)
-			round_json["Name"]          = round_name
-			round_json["FolderName"]    = round_slug
-			round_json["NodeId"]        = item.get("node_id", "")
-			round_json["Order"]         = pos
-			round_json["BossImage"]     = boss_image_rel
-			round_json["FunscriptPath"] = funscript_rel
-			round_json["VideoPath"]     = video_rel
-			round_json["AxisScripts"]   = axis_scripts_rel
-			round_json["VibScripts"]    = vib_scripts_rel
-			round_json["ActionCount"]   = fs_stats["count"]
-			round_json["LengthMs"]      = fs_stats["length_ms"]
-			rounds_json.append(round_json)
-		else:
-			# Fork — recursively save the fork and all nested forks.
-			var slug_prefix: String = "fork%d" % forks_json.size()
-			forks_json.append(await _save_fork(item, abs_dir, abs_media_dir, pos, slug_prefix, copied_images, modal))
-			# A failed video copy deep inside a fork path unwinds to here. Use
-			# the stashed failure info so the modal shows the actual cause
-			# (cancel vs source unreadable vs destination unwritable) and the
-			# specific fork-path round that failed.
-			if _save_aborted:
-				var stashed_result: Dictionary = _save_abort_error.get("result", {"reason": CAUSE_UNKNOWN_COPY_ERROR})
-				var stashed_item: String       = _save_abort_error.get("item",   "Fork path video")
-				_show_copy_failure_modal(stashed_result, stashed_item)
-				return {}
-
-	# Catches _save_aborted set by a non-video _copy_file (funscript / axis /
-	# vib / boss / storyboard image) during top-level iteration. Fork-path
-	# failures already returned via the inline `if _save_aborted:` block above.
-	if _save_aborted:
-		var stashed_result: Dictionary = _save_abort_error.get("result", {"reason": CAUSE_UNKNOWN_COPY_ERROR})
-		var stashed_item: String       = _save_abort_error.get("item",   "File copy")
-		_show_copy_failure_modal(stashed_result, stashed_item)
-		return {}
-
-	return {
+	# Assemble the Format-2 node block (Format/Start/Nodes) + journey meta around it.
+	# Redirects are intentionally gone — in a free-form graph, skip/converge/end are just
+	# edges (GRAPH_EDITOR_OVERHAUL.md §7).
+	var node_block: Dictionary = JourneyGraph.to_json({"start": _graph_model.get("start", ""), "nodes": out_nodes})
+	var result: Dictionary = {
 		"Name":        paths["journey_name"],
 		"Author":      _journey_author.strip_edges(),
 		"Description": _journey_desc.strip_edges(),
 		"Difficulty":  JourneyData.DIFFICULTIES[_journey_difficulty_idx],
 		"Tags":        TagRegistry.sanitize(_journey_tags),
 		"MapEnabled":  _journey_map_enabled,
-		"Rounds":      rounds_json,
-		"Forks":       forks_json,
-		"Shops":       shops_json,
-		"Storyboards": storyboards_json,
 	}
+	result.merge(node_block)   # adds Format, Start, Nodes
+	return result
+
+
+# Pools a round node's playback media (funscript / axis / vib / boss image / video) into
+# content/, rewriting saved_data's media fields to journey-root-relative pooled paths and
+# refreshing the funscript stats. Reads SOURCE paths from data_in (absolute). Returns the
+# updated saved_data, or {} when a video transcode/copy fails (error modal already shown).
+# A small-file copy failure sets _save_aborted instead (surfaced by the caller's checkpoint).
+func _save_round_node_media(saved_data: Dictionary, data_in: Dictionary, abs_dir: String, modal: Control, rorder: int, total: int) -> Dictionary:
+	var round_name: String = str(saved_data.get("name", "")).strip_edges()
+	# FolderName slug — a stable logical round id + the legacy folder-scan fallback key.
+	# No per-round folder is created; all playback assets pool into content/ by hash.
+	saved_data["folder"] = _next_round_folder_slug()
+
+	# Funscript → content pool (stored + parsed once per source; stats cached by fingerprint).
+	var fs_src: String = str(data_in.get("funscript_path", ""))
+	var funscript_rel: String = ""
+	var fs_stats: Dictionary = {"count": 0, "length_ms": 0}
+	if fs_src != "":
+		var fs_pool: Dictionary = _assign_pooled_media(fs_src, fs_src.get_extension())
+		funscript_rel = fs_pool["rel"]
+		if fs_pool["copy"]:
+			var fs_dst: String = abs_dir + "/" + funscript_rel
+			_copy_file(fs_src, fs_dst)
+			fs_stats = JourneyData.read_funscript_stats(fs_dst)
+			_pooled_fs_stats[fs_pool["fingerprint"]] = fs_stats
+		else:
+			fs_stats = _pooled_fs_stats.get(fs_pool["fingerprint"], fs_stats)
+	saved_data["funscript_path"] = funscript_rel
+	saved_data["action_count"]   = fs_stats["count"]
+	saved_data["length_ms"]      = fs_stats["length_ms"]
+
+	# Secondary-axis scripts — pooled, keyed by axis (suffix preserved via _channel_pool_ext).
+	var axis_in: Dictionary = data_in.get("axis_scripts", {})
+	var axis_rel: Dictionary = {}
+	for axis: String in axis_in:
+		var ax_src: String = str(axis_in[axis])
+		var ax_rel: String = _pool_small_file(ax_src, abs_dir, _channel_pool_ext(JourneyData.AXIS_SUFFIXES.get(axis, ""), ax_src))
+		if ax_rel != "":
+			axis_rel[axis] = ax_rel
+	saved_data["axis_scripts"] = axis_rel
+
+	# Vibrator-channel scripts — pooled, keyed by channel.
+	var vib_in: Dictionary = data_in.get("vib_scripts", {})
+	var vib_rel: Dictionary = {}
+	for ch: String in vib_in:
+		var vib_src: String = str(vib_in[ch])
+		var vib_rel_path: String = _pool_small_file(vib_src, abs_dir, _channel_pool_ext(JourneyData.VIB_SUFFIXES.get(ch, ""), vib_src))
+		if vib_rel_path != "":
+			vib_rel[ch] = vib_rel_path
+	saved_data["vib_scripts"] = vib_rel
+
+	# Boss intro image (boss rounds only) → content pool.
+	var boss_rel: String = ""
+	if str(saved_data.get("round_type", "normal")) == "boss":
+		boss_rel = _pool_small_file(str(data_in.get("boss_image", "")), abs_dir)
+	saved_data["boss_image"] = boss_rel
+
+	# Video → content pool, transcoded/copied only the first time the source is seen this save.
+	var video_rel: String = ""
+	var vid_src: String = str(data_in.get("video_path", ""))
+	if vid_src == "":
+		# Defense-in-depth against silent video loss: a legacy round (pre-VideoPath) carries its video
+		# only on disk. The editor load resolves it (parse_graph_for_editor), but fall back to a folder-
+		# scan here too — a re-save must NEVER drop a video that's physically present, because the swap
+		# then deletes the old rNNN/ folder. No-op for content/-pooled journeys (their folder is a slug).
+		vid_src = JourneyData.find_video_in_round(str(data_in.get("folder", "")))
+	if vid_src != "":
+		var is_transcode: bool = _transcode_plan.has(vid_src)
+		var vid_ext: String = "mp4" if is_transcode else vid_src.get_extension()
+		var vid_pool: Dictionary = _assign_pooled_media(vid_src, vid_ext)
+		video_rel = vid_pool["rel"]
+		if vid_pool["copy"]:
+			var vid_dst: String = abs_dir + "/" + video_rel
+			if is_transcode:
+				var info: Dictionary = _transcode_plan[vid_src]
+				_update_modal_round(modal, rorder, total, round_name, info["codec"])
+				var ok: bool = await _transcode_video(vid_src, vid_dst, info["duration"], modal)
+				if not ok:
+					if _transcode_cancel:
+						_show_save_error_single(
+							"SAVE CANCELLED", CAUSE_CANCELLED, "Round \"%s\"" % round_name,
+							"You cancelled the transcode while round \"%s\" was being processed." % round_name,
+							"Press Save again to retry. Nothing on disk was changed.")
+					else:
+						_show_save_error_single(
+							"SAVE FAILED", CAUSE_TRANSCODE_FAILED, "Round \"%s\"" % round_name,
+							"ffmpeg failed to transcode video \"%s\" (codec %s → h264)." % [vid_src.get_file(), info["codec"]],
+							"The source video may be corrupt or use an unsupported variant. Try re-encoding it to H.264 .mp4 outside the editor, then re-drag it into this round.")
+					return {}
+			else:
+				_update_modal_label(modal, "Round %d / %d — %s  (copying video)" % [rorder, total, round_name])
+				var copy_result: Dictionary = await _copy_file_chunked(
+					vid_src, vid_dst,
+					func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
+				if not copy_result["ok"]:
+					_show_copy_failure_modal(copy_result, "Round \"%s\"" % round_name)
+					return {}
+	saved_data["video_path"] = video_rel
+	return saved_data
+
+
+# Copies a storyboard node's images (background + per-line) into media/ (source-path dedup),
+# rewriting saved_data's image fields to journey-root-relative paths. Filenames are keyed by
+# the node id so two storyboards can't collide. Sync (small files); a copy failure sets
+# _save_aborted, surfaced by the caller's checkpoint.
+func _save_storyboard_node_media(saved_data: Dictionary, data_in: Dictionary, abs_media_dir: String, node_id: String, copied_images: Dictionary) -> Dictionary:
+	var img_src: String = str(data_in.get("image", ""))
+	saved_data["image"] = ""
+	if img_src != "":
+		var ext: String = img_src.get_extension().to_lower()
+		var f: String = _copy_image_deduped(img_src, abs_media_dir, "%s.%s" % [node_id, ext], copied_images)
+		saved_data["image"] = ("media/" + f) if f != "" else ""
+
+	var lines_out: Array = []
+	var lines_in: Array = data_in.get("lines", [])
+	for li in lines_in.size():
+		var line: Dictionary = lines_in[li]
+		var li_src: String = str(line.get("image", ""))
+		var li_rel: String = ""
+		if li_src != "":
+			var le: String = li_src.get_extension().to_lower()
+			var lf: String = _copy_image_deduped(li_src, abs_media_dir, "%s_line_%d.%s" % [node_id, li, le], copied_images)
+			li_rel = ("media/" + lf) if lf != "" else ""
+		lines_out.append({"speaker": str(line.get("speaker", "")), "text": str(line.get("text", "")), "image": li_rel})
+	saved_data["lines"] = lines_out
+	return saved_data
+
+
+# Builds a fork node's out-edges for save: one entry per choice, with the per-choice config
+# coerced (weights/threshold/cost → int) and the choice's card image copied into media/
+# (keyed by node id + choice index so paths sharing a name can't collide). The `to` target
+# id is preserved verbatim (it's a node reference, not a path).
+func _save_fork_node_edges(edges: Array, abs_media_dir: String, node_id: String, copied_images: Dictionary) -> Array:
+	var out: Array = []
+	for ei in edges.size():
+		var e: Dictionary = edges[ei]
+		var img_src: String = str(e.get("image_path", ""))
+		var img_rel: String = ""
+		if img_src != "":
+			var ext: String = img_src.get_extension().to_lower()
+			var f: String = _copy_image_deduped(img_src, abs_media_dir, "%s_e%d_cover.%s" % [node_id, ei, ext], copied_images)
+			img_rel = ("media/" + f) if f != "" else ""
+		out.append({
+			"to":            str(e.get("to", "")),
+			"name":          str(e.get("name", "")),
+			"description":   str(e.get("description", "")),
+			"image_path":    img_rel,
+			"weight":        int(e.get("weight", 1)),
+			"threshold":     int(e.get("threshold", 0)),
+			"required_item": str(e.get("required_item", "")),
+			"cost":          int(e.get("cost", 0)),
+		})
+	return out
+
+
+# Normalizes a regular (non-fork) node's out list to its single forward edge: {to:<id>} when
+# it has a target, or [] when it ends the run. Strips any stray edge config a regular node
+# shouldn't carry, and enforces the ≤1-out-edge invariant (GRAPH_EDITOR_OVERHAUL.md §4).
+func _clean_regular_out(edges: Array) -> Array:
+	for e: Dictionary in edges:
+		var to: String = str(e.get("to", ""))
+		if to != "":
+			return [{"to": to}]
+	return []
 
 
 # Writes journey.json into the staging folder. Returns false (showing the
@@ -2095,236 +2185,9 @@ func _finalize_save_success() -> void:
 	Transition.change_scene("res://scenes/journey_select/JourneySelect.tscn")
 
 
-# Recursively serializes a fork item to JSON. Calls _save_path for each path.
-# `slug_prefix` makes nested-storyboard filenames unique across the journey.
-func _save_fork(fork_item: Dictionary, abs_dir: String, abs_media_dir: String, after_order: int, slug_prefix: String, copied_images: Dictionary, modal: Control) -> Dictionary:
-	var fork_entry: Dictionary = {
-		"AfterOrder":  after_order,
-		"NodeId":      fork_item.get("node_id", ""),
-		"Title":       fork_item.get("title",""),
-		"Description": fork_item.get("description",""),
-		"Resolution":  fork_item.get("resolution", "choice"),
-		"CondMetric":  fork_item.get("cond_metric", "score"),
-		"DefaultPath": int(fork_item.get("default_path", 0)),
-		"Paths":       [],
-	}
-	for pi in (fork_item.get("paths", []) as Array).size():
-		var path_data: Dictionary = fork_item["paths"][pi]
-		var path_slug: String = "%s_p%d" % [slug_prefix, pi]
-		fork_entry["Paths"].append(await _save_path(path_data, abs_dir, abs_media_dir, path_slug, copied_images, modal))
-		if _save_aborted:
-			return fork_entry
-	return fork_entry
-
-
-# Recursively serializes a single fork path to JSON, splitting its items into
-# Rounds, Shops, Storyboards, and (nested) Forks arrays.
-func _save_path(path_data: Dictionary, abs_dir: String, abs_media_dir: String, slug_prefix: String, copied_images: Dictionary, modal: Control) -> Dictionary:
-	var img_src: String  = path_data.get("image_path", "")
-	var img_fname: String = ""
-	if img_src != "":
-		# Use slug_prefix ("fork0_p0", "fork0_p1_f0_p0", …) for the filename so
-		# two paths sharing a name (e.g. "Yes" / "No" branches across multiple
-		# nested forks) can't overwrite each other's card image. The human-
-		# readable Name lives in journey.json's Image field via the resolved
-		# media/<slug>_cover.<ext> path, but the filename itself is collision-
-		# free regardless of what the user calls each path.
-		var img_f: String = _copy_image_deduped(img_src, abs_media_dir, slug_prefix + "_cover." + img_src.get_extension().to_lower(), copied_images)
-		img_fname = "media/" + img_f if img_f != "" else ""
-
-	var path_entry: Dictionary = {
-		"Name":         path_data.get("name", ""),
-		"Description":  path_data.get("description", ""),
-		"Image":        img_fname,
-		"Weight":       int(path_data.get("weight", 1)),
-		"Threshold":    int(path_data.get("threshold", 0)),
-		"RequiredItem": path_data.get("required_item", ""),
-		"Cost":         int(path_data.get("cost", 0)),
-		"Rounds":       [],
-		"Shops":        [],
-		"Storyboards":  [],
-		"Forks":        [],
-	}
-
-	var pr_order: int = 0
-	# Monotonic authoring position, same scheme as the top-level loop — every
-	# item bumps it so a shop placed after a (nested) fork sorts correctly.
-	var pr_pos: int = 0
-	var nested_fork_count: int = 0
-
-	for pi_item: Dictionary in path_data.get("items", []):
-		var pi_type: String = pi_item.get("type","round")
-		pr_pos += 1
-		match pi_type:
-			"shop":
-				path_entry["Shops"].append({
-					"AfterOrder":      pr_pos,
-					"NodeId":          pi_item.get("node_id", ""),
-					"Title":           pi_item.get("title",""),
-					"Mode":            pi_item.get("mode", "pool"),
-					"Count":           pi_item.get("count", 3),
-					"Items":           pi_item.get("items", []),
-					"PriceMultiplier": pi_item.get("price_multiplier", 1.0),
-				})
-			"storyboard":
-				pr_order += 1
-				var psb_slug: String = "%s_storyboard_%d" % [slug_prefix, pr_order]
-				var psb_img_src: String = pi_item.get("image", "")
-				var psb_img_fname: String = ""
-				if psb_img_src != "":
-					var psb_ext: String = psb_img_src.get_extension().to_lower()
-					var psb_f: String = _copy_image_deduped(psb_img_src, abs_media_dir, psb_slug + "." + psb_ext, copied_images)
-					psb_img_fname = "media/" + psb_f if psb_f != "" else ""
-				var psb_lines_json: Array = []
-				for psb_li_idx in (pi_item.get("lines",[]) as Array).size():
-					var psb_li: Dictionary = pi_item["lines"][psb_li_idx]
-					var psb_li_img_src: String = psb_li.get("image","")
-					var psb_li_img_fname: String = ""
-					if psb_li_img_src != "":
-						var psb_li_ext: String = psb_li_img_src.get_extension().to_lower()
-						var psb_li_f: String = _copy_image_deduped(psb_li_img_src, abs_media_dir, psb_slug + "_line_%d.%s" % [psb_li_idx, psb_li_ext], copied_images)
-						psb_li_img_fname = "media/" + psb_li_f if psb_li_f != "" else ""
-					psb_lines_json.append({
-						"Speaker": psb_li.get("speaker",""),
-						"Text":    psb_li.get("text",""),
-						"Image":   psb_li_img_fname,
-					})
-				path_entry["Storyboards"].append({
-					"Order":        pr_pos,
-					"NodeId":       pi_item.get("node_id", ""),
-					"CoinsAwarded": pi_item.get("coins",0) as int,
-					"Item":         pi_item.get("item", ""),
-					"Image":        psb_img_fname,
-					"Lines":        psb_lines_json,
-				})
-			"fork":
-				# Nested fork — recurse. Sort key uses the monotonic position so it
-				# lands exactly where it was authored within this path.
-				var nested_slug: String = "%s_f%d" % [slug_prefix, nested_fork_count]
-				nested_fork_count += 1
-				path_entry["Forks"].append(await _save_fork(pi_item, abs_dir, abs_media_dir, pr_pos, nested_slug, copied_images, modal))
-				if _save_aborted:
-					return path_entry
-			_:
-				# Round (inside a fork path). Same scheme as top-level rounds: the
-				# slug is written as FolderName (logical id / legacy fallback key),
-				# but no per-round folder is created — assets are pooled into content/.
-				pr_order += 1
-				var pr_name: String = (pi_item.get("name","") as String).strip_edges()
-				var pr_slug: String = _next_round_folder_slug()
-				var pr_fs: String = pi_item.get("funscript_path","")
-				# Funscript into the shared content pool (see the top-level round save).
-				var pr_funscript_rel: String = ""
-				var pr_fs_stats: Dictionary = {"count": 0, "length_ms": 0}
-				if pr_fs != "":
-					var pr_fs_pool: Dictionary = _assign_pooled_media(pr_fs, pr_fs.get_extension())
-					pr_funscript_rel = pr_fs_pool["rel"]
-					if pr_fs_pool["copy"]:
-						var pr_fs_dst: String = abs_dir + "/" + pr_funscript_rel
-						_copy_file(pr_fs, pr_fs_dst)
-						pr_fs_stats = JourneyData.read_funscript_stats(pr_fs_dst)
-						_pooled_fs_stats[pr_fs_pool["fingerprint"]] = pr_fs_stats
-					else:
-						pr_fs_stats = _pooled_fs_stats.get(pr_fs_pool["fingerprint"], pr_fs_stats)
-				# Journey-root-relative video path (VideoPath), pooled under content/ and
-				# shared across rounds that reuse the same source. Transcoded/copied only
-				# the first time the source is seen this save (_assign_pooled_media).
-				var pr_video_rel: String = ""
-				var pr_vid: String = pi_item.get("video_path","")
-				if pr_vid != "":
-					var pr_is_transcode: bool = _transcode_plan.has(pr_vid)
-					var pr_vid_ext: String = "mp4" if pr_is_transcode else pr_vid.get_extension()
-					var pr_vid_pool: Dictionary = _assign_pooled_media(pr_vid, pr_vid_ext)
-					pr_video_rel = pr_vid_pool["rel"]
-					if pr_vid_pool["copy"]:
-						var pr_vid_dst_path: String = abs_dir + "/" + pr_video_rel
-						if pr_is_transcode:
-							var pr_info: Dictionary = _transcode_plan[pr_vid]
-							_update_modal_label(modal, "Fork round — %s  (transcoding %s → h264)" % [pr_name, pr_info["codec"]])
-							var pr_transcode_ok: bool = await _transcode_video(pr_vid, pr_vid_dst_path, pr_info["duration"], modal)
-							if not pr_transcode_ok:
-								_save_aborted = true
-								_save_abort_error = {
-									"result": {"ok": false, "reason": (CAUSE_CANCELLED if _transcode_cancel else CAUSE_TRANSCODE_FAILED), "detail": pr_vid},
-									"item":   "%s → Round \"%s\"" % [slug_prefix, pr_name],
-								}
-								return path_entry
-						else:
-							_update_modal_label(modal, "Fork round — %s  (copying video)" % pr_name)
-							var pr_copy_result: Dictionary = await _copy_file_chunked(
-								pr_vid, pr_vid_dst_path,
-								func(done: int, tot: int) -> void: _update_modal_copy(modal, done, tot))
-							if not pr_copy_result["ok"]:
-								# Cancelled / failed — unwind the recursive save and stash
-								# the detailed failure so the top-level handler can show
-								# a specific error instead of a generic message.
-								_save_aborted = true
-								_save_abort_error = {
-									"result": pr_copy_result,
-									"item":   "%s → Round \"%s\"" % [slug_prefix, pr_name],
-								}
-								return path_entry
-				var pr_axis_in: Dictionary = pi_item.get("axis_scripts", {})
-				var pr_axis_rel: Dictionary = {}
-				for axis: String in pr_axis_in:
-					var ax_src: String = pr_axis_in[axis]
-					var ax_rel: String = _pool_small_file(ax_src, abs_dir, _channel_pool_ext(JourneyData.AXIS_SUFFIXES.get(axis, ""), ax_src))
-					if ax_rel != "":
-						pr_axis_rel[axis] = ax_rel
-				var pr_vib_in: Dictionary = pi_item.get("vib_scripts", {})
-				var pr_vib_rel: Dictionary = {}
-				for ch_key: String in pr_vib_in:
-					var vib_src: String = pr_vib_in[ch_key]
-					var vib_rel: String = _pool_small_file(vib_src, abs_dir, _channel_pool_ext(JourneyData.VIB_SUFFIXES.get(ch_key, ""), vib_src))
-					if vib_rel != "":
-						pr_vib_rel[ch_key] = vib_rel
-				var pr_round_type: String = pi_item.get("round_type", "normal")
-				var pr_boss_image_rel: String = ""
-				if pr_round_type == "boss":
-					pr_boss_image_rel = _pool_small_file(pi_item.get("boss_image", ""), abs_dir)
-				# (Renamed-round cleanup is implicit at swap time — see the
-				# top-level round save above. Deleting the live original mid-
-				# save would break the staging rollback if a later step fails.)
-				# Same shared serializer as the top-level round save; merge in the
-				# fork-path media / slug fields.
-				var pr_json: Dictionary = JourneyData.round_to_json(pi_item)
-				pr_json["Name"]          = pr_name
-				pr_json["FolderName"]    = pr_slug
-				pr_json["NodeId"]        = pi_item.get("node_id", "")
-				pr_json["Order"]         = pr_pos
-				pr_json["BossImage"]     = pr_boss_image_rel
-				pr_json["FunscriptPath"] = pr_funscript_rel
-				pr_json["VideoPath"]     = pr_video_rel
-				pr_json["AxisScripts"]   = pr_axis_rel
-				pr_json["VibScripts"]    = pr_vib_rel
-				pr_json["ActionCount"]   = pr_fs_stats["count"]
-				pr_json["LengthMs"]      = pr_fs_stats["length_ms"]
-				path_entry["Rounds"].append(pr_json)
-
-	return path_entry
-
-
 # ---------------------------------------------------------------------------
 # Transcoding
 # ---------------------------------------------------------------------------
-
-# Recursively walks the journey items tree and appends every non-empty
-# video_path it finds (top-level rounds + every round in every fork path at
-# every depth) into `sources`. Duplicates may appear if the same source video
-# is used in multiple rounds; callers dedupe by checking has() on the plan
-# dictionary before probing the codec a second time.
-func _collect_video_sources(items: Array, sources: Array) -> void:
-	for item: Dictionary in items:
-		var item_type: String = item.get("type", "round")
-		match item_type:
-			"round":
-				var vid: String = item.get("video_path", "")
-				if vid != "":
-					sources.append(vid)
-			"fork":
-				for p: Dictionary in item.get("paths", []):
-					_collect_video_sources(p.get("items", []) as Array, sources)
-
 
 func _ffmpeg_binary(name: String) -> String:
 	# Resolution order (custom folder → bundled → PATH) lives in
@@ -2860,84 +2723,15 @@ func _save_source_exists(path: String) -> bool:
 	return FileAccess.file_exists(ProjectSettings.globalize_path(path))
 
 
-# Returns a short, node-local problem summary for an item ("" when it's fine).
-# Mirrors the save-time validation rules but only for THIS node (children get
-# their own badges), so the graph can flag issues live instead of at save. Used
-# as GraphView.validity_fn.
-func _item_issue_summary(item: Dictionary) -> String:
-	match item.get("type", "round"):
-		"round":
-			if (item.get("name", "") as String).strip_edges() == "":
-				return "This round has no name."
-			var fs: String = item.get("funscript_path", "")
-			if fs == "":
-				return "No funscript selected — required for a playable round."
-			if not _save_source_exists(fs):
-				return "Funscript file is missing (moved or deleted)."
-			var vid: String = item.get("video_path", "")
-			if vid != "" and not _save_source_exists(vid):
-				return "Video file is missing (moved or deleted)."
-			for axis: String in item.get("axis_scripts", {}):
-				if not _save_source_exists(item["axis_scripts"][axis]):
-					return "An axis funscript (%s) is missing." % axis
-			for ch: String in item.get("vib_scripts", {}):
-				if not _save_source_exists(item["vib_scripts"][ch]):
-					return "A vibrator funscript (%s) is missing." % ch
-			var boss_img: String = item.get("boss_image", "")
-			if boss_img != "" and not _save_source_exists(boss_img):
-				return "Boss intro image is missing."
-			return ""
-		"storyboard":
-			if (item.get("lines", []) as Array).is_empty():
-				return "Storyboard has no dialogue lines."
-			var def_img: String = item.get("image", "")
-			if def_img != "" and not _save_source_exists(def_img):
-				return "Default image is missing."
-			for line: Dictionary in item.get("lines", []):
-				var li_img: String = line.get("image", "")
-				if li_img != "" and not _save_source_exists(li_img):
-					return "A line's speaker image is missing."
-			return ""
-		"fork":
-			var paths: Array = item.get("paths", [])
-			if paths.size() < 2:
-				return "Fork needs at least 2 paths."
-			for p: Dictionary in paths:
-				if (p.get("name", "") as String).strip_edges() == "":
-					return "A fork path has no name."
-				if (p.get("items", []) as Array).is_empty():
-					return "A fork path is empty."
-				var pimg: String = p.get("image_path", "")
-				if pimg != "" and not _save_source_exists(pimg):
-					return "A fork path's card image is missing."
-			return ""
-	return ""
-
-
-# Recursively walks an items[] tree (top-level + every fork path at every
-# nesting depth) and returns true if any round exists anywhere. Used by the
-# journey-level "needs at least one round somewhere" check so authors can
-# gate their gameplay behind a fork (e.g. "Cutscene → Choose difficulty fork
-# → each path has its own boss") and still pass validation.
-func _has_any_round_in_tree(items: Array) -> bool:
-	for item: Dictionary in items:
-		var item_type: String = item.get("type", "round")
-		if item_type == "round":
-			return true
-		if item_type == "fork":
-			for p: Dictionary in item.get("paths", []):
-				if _has_any_round_in_tree(p.get("items", []) as Array):
-					return true
-	return false
-
-
-# Walks the entire journey tree (top-level + every fork path recursively) and
-# returns an Array of SaveError dicts for all problems found. An empty array
+# Returns an Array of SaveError dicts for all problems found in the graph. An empty array
 # means the journey is safe to save.
 func _collect_presave_issues() -> Array:
-	var issues: Array = []
+	return _collect_presave_issues_graph()
 
-	# Journey-level checks.
+
+# Journey-level presave checks shared by the tree + graph paths: name present, no rename
+# collision with another journey on disk, and the cover image (if any) still exists.
+func _collect_journey_meta_issues(issues: Array) -> void:
 	var jn: String = _journey_name.strip_edges()
 	if jn == "":
 		issues.append({
@@ -2971,44 +2765,140 @@ func _collect_presave_issues() -> Array:
 			"hint":   "Re-drag the cover image into the Journey Info panel, or remove it.",
 		})
 
-	# "Journey" is loosely defined as "has gameplay somewhere." A round inside
-	# a fork path still counts — e.g. a cutscene-intro storyboard followed by
-	# a "choose your difficulty" fork whose paths all contain rounds. Only
-	# truly round-less journeys (slideshows of storyboards / shops) are blocked.
-	if not _has_any_round_in_tree(_items):
+
+# Graph-editor presave validation. Per GRAPH_EDITOR_OVERHAUL.md §10/§12, deep structural
+# checks (cycles, unreachable, dangling edges) are deferred to L4 — migrated journeys are
+# always valid and full free-form authoring isn't reachable yet. For now: journey meta, at
+# least one round node, and the per-round / per-storyboard source checks (reused as-is —
+# they read a node's lowercase data dict directly, identical to a tree item).
+func _collect_presave_issues_graph() -> Array:
+	var issues: Array = []
+	_collect_journey_meta_issues(issues)
+
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	var has_round: bool = false
+	for id: String in nodes:
+		if str((nodes[id] as Dictionary).get("type", "")) == "round":
+			has_round = true
+			break
+	if not has_round:
 		issues.append({
 			"cause":  CAUSE_NO_ROUNDS,
 			"item":   "Journey",
-			"detail": "A journey needs at least one round somewhere — top-level or inside any fork path.",
-			"hint":   "Add a round from the side panel, or add a round inside one of your fork paths.",
+			"detail": "A journey needs at least one round node.",
+			"hint":   "Add a round from the side panel's ADD NODE row.",
 		})
 
-	_save_collect_items_issues(_items, "Top level", issues)
+	var round_num: int = 0
+	var sb_num: int = 0
+	var fork_num: int = 0
+	for id: String in nodes:
+		var n: Dictionary = nodes[id]
+		var data: Dictionary = n.get("data", {})
+		match str(n.get("type", "")):
+			"round":
+				round_num += 1
+				_save_check_round(data, "Round %d" % round_num, issues)
+			"storyboard":
+				sb_num += 1
+				_save_check_storyboard(data, "Storyboard %d" % sb_num, issues)
+			"fork":
+				fork_num += 1
+				_save_check_fork_graph(n, "Fork %d" % fork_num, issues)
+
+	# Structural graph validation (L4): block on graphs the runtime can't cleanly play — a missing
+	# start, an edge to a deleted node, a cycle (the DAG walk would loop forever), or an unreachable
+	# node. Unreachable nodes block so a saved journey never carries media that's never played (a
+	# storage concern): the author must wire the orphan into the flow or delete it before saving.
+	for gi: Dictionary in JourneyGraph.validate_graph(_graph_model):
+		match str(gi.get("kind", "")):
+			"no_start":
+				issues.append({
+					"cause":  CAUSE_NO_START,
+					"item":   "Journey",
+					"detail": "The journey has no valid start node.",
+					"hint":   "Reopen the journey, or add a node — the first node becomes the start.",
+				})
+			"dangling":
+				issues.append({
+					"cause":  CAUSE_DANGLING_EDGE,
+					"item":   _graph_issue_label(str(gi.get("id", ""))),
+					"detail": "A connection points to a node that no longer exists.",
+					"hint":   "Re-wire that connection to a current node — its target may have been deleted.",
+				})
+			"cycle":
+				issues.append({
+					"cause":  CAUSE_CYCLE,
+					"item":   _graph_issue_label(str(gi.get("id", ""))),
+					"detail": "This node is part of a loop — a journey must flow forward (no cycles).",
+					"hint":   "Remove the connection that loops back to an earlier node.",
+				})
+			"unreachable":
+				issues.append({
+					"cause":  CAUSE_UNREACHABLE,
+					"item":   _graph_issue_label(str(gi.get("id", ""))),
+					"detail": "This node can't be reached from the start, so it would never play — and its media would bloat the saved journey.",
+					"hint":   "Connect it into the flow (wire an earlier node to it), or delete it.",
+				})
 	return issues
 
 
-# Recursively scans an items[] array (used at both top level and inside fork
-# paths). `context` is a human-readable trail like
-# 'Fork 1 → Path "Adventure"' so issue messages can pinpoint the location.
-func _save_collect_items_issues(items: Array, context: String, issues: Array) -> void:
-	var round_num: int = 0
-	var sb_num:    int = 0
-	var fork_num:  int = 0
-	for item: Dictionary in items:
-		var item_type: String = item.get("type", "round")
-		match item_type:
-			"round":
-				round_num += 1
-				_save_check_round(item, "%s, Round %d" % [context, round_num], issues)
-			"storyboard":
-				sb_num += 1
-				_save_check_storyboard(item, "%s, Storyboard %d" % [context, sb_num], issues)
-			"fork":
-				fork_num += 1
-				_save_check_fork(item, "%s, Fork %d" % [context, fork_num], issues)
-			"shop":
-				# Shops write no filesystem paths and have no source files.
-				pass
+# Readable label for a node id, used by the structural validation messages.
+func _graph_issue_label(node_id: String) -> String:
+	var nodes: Dictionary = _graph_model.get("nodes", {})
+	if not nodes.has(node_id):
+		return "A node"
+	var n: Dictionary = nodes[node_id]
+	var d: Dictionary = n.get("data", {})
+	match str(n.get("type", "")):
+		"round":
+			var rn: String = str(d.get("name", "")).strip_edges()
+			return "Round \"%s\"" % rn if rn != "" else "A round"
+		"shop":
+			var sn: String = str(d.get("title", "")).strip_edges()
+			return "Shop \"%s\"" % sn if sn != "" else "A shop"
+		"storyboard":
+			return "A storyboard"
+		"fork":
+			var fn: String = str(d.get("title", "")).strip_edges()
+			return "Fork \"%s\"" % fn if fn != "" else "A fork"
+	return "A node"
+
+
+# Graph fork authoring checks (3c-ii): a fork's choices are its out-edges. Mirrors the tree's
+# _save_check_fork — ≥2 choices, a Sacrifice fork needs ≥1 free choice, and each choice needs a
+# name (the player sees it on the choice screen). Structural edge validity (cycles / dangling) is
+# handled separately by JourneyGraph.validate_graph; cycles are also prevented at wire time.
+func _save_check_fork_graph(node: Dictionary, ctx: String, issues: Array) -> void:
+	var edges: Array = node.get("out", [])
+	if edges.size() < 2:
+		issues.append({
+			"cause":  CAUSE_FORK_UNDERFILLED,
+			"item":   ctx,
+			"detail": "Fork has only %d choice(s); needs at least 2." % edges.size(),
+			"hint":   "Add a second choice in the fork editor.",
+		})
+	if str((node.get("data", {}) as Dictionary).get("resolution", "choice")) == "sacrifice" and not edges.is_empty():
+		var has_free: bool = false
+		for e: Dictionary in edges:
+			if int(e.get("cost", 0)) <= 0 and str(e.get("required_item", "")).strip_edges() == "":
+				has_free = true
+				break
+		if not has_free:
+			issues.append({
+				"cause":  CAUSE_FORK_UNDERFILLED,
+				"item":   ctx,
+				"detail": "This Sacrifice fork has no free choice — the player could be stuck with no affordable option.",
+				"hint":   "Make at least one choice free: Coin Cost 0 and Required Item None.",
+			})
+	for ei in edges.size():
+		if str((edges[ei] as Dictionary).get("name", "")).strip_edges() == "":
+			issues.append({
+				"cause":  CAUSE_BAD_NAME,
+				"item":   "%s → Choice %d" % [ctx, ei + 1],
+				"detail": "Choice name is empty.",
+				"hint":   "Give the choice a name in the fork editor (the player sees it on the choice screen).",
+			})
 
 
 func _save_check_round(round_data: Dictionary, ctx: String, issues: Array) -> void:
@@ -3114,78 +3004,6 @@ func _save_check_storyboard(sb_data: Dictionary, ctx: String, issues: Array) -> 
 				"detail": "Speaker image no longer exists at: %s" % img,
 				"hint":   "Re-drag the speaker image into this line, or remove it.",
 			})
-
-
-func _save_check_fork(fork_data: Dictionary, ctx: String, issues: Array) -> void:
-	var paths: Array = fork_data.get("paths", [])
-	if paths.size() < 2:
-		issues.append({
-			"cause":  CAUSE_FORK_UNDERFILLED,
-			"item":   ctx,
-			"detail": "Fork has only %d path(s); needs at least 2." % paths.size(),
-			"hint":   "Add a second path in the fork editor.",
-		})
-
-	# A Sacrifice fork must offer at least one free path (no coin cost and no
-	# required item), so the player always has an option even when broke / out of
-	# items.
-	if fork_data.get("resolution", "choice") == "sacrifice" and not paths.is_empty():
-		var has_free: bool = false
-		for p: Dictionary in paths:
-			if int(p.get("cost", 0)) <= 0 and str(p.get("required_item", "")).strip_edges() == "":
-				has_free = true
-				break
-		if not has_free:
-			issues.append({
-				"cause":  CAUSE_FORK_UNDERFILLED,
-				"item":   ctx,
-				"detail": "This Sacrifice fork has no free path — the player could be stuck with no affordable option.",
-				"hint":   "Make at least one path free: Coin Cost 0 and Required Item None.",
-			})
-	for pi in paths.size():
-		var p: Dictionary = paths[pi]
-		var pname: String = (p.get("name", "") as String).strip_edges()
-		var path_ctx: String = "%s → Path %d \"%s\"" % [ctx, pi + 1, pname] if pname != "" \
-			else "%s → Path %d" % [ctx, pi + 1]
-
-		# Names are display-only now (see fork-path slug scheme for the card
-		# image filename and round-folder slugs for rounds inside the path).
-		# Any character is fine — only empty names need to be flagged, since
-		# the name is what the player sees on the fork choice screen.
-		if pname == "":
-			issues.append({
-				"cause":  CAUSE_BAD_NAME,
-				"item":   path_ctx,
-				"detail": "Path name is empty.",
-				"hint":   "Give the path a name (e.g. \"Adventure\" or \"Reward\", or even \"What's next?\").",
-			})
-
-		var img: String = p.get("image_path", "")
-		if img != "" and not _save_source_exists(img):
-			issues.append({
-				"cause":  CAUSE_MISSING_SOURCE,
-				"item":   path_ctx,
-				"detail": "Card image no longer exists at: %s" % img,
-				"hint":   "Re-drag the card image for this path, or remove it.",
-			})
-
-		# A fork path must contain at least one item of any kind — round,
-		# storyboard, shop, or nested fork. The "narrative-only" path
-		# (storyboards as the consequence of a choice) and "skip-this-section"
-		# patterns are explicit author intents we want to support, so we
-		# don't require a round here. A completely empty path is still
-		# rejected because it would be a button-that-does-nothing UX trap.
-		var sub_items: Array = p.get("items", [])
-		if sub_items.is_empty():
-			issues.append({
-				"cause":  CAUSE_NO_ROUNDS,
-				"item":   path_ctx,
-				"detail": "This fork path is empty.",
-				"hint":   "Add at least one round, storyboard, shop, or nested fork to the path.",
-			})
-		_save_collect_items_issues(sub_items, path_ctx, issues)
-
-
 
 
 # ---------------------------------------------------------------------------

@@ -174,6 +174,23 @@ static func is_end(graph: Dictionary, id: String) -> bool:
 	return id == "" or out_edges(graph, id).is_empty()
 
 
+# The set (Dictionary-as-set) of node ids reachable from the journey start, following out-edges
+# (post-redirect, when apply_redirects has run). Any node NOT in this set is orphaned — a redirect
+# skipped past it and nothing else leads there. DAG → terminates; `seen` also backstops a malformed
+# cycle. Feeds the builder's live "unreachable" warning.
+static func reachable_ids(graph: Dictionary, from_id: String = "") -> Dictionary:
+	var seen: Dictionary = {}
+	var stack: Array = [from_id if from_id != "" else str(graph.get("start", ""))]
+	while not stack.is_empty():
+		var id: String = str(stack.pop_back())
+		if id == "" or seen.has(id):
+			continue
+		seen[id] = true
+		for e: Dictionary in out_edges(graph, id):
+			stack.append(str(e.get("to", "")))
+	return seen
+
+
 # Rewires nodes' out-edges per a redirect map {node_id: target_id} — the runtime side of
 # the "skip / converge" authoring (a fork path's tail, or any node, pointing somewhere
 # other than its default successor). `target_id == ""` makes the node an end. No-op on
@@ -190,6 +207,67 @@ static func apply_redirects(graph: Dictionary, redirects: Dictionary) -> void:
 			continue
 		var to_id: String = str(redirects[from_id])
 		n["out"] = [] if to_id == "" else [{"to": to_id}]
+
+
+# ── Validation (free-form authoring) ─────────────────────────────────────────
+
+# Checks a graph for the invariants the runtime assumes: a real start, every edge resolving to a
+# node, acyclicity (the runtime walks the DAG and would loop forever on a back-edge), and which
+# nodes are reachable. Returns a list of issues [{kind, id, to?}] — pure (no UI strings), so it's
+# unit-tested and the builder formats its own user-facing messages. Kinds:
+#   "no_start"    — start is empty or not a node (graph non-empty)
+#   "dangling"    — node `id` has an out-edge whose target `to` is not a node
+#   "cycle"       — node `id` is closed onto by a back-edge (it participates in a loop)
+#   "unreachable" — node `id` can't be reached from start (it would never play)
+static func validate_graph(graph: Dictionary) -> Array:
+	var issues: Array = []
+	var nodes: Dictionary = graph.get("nodes", {})
+	if nodes.is_empty():
+		return issues   # "no rounds" is handled separately; nothing structural to check
+	var start: String = str(graph.get("start", ""))
+	var start_ok: bool = start != "" and nodes.has(start)
+	if not start_ok:
+		issues.append({"kind": "no_start", "id": start})
+	# Dangling out-edges (a non-empty target that isn't a node).
+	for id: String in nodes:
+		for e: Dictionary in (nodes[id] as Dictionary).get("out", []):
+			var to: String = str(e.get("to", ""))
+			if to != "" and not nodes.has(to):
+				issues.append({"kind": "dangling", "id": id, "to": to})
+	# Cycles (DFS three-colouring; report each node a back-edge closes onto).
+	for id: String in _find_cycle_nodes(graph):
+		issues.append({"kind": "cycle", "id": id})
+	# Unreachable nodes (only meaningful with a valid start).
+	if start_ok:
+		var reach: Dictionary = reachable_ids(graph, start)
+		for id: String in nodes:
+			if not reach.has(id):
+				issues.append({"kind": "unreachable", "id": id})
+	return issues
+
+
+# The set of node ids that a back-edge closes onto — i.e. nodes that participate in a cycle.
+# Standard DFS three-colouring (gray = on the current DFS stack). Empty for a DAG.
+static func _find_cycle_nodes(graph: Dictionary) -> Dictionary:
+	var color: Dictionary = {}   # id -> 1 gray (on stack) · 2 black (finished)
+	var found: Dictionary = {}
+	for id: String in graph.get("nodes", {}):
+		if not color.has(id):
+			_cycle_dfs(graph, id, color, found)
+	return found
+
+
+static func _cycle_dfs(graph: Dictionary, id: String, color: Dictionary, found: Dictionary) -> void:
+	color[id] = 1
+	for e: Dictionary in out_edges(graph, id):
+		var to: String = str(e.get("to", ""))
+		if to == "" or not (graph.get("nodes", {}) as Dictionary).has(to):
+			continue
+		if color.get(to, 0) == 1:
+			found[to] = true              # back-edge onto a node still on the stack → cycle
+		elif not color.has(to):
+			_cycle_dfs(graph, to, color, found)
+	color[id] = 2
 
 
 # Longest count of `round` nodes along any path from `from_id` to an end (inclusive of
@@ -236,12 +314,18 @@ static func to_json(graph: Dictionary) -> Dictionary:
 	var nodes_arr: Array = []
 	for id: String in graph.get("nodes", {}):
 		var n: Dictionary = graph["nodes"][id]
-		nodes_arr.append({
+		var entry: Dictionary = {
 			"id":   id,
 			"type": n.get("type", ""),
 			"data": n.get("data", {}),
 			"out":  n.get("out", []),
-		})
+		}
+		# Editor canvas position (graph builder), stored as [x, y]. Absent for a graph that
+		# was never laid out (e.g. a freshly migrated runtime graph the builder hasn't seeded).
+		if n.has("pos"):
+			var p: Vector2 = n["pos"]
+			entry["pos"] = [p.x, p.y]
+		nodes_arr.append(entry)
 	return {"Format": FORMAT_GRAPH, "Start": graph.get("start", ""), "Nodes": nodes_arr}
 
 
@@ -250,11 +334,17 @@ static func to_json(graph: Dictionary) -> Dictionary:
 static func from_json(data: Dictionary) -> Dictionary:
 	var nodes: Dictionary = {}
 	for raw: Dictionary in data.get("Nodes", []):
-		nodes[str(raw.get("id", ""))] = {
+		var node: Dictionary = {
 			"type": str(raw.get("type", "")),
 			"data": raw.get("data", {}),
 			"out":  raw.get("out", []),
 		}
+		# Restore editor canvas position when present (see to_json).
+		if raw.has("pos"):
+			var p: Array = raw["pos"]
+			if p.size() >= 2:
+				node["pos"] = Vector2(float(p[0]), float(p[1]))
+		nodes[str(raw.get("id", ""))] = node
 	return {"start": str(data.get("Start", "")), "nodes": nodes}
 
 
