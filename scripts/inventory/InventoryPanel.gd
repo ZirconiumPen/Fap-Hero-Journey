@@ -6,9 +6,7 @@ const PANEL_WIDTH: int = 300
 const SLIDE_TIME: float = 0.18
 
 @onready var _panel: PanelContainer = $Panel
-@onready var _title: Label = $Panel/VBox/HeaderRow/Title
 @onready var _close_btn: Button = $Panel/VBox/HeaderRow/CloseButton
-@onready var _subtitle: Label = $Panel/VBox/Subtitle
 @onready var _empty_lbl: Label = $Panel/VBox/EmptyLabel
 @onready var _scroll: ScrollContainer = $Panel/VBox/Scroll
 @onready var _item_list: VBoxContainer = $Panel/VBox/Scroll/ItemList
@@ -19,7 +17,6 @@ var _activating: bool = false
 
 
 func _ready() -> void:
-	_apply_theme()
 	_close_btn.pressed.connect(close)
 	InventoryService.InventoryChanged.connect(_refresh)
 	_refresh()
@@ -180,36 +177,6 @@ func _activate_card(card: Control, use_lbl: Label, slot_idx: int) -> void:
 	tw.tween_callback(func() -> void: InventoryService.ActivateItem(slot_idx))
 
 
-# --------------------------------------------------------------------------
-# Layout / theme
-# --------------------------------------------------------------------------
-
-
-func _apply_theme() -> void:
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = UITheme.PANEL_BG_DEEP
-	panel_style.border_color = UITheme.PURPLE_BRIGHT
-	panel_style.border_width_left = 3
-	panel_style.content_margin_left = 18
-	panel_style.content_margin_right = 18
-	panel_style.content_margin_top = 18
-	panel_style.content_margin_bottom = 18
-	_panel.add_theme_stylebox_override("panel", panel_style)
-
-	_title.add_theme_color_override("font_color", UITheme.PURPLE_BRIGHT)
-	_title.add_theme_font_size_override("font_size", 20)
-	_title.uppercase = true
-
-	_subtitle.add_theme_color_override("font_color", UITheme.DARK_TEXT)
-	_subtitle.add_theme_font_size_override("font_size", 11)
-	_subtitle.uppercase = true
-
-	_empty_lbl.add_theme_color_override("font_color", UITheme.DARK_TEXT)
-	_empty_lbl.add_theme_font_size_override("font_size", 13)
-	_empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	_style_close_button(_close_btn)
-
 
 # `accent` colours the card outline — a bold left stripe plus a thin border —
 # so the item's effect class (buff / debuff / modifier) reads at a glance.
@@ -226,32 +193,3 @@ func _row_stylebox(accent: Color) -> StyleBoxFlat:
 	s.corner_radius_bottom_left = 4
 	s.corner_radius_bottom_right = 4
 	return s
-
-
-func _style_close_button(btn: Button) -> void:
-	btn.add_theme_color_override("font_color", UITheme.MAGENTA)
-	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
-	btn.add_theme_font_size_override("font_size", 16)
-	btn.focus_mode = Control.FOCUS_NONE
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(0, 0, 0, 0)
-	s.border_color = UITheme.MAGENTA
-	s.border_width_left = 1
-	s.border_width_right = 1
-	s.border_width_top = 1
-	s.border_width_bottom = 1
-	s.content_margin_left = 10
-	s.content_margin_right = 10
-	s.content_margin_top = 4
-	s.content_margin_bottom = 4
-	btn.add_theme_stylebox_override("normal", s)
-
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.25)
-	btn.add_theme_stylebox_override("hover", s_hover)
-
-	var s_pressed: StyleBoxFlat = s.duplicate()
-	s_pressed.bg_color = UITheme.MAGENTA
-	btn.add_theme_stylebox_override("pressed", s_pressed)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
