@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cwwqtfpswu8er" path="res://scripts/fork_screen/ForkScreen.gd" id="1_fscr"]
 [ext_resource type="LabelSettings" uid="uid://dx7wyw25c8lnf" path="res://theming/subtitle_label.tres" id="2_bn5or"]
+[ext_resource type="LabelSettings" uid="uid://daceb5f7ja3v2" path="res://theming/title_label.tres" id="2_bsjhs"]
 
 [node name="root" type="Control" unique_id=1000000001]
 layout_mode = 3
@@ -35,6 +36,7 @@ theme_override_constants/separation = 24
 [node name="ForkTitle" type="Label" parent="CenterBox" unique_id=1000000004]
 layout_mode = 2
 text = "FORK IN THE ROAD"
+label_settings = ExtResource("2_bsjhs")
 horizontal_alignment = 1
 uppercase = true
 

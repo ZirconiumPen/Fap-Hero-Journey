@@ -17,7 +17,6 @@ const BeatBarScript = preload("res://scripts/game_loop/BeatBar.gd")
 # _load_video() body with that extension's API.
 # ---------------------------------------------------------------------------
 
-const HUD_BAR_HEIGHT: int = 68
 # Playback-capable formats. Intentionally distinct from JourneyData.VIDEO_EXTENSIONS
 # (the import/transcode set): includes "ogv" (Godot-native, no FFmpeg needed) and
 # omits container types that only matter at import time.
@@ -42,7 +41,6 @@ const BOSS_EFFECT_NAMES: Dictionary = {
 @onready var _video: VideoStreamPlayer = $VideoPlayer
 @onready var _hud: Control = $HUD
 @onready var _hud_bar: PanelContainer = $HUD/HUDBar
-@onready var _hud_layout: HBoxContainer = $HUD/HUDBar/HUDLayout
 @onready var _round_lbl: Label = $HUD/HUDBar/HUDLayout/RoundLabel
 @onready var _coin_lbl: Label = $HUD/HUDBar/HUDLayout/CoinLabel
 @onready var _progress: ProgressBar = $HUD/ProgressBar
@@ -58,8 +56,8 @@ const BOSS_EFFECT_NAMES: Dictionary = {
 # output device drops its connection during play. Built dynamically in
 # _apply_layout so the scene file doesn't need a new node. Lives outside the
 # auto-hiding HUD so it stays visible even when the rest of the HUD fades.
-var _device_warning_banner: PanelContainer = null
-var _device_warning_label: Label = null
+@onready var _device_warning_banner: PanelContainer = %DeviceWarningBanner
+@onready var _device_warning_label: Label = %DeviceWarningLabel
 @onready var _end_timer: Timer = $EndTimer
 @onready var _transition: ColorRect = $TransitionLayer/TransitionOverlay
 
@@ -156,7 +154,6 @@ var _run_accounted: bool = false
 
 func _ready() -> void:
 	MusicService.stop()
-	_apply_layout()
 	_apply_theme()
 	_build_boss_frame()
 	_build_curse_overlay()
@@ -2022,108 +2019,6 @@ func _update_chip_countdowns() -> void:
 		var lbl: Label = chip.get_meta("chip_label", null)
 		if lbl != null:
 			_update_chip_text(lbl, effects[i])
-
-
-# ---------------------------------------------------------------------------
-# Layout
-# ---------------------------------------------------------------------------
-
-
-func _apply_layout() -> void:
-	anchor_right = 1.0
-	anchor_bottom = 1.0
-
-	_bg.anchor_right = 1.0
-	_bg.anchor_bottom = 1.0
-	_bg.offset_left = 0
-	_bg.offset_top = 0
-	_bg.offset_right = 0
-	_bg.offset_bottom = 0
-
-	_video.anchor_left = 0.0
-	_video.anchor_top = 0.0
-	_video.anchor_right = 0.0
-	_video.anchor_bottom = 0.0
-	_video.offset_left = 0
-	_video.offset_top = 0
-	_video.offset_right = 0
-	_video.offset_bottom = 0
-	_video.position = Vector2.ZERO
-	_video.size = get_viewport_rect().size
-
-	_hud.anchor_right = 1.0
-	_hud.anchor_bottom = 1.0
-
-	_hud_bar.anchor_left = 0.0
-	_hud_bar.anchor_right = 1.0
-	_hud_bar.anchor_top = 1.0
-	_hud_bar.anchor_bottom = 1.0
-	_hud_bar.offset_top = -HUD_BAR_HEIGHT
-	_hud_bar.offset_bottom = 0
-
-	_hud_layout.add_theme_constant_override("separation", 16)
-	_round_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# Progress bar — centered thin strip at the very bottom of the screen
-	_progress.anchor_left = 0.1
-	_progress.anchor_right = 0.9
-	_progress.anchor_top = 1.0
-	_progress.anchor_bottom = 1.0
-	_progress.offset_left = 0
-	_progress.offset_right = 0
-	_progress.offset_top = -7
-	_progress.offset_bottom = -1
-
-	# Effect chips — row pinned just above the progress bar, centred.
-	_chips_row.anchor_left = 0.0
-	_chips_row.anchor_right = 1.0
-	_chips_row.anchor_top = 1.0
-	_chips_row.anchor_bottom = 1.0
-	_chips_row.offset_top = -42
-	_chips_row.offset_bottom = -12
-	_chips_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_chips_row.add_theme_constant_override("separation", 8)
-	_chips_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# Device-disconnected banner — pinned to the top edge of the viewport,
-	# centred horizontally, hidden by default. Lives outside _hud so the
-	# auto-hide timer doesn't fade it away.
-	_device_warning_banner = PanelContainer.new()
-	_device_warning_banner.anchor_left = 0.5
-	_device_warning_banner.anchor_right = 0.5
-	_device_warning_banner.anchor_top = 0.0
-	_device_warning_banner.anchor_bottom = 0.0
-	_device_warning_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_device_warning_banner.offset_top = 12
-	_device_warning_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_device_warning_banner.visible = false
-	add_child(_device_warning_banner)
-
-	var banner_style: StyleBoxFlat = StyleBoxFlat.new()
-	banner_style.bg_color = Color(
-		UITheme.ERROR_SOFT.r, UITheme.ERROR_SOFT.g, UITheme.ERROR_SOFT.b, 0.92
-	)
-	banner_style.border_color = UITheme.ERROR_SOFT
-	banner_style.border_width_left = 2
-	banner_style.border_width_right = 2
-	banner_style.border_width_top = 2
-	banner_style.border_width_bottom = 2
-	banner_style.content_margin_left = 18
-	banner_style.content_margin_right = 18
-	banner_style.content_margin_top = 8
-	banner_style.content_margin_bottom = 8
-	banner_style.corner_radius_top_left = 6
-	banner_style.corner_radius_top_right = 6
-	banner_style.corner_radius_bottom_left = 6
-	banner_style.corner_radius_bottom_right = 6
-	_device_warning_banner.add_theme_stylebox_override("panel", banner_style)
-
-	_device_warning_label = Label.new()
-	_device_warning_label.add_theme_color_override("font_color", UITheme.WHITE_SOFT)
-	_device_warning_label.add_theme_font_size_override("font_size", 13)
-	_device_warning_label.uppercase = true
-	_device_warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_device_warning_banner.add_child(_device_warning_label)
 
 
 # ---------------------------------------------------------------------------
