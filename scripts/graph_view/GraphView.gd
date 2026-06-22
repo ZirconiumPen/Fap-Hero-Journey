@@ -79,7 +79,7 @@ const MARQUEE_DRAG_THRESHOLD: float = 6.0
 
 # Auto-layout artefacts (rebuilt on refresh).
 # Edges: list of {from: Vector2, to: Vector2, color: Color}
-var _edges: Array = []
+var _edges: Array[GraphEdge] = []
 
 # Background grid + edges live on _canvas. Nodes are added as children of _canvas
 # so they pan/zoom together with edges.
@@ -719,7 +719,7 @@ func _fork_type_label(resolution: String) -> String:
 
 
 func _add_edge(from: Vector2, to: Vector2, color: Color) -> void:
-	_edges.append({"from": from, "to": to, "color": color})
+	_edges.append(GraphEdge.new(from, to, color))
 
 
 func _node_top(node: Control) -> Vector2:

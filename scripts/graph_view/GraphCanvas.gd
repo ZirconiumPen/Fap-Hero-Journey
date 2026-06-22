@@ -6,7 +6,7 @@ extends Control
 # and edge coordinates share the same canvas-local space.
 
 # Edges: list of { from: Vector2, to: Vector2, color: Color }
-var edges: Array = []
+var edges: Array[GraphEdge] = []
 
 
 func set_edges(e: Array) -> void:
@@ -15,10 +15,10 @@ func set_edges(e: Array) -> void:
 
 
 func _draw() -> void:
-	for e in edges:
-		var from: Vector2 = e["from"]
-		var to: Vector2 = e["to"]
-		var color: Color = e["color"]
+	for e: GraphEdge in edges:
+		var from: Vector2 = e.from
+		var to: Vector2 = e.to
+		var color: Color = e.color
 		# Route the horizontal segment just above the destination (20 px gap)
 		# rather than at the midpoint.  For adjacent same-column nodes the
 		# result is identical; for cross-column long arrows it keeps the line
