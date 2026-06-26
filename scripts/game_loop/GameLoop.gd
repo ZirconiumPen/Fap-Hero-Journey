@@ -2412,34 +2412,9 @@ func _apply_theme() -> void:
 	_style_button(_options_btn, UITheme.PURPLE_MID)
 
 
+# Thin delegate to UITheme — the canonical styling lives there.
 func _style_button(btn: Button, accent: Color) -> void:
-	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
-	btn.add_theme_font_size_override("font_size", 13)
-	btn.text = btn.text.to_upper()
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color            = Color(accent.r, accent.g, accent.b, 0.12)
-	s.border_color        = accent
-	s.border_width_left   = 1
-	s.border_width_right  = 1
-	s.border_width_top    = 1
-	s.border_width_bottom = 1
-	s.content_margin_left   = 14
-	s.content_margin_right  = 14
-	s.content_margin_top    = 8
-	s.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("normal", s)
-
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(accent.r, accent.g, accent.b, 0.32)
-	btn.add_theme_stylebox_override("hover", s_hover)
-
-	var s_pressed: StyleBoxFlat = s.duplicate()
-	s_pressed.bg_color = accent
-	btn.add_theme_stylebox_override("pressed", s_pressed)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	UITheme.style_button_subtle(btn, accent, 14, 8, 13, true)
 
 
 func _style_progress() -> void:

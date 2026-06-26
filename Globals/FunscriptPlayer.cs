@@ -192,7 +192,7 @@ public partial class FunscriptPlayer : Node
         for (int i = 1; i < _actions.Count - 1; i++)
         {
             int prev = _actions[i - 1].Pos;
-            int cur  = _actions[i].Pos;
+            int cur = _actions[i].Pos;
             int next = _actions[i + 1].Pos;
             if (prev > cur && cur < next)
             {
@@ -332,7 +332,7 @@ public partial class FunscriptPlayer : Node
             state.Actions.Add(new Action
             {
                 AtMs = action.ContainsKey("at") ? action["at"].AsSingle() : 0f,
-                Pos  = action.ContainsKey("pos") ? action["pos"].AsInt32() : 0,
+                Pos = action.ContainsKey("pos") ? action["pos"].AsInt32() : 0,
             });
         }
         _vibScripts[channel] = state;
@@ -618,7 +618,7 @@ public partial class FunscriptPlayer : Node
                     foreach (var vibEntry in _vibScripts)
                     {
                         int channel = vibEntry.Key;
-                        var vstate  = vibEntry.Value;
+                        var vstate = vibEntry.Value;
                         while (vstate.Index < vstate.Actions.Count)
                         {
                             if (vstate.Actions[vstate.Index].AtMs > _positionMs)
@@ -796,7 +796,7 @@ public partial class FunscriptPlayer : Node
             // the script position. Secondary axes still use 50 as their anchor
             // since they always home to centre.
             currentPos = (int)Math.Round(_homePosition + (currentPos - _homePosition) * smooth);
-            nextPos    = (int)Math.Round(_homePosition + (nextPos    - _homePosition) * smooth);
+            nextPos = (int)Math.Round(_homePosition + (nextPos - _homePosition) * smooth);
             if (elapsed >= _easeDurationMs)
                 _easing = false;
         }

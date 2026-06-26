@@ -109,6 +109,69 @@ func make_icon_btn(icon: String, disabled: bool, accent: Color) -> Button:
 	return btn
 
 
+# Subtle/translucent button — a 1px accent border over a faint accent fill that brightens on hover.
+# For buttons over video / busy backgrounds (in-game HUD, shop / fork overlays) where the solid button
+# is too heavy. Same call shape as style_button, plus a disabled state and optional uppercasing.
+func style_button_subtle(btn: Button, accent: Color, h_pad: int = 14, v_pad: int = 10, font_size: int = 13, uppercase: bool = false) -> void:
+	btn.add_theme_color_override("font_color",         accent)
+	btn.add_theme_color_override("font_hover_color",   WHITE_SOFT)
+	btn.add_theme_color_override("font_pressed_color", BG)
+	btn.add_theme_font_size_override("font_size", font_size)
+	if uppercase:
+		btn.text = btn.text.to_upper()
+
+	var s: StyleBoxFlat = StyleBoxFlat.new()
+	s.bg_color            = Color(accent.r, accent.g, accent.b, 0.12)
+	s.border_color        = accent
+	s.border_width_left   = 1; s.border_width_right  = 1
+	s.border_width_top    = 1; s.border_width_bottom = 1
+	s.content_margin_left = h_pad; s.content_margin_right  = h_pad
+	s.content_margin_top  = v_pad; s.content_margin_bottom = v_pad
+	btn.add_theme_stylebox_override("normal", s)
+
+	var s_hover: StyleBoxFlat = s.duplicate()
+	s_hover.bg_color = Color(accent.r, accent.g, accent.b, 0.32)
+	btn.add_theme_stylebox_override("hover", s_hover)
+
+	var s_pressed: StyleBoxFlat = s.duplicate()
+	s_pressed.bg_color = accent
+	btn.add_theme_stylebox_override("pressed", s_pressed)
+
+	var s_disabled: StyleBoxFlat = s.duplicate()
+	s_disabled.bg_color = Color(accent.r, accent.g, accent.b, 0.04)
+	s_disabled.border_color = Color(accent.r, accent.g, accent.b, 0.4)
+	btn.add_theme_stylebox_override("disabled", s_disabled)
+
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+# Small square ✕ / close button — magenta outline, transparent fill, magenta-tinted hover. Used by the
+# slide-in drawers (inventory, quick settings).
+func style_close_button(btn: Button) -> void:
+	btn.add_theme_color_override("font_color",       MAGENTA)
+	btn.add_theme_color_override("font_hover_color", WHITE_SOFT)
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.focus_mode = Control.FOCUS_NONE
+
+	var s: StyleBoxFlat = StyleBoxFlat.new()
+	s.bg_color = BG_ZERO
+	s.border_color = MAGENTA
+	s.border_width_left = 1; s.border_width_right = 1
+	s.border_width_top = 1; s.border_width_bottom = 1
+	s.content_margin_left = 10; s.content_margin_right = 10
+	s.content_margin_top = 4; s.content_margin_bottom = 4
+	btn.add_theme_stylebox_override("normal", s)
+
+	var s_hover: StyleBoxFlat = s.duplicate()
+	s_hover.bg_color = Color(MAGENTA.r, MAGENTA.g, MAGENTA.b, 0.25)
+	btn.add_theme_stylebox_override("hover", s_hover)
+
+	var s_pressed: StyleBoxFlat = s.duplicate()
+	s_pressed.bg_color = MAGENTA
+	btn.add_theme_stylebox_override("pressed", s_pressed)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
 # LineEdit styling: purple-dark fill, mid-purple border, bright caret/focus.
 func style_line_edit(line_edit: LineEdit) -> void:
 	line_edit.add_theme_color_override("font_color",             WHITE_SOFT)

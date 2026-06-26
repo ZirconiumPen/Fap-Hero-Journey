@@ -1074,7 +1074,7 @@ func _make_side_round_editor(arr: Array, idx: int, reselect: Callable) -> Contro
 			arr[idx]["name"] = p.get_file().get_basename()
 		# Auto-fill the funscript + any secondary axis / vib scripts from same-
 		# named siblings on disk, then rebuild so the DropZones show them.
-		if _owner._autofill_round_siblings(arr[idx], p):
+		if ImportScanner.autofill_round_siblings(arr[idx], p):
 			_owner._show_status("Auto-filled matching scripts from file names.", false)
 			reselect.call(idx)
 			return
@@ -1116,7 +1116,7 @@ func _make_side_round_editor(arr: Array, idx: int, reselect: Callable) -> Contro
 			arr[idx]["name"] = p.get_file().get_basename()
 		# Auto-fill the video + any secondary axis / vib scripts from same-named
 		# siblings on disk, then rebuild so the DropZones show them.
-		if _owner._autofill_round_siblings(arr[idx], p):
+		if ImportScanner.autofill_round_siblings(arr[idx], p):
 			_owner._show_status("Auto-filled matching scripts from file names.", false)
 			reselect.call(idx)
 			return

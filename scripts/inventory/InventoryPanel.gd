@@ -254,30 +254,6 @@ func _row_stylebox(accent: Color) -> StyleBoxFlat:
 	return s
 
 
+# Thin delegate to UITheme — the canonical styling lives there.
 func _style_close_button(btn: Button) -> void:
-	btn.add_theme_color_override("font_color",       UITheme.MAGENTA)
-	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
-	btn.add_theme_font_size_override("font_size", 16)
-	btn.focus_mode = Control.FOCUS_NONE
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(0, 0, 0, 0)
-	s.border_color        = UITheme.MAGENTA
-	s.border_width_left   = 1
-	s.border_width_right  = 1
-	s.border_width_top    = 1
-	s.border_width_bottom = 1
-	s.content_margin_left   = 10
-	s.content_margin_right  = 10
-	s.content_margin_top    = 4
-	s.content_margin_bottom = 4
-	btn.add_theme_stylebox_override("normal", s)
-
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.25)
-	btn.add_theme_stylebox_override("hover", s_hover)
-
-	var s_pressed: StyleBoxFlat = s.duplicate()
-	s_pressed.bg_color = UITheme.MAGENTA
-	btn.add_theme_stylebox_override("pressed", s_pressed)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	UITheme.style_close_button(btn)

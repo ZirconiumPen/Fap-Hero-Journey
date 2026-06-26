@@ -167,22 +167,6 @@ func _slide_in() -> void:
 	tween.tween_property(_panel, "position:x", w - PANEL_WIDTH, SLIDE_TIME)
 
 
+# Thin delegate to UITheme — the canonical styling lives there.
 func _style_close_button(btn: Button) -> void:
-	btn.add_theme_color_override("font_color",       UITheme.MAGENTA)
-	btn.add_theme_color_override("font_hover_color", UITheme.WHITE_SOFT)
-	btn.add_theme_font_size_override("font_size", 16)
-
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(0, 0, 0, 0)
-	s.border_color = UITheme.MAGENTA
-	s.set_border_width_all(1)
-	s.content_margin_left = 10
-	s.content_margin_right = 10
-	s.content_margin_top = 4
-	s.content_margin_bottom = 4
-	btn.add_theme_stylebox_override("normal", s)
-
-	var s_hover: StyleBoxFlat = s.duplicate()
-	s_hover.bg_color = Color(UITheme.MAGENTA.r, UITheme.MAGENTA.g, UITheme.MAGENTA.b, 0.25)
-	btn.add_theme_stylebox_override("hover", s_hover)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	UITheme.style_close_button(btn)

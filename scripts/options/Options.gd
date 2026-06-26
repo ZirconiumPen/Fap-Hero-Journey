@@ -1104,37 +1104,17 @@ func _make_separator_style() -> StyleBoxFlat:
 	return s
 
 
+# Thin delegates to UITheme — the canonical styling lives there. Args preserve this screen's padding.
 func _style_label(label: Label, color: Color, size: int, uppercase: bool = false) -> void:
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
-	label.uppercase = uppercase
+	UITheme.style_label(label, color, size, uppercase)
 
 
 func _style_button(btn: Button, accent: Color) -> void:
-	btn.add_theme_color_override("font_color",         accent)
-	btn.add_theme_color_override("font_hover_color",   UITheme.WHITE_SOFT)
-	btn.add_theme_color_override("font_pressed_color", UITheme.BG)
-	btn.add_theme_font_size_override("font_size", 14)
-	btn.text = btn.text.to_upper()
-	btn.add_theme_stylebox_override("normal",  _make_btn_style(accent, UITheme.PURPLE_DARK))
-	btn.add_theme_stylebox_override("hover",   _make_btn_style(accent, UITheme.PURPLE_MID))
-	btn.add_theme_stylebox_override("pressed", _make_btn_style(accent, accent))
-	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
+	UITheme.style_button(btn, accent, 18, 10)
 
 
 func _make_btn_style(border: Color, fill: Color) -> StyleBoxFlat:
-	var s: StyleBoxFlat   = StyleBoxFlat.new()
-	s.bg_color            = fill
-	s.border_color        = border
-	s.border_width_left   = 2
-	s.border_width_right  = 2
-	s.border_width_top    = 2
-	s.border_width_bottom = 2
-	s.content_margin_left   = 18
-	s.content_margin_right  = 18
-	s.content_margin_top    = 10
-	s.content_margin_bottom = 10
-	return s
+	return UITheme.make_btn_style(border, fill, 18, 10)
 
 
 func _style_toggle(btn: Button, pressed: bool) -> void:
