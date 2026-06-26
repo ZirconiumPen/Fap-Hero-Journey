@@ -172,8 +172,7 @@ func _add_map_button() -> void:
 	n.border_color = accent
 	n.border_width_left = 1; n.border_width_right = 1
 	n.border_width_top  = 1; n.border_width_bottom = 1
-	n.corner_radius_top_left = 4; n.corner_radius_top_right = 4
-	n.corner_radius_bottom_left = 4; n.corner_radius_bottom_right = 4
+	n.set_corner_radius_all(UITheme.CORNER_RADIUS)
 	n.content_margin_left = 10; n.content_margin_right = 10
 	n.content_margin_top  = 4;  n.content_margin_bottom = 4
 	_map_btn.add_theme_stylebox_override("normal", n)
@@ -290,8 +289,7 @@ func _apply_theme() -> void:
 	sk_n.border_color = UITheme.DARK_TEXT
 	sk_n.border_width_left   = 1; sk_n.border_width_right  = 1
 	sk_n.border_width_top    = 1; sk_n.border_width_bottom = 1
-	sk_n.corner_radius_top_left     = 4; sk_n.corner_radius_top_right    = 4
-	sk_n.corner_radius_bottom_left  = 4; sk_n.corner_radius_bottom_right = 4
+	sk_n.set_corner_radius_all(UITheme.CORNER_RADIUS)
 	sk_n.content_margin_left  = 10; sk_n.content_margin_right  = 10
 	sk_n.content_margin_top   = 4;  sk_n.content_margin_bottom = 4
 	_skip_btn.add_theme_stylebox_override("normal", sk_n)

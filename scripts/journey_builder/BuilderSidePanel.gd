@@ -277,8 +277,7 @@ func _make_tag_toggle(tag_def: Dictionary) -> Button:
 	off_style.border_color        = Color(color.r, color.g, color.b, 0.45)
 	off_style.border_width_left   = 1; off_style.border_width_right  = 1
 	off_style.border_width_top    = 1; off_style.border_width_bottom = 1
-	off_style.corner_radius_top_left    = 6; off_style.corner_radius_top_right    = 6
-	off_style.corner_radius_bottom_left = 6; off_style.corner_radius_bottom_right = 6
+	off_style.set_corner_radius_all(UITheme.CORNER_RADIUS)
 	off_style.content_margin_left = 11; off_style.content_margin_right  = 11
 	off_style.content_margin_top  = 5;  off_style.content_margin_bottom = 5
 
@@ -1634,6 +1633,7 @@ func _make_insert_line_btn(lines_arr: Array, insert_at: int, refresh: Callable) 
 	s_n.border_width_left  = 1; s_n.border_width_right  = 1
 	s_n.border_width_top   = 1; s_n.border_width_bottom = 1
 	s_n.content_margin_top = 2; s_n.content_margin_bottom = 2
+	s_n.set_corner_radius_all(UITheme.CORNER_RADIUS)
 	btn.add_theme_stylebox_override("normal", s_n)
 
 	var s_h: StyleBoxFlat = s_n.duplicate()

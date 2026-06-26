@@ -202,8 +202,7 @@ func _show_update_banner(latest_version: String) -> void:
 	s.border_color = UITheme.MAGENTA
 	s.border_width_left = 1; s.border_width_right = 1
 	s.border_width_top = 1; s.border_width_bottom = 1
-	s.corner_radius_top_left = 4; s.corner_radius_top_right = 4
-	s.corner_radius_bottom_left = 4; s.corner_radius_bottom_right = 4
+	s.set_corner_radius_all(UITheme.CORNER_RADIUS)
 	s.content_margin_left = 18; s.content_margin_right = 18
 	s.content_margin_top = 8; s.content_margin_bottom = 8
 	banner.add_theme_stylebox_override("normal", s)

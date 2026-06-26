@@ -56,6 +56,11 @@ const EDGE:          Color = Color(0.55,  0.30,  0.85,  0.85)
 const FORK_EDGE:     Color = Color(0.88,  0.0,   0.88,  0.85)
 
 
+# ── Shape ────────────────────────────────────────────────────────────────────
+# Standard corner radius for the app's controls and free-floating panels — one knob for UI rounding.
+const CORNER_RADIUS: int = 4
+
+
 # ── Style helpers ──────────────────────────────────────────────────────────
 
 # Apply standard font-color + size + uppercase override to a Label.
@@ -75,6 +80,7 @@ func make_btn_style(border: Color, fill: Color, h_pad: int = 16, v_pad: int = 10
 	s.border_width_top    = 2; s.border_width_bottom = 2
 	s.content_margin_left = h_pad; s.content_margin_right  = h_pad
 	s.content_margin_top  = v_pad; s.content_margin_bottom = v_pad
+	s.set_corner_radius_all(CORNER_RADIUS)
 	return s
 
 
@@ -127,6 +133,7 @@ func style_button_subtle(btn: Button, accent: Color, h_pad: int = 14, v_pad: int
 	s.border_width_top    = 1; s.border_width_bottom = 1
 	s.content_margin_left = h_pad; s.content_margin_right  = h_pad
 	s.content_margin_top  = v_pad; s.content_margin_bottom = v_pad
+	s.set_corner_radius_all(CORNER_RADIUS)
 	btn.add_theme_stylebox_override("normal", s)
 
 	var s_hover: StyleBoxFlat = s.duplicate()
@@ -160,6 +167,7 @@ func style_close_button(btn: Button) -> void:
 	s.border_width_top = 1; s.border_width_bottom = 1
 	s.content_margin_left = 10; s.content_margin_right = 10
 	s.content_margin_top = 4; s.content_margin_bottom = 4
+	s.set_corner_radius_all(CORNER_RADIUS)
 	btn.add_theme_stylebox_override("normal", s)
 
 	var s_hover: StyleBoxFlat = s.duplicate()
@@ -185,6 +193,7 @@ func style_line_edit(line_edit: LineEdit) -> void:
 	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
 	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
 	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	normal_style.set_corner_radius_all(CORNER_RADIUS)
 	line_edit.add_theme_stylebox_override("normal", normal_style)
 	var focus_style: StyleBoxFlat = normal_style.duplicate()
 	focus_style.border_color = PURPLE_BRIGHT
@@ -213,6 +222,7 @@ func style_text_edit(text_edit: TextEdit) -> void:
 	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
 	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
 	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	normal_style.set_corner_radius_all(CORNER_RADIUS)
 	text_edit.add_theme_stylebox_override("normal", normal_style)
 	var focus_style: StyleBoxFlat = normal_style.duplicate()
 	focus_style.border_color = PURPLE_BRIGHT
@@ -231,6 +241,7 @@ func style_option_button(option_button: OptionButton) -> void:
 	normal_style.border_width_top    = 2; normal_style.border_width_bottom = 2
 	normal_style.content_margin_left = 10; normal_style.content_margin_right  = 10
 	normal_style.content_margin_top  = 8;  normal_style.content_margin_bottom = 8
+	normal_style.set_corner_radius_all(CORNER_RADIUS)
 	option_button.add_theme_stylebox_override("normal", normal_style)
 	var hover_style: StyleBoxFlat = normal_style.duplicate()
 	hover_style.border_color = PURPLE_BRIGHT
@@ -311,6 +322,7 @@ func build_centered_modal(
 	panel_style.border_width_top      = 2;  panel_style.border_width_bottom   = 2
 	panel_style.content_margin_left   = 28; panel_style.content_margin_right  = 28
 	panel_style.content_margin_top    = 22; panel_style.content_margin_bottom = 22
+	panel_style.set_corner_radius_all(CORNER_RADIUS)
 	panel.add_theme_stylebox_override("panel", panel_style)
 	panel.anchor_left = 0.5; panel.anchor_right  = 0.5
 	panel.anchor_top  = 0.5; panel.anchor_bottom = 0.5

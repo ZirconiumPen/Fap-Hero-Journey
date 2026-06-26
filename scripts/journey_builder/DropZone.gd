@@ -159,6 +159,7 @@ func _update_style() -> void:
 		bs.content_margin_right  = 4
 		bs.content_margin_top    = 2
 		bs.content_margin_bottom = 2
+		bs.set_corner_radius_all(UITheme.CORNER_RADIUS)
 		_browse_btn.add_theme_stylebox_override("normal",   bs)
 		_browse_btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
 		var bs_h: StyleBoxFlat = bs.duplicate()
