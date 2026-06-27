@@ -216,6 +216,7 @@ func _setup_graph_view() -> void:
 	_graph.frame_clicked.connect(_on_frame_clicked)
 	_graph.frame_toggle_collapse.connect(_on_frame_toggle_collapse)
 	_graph.canvas_context_menu_requested.connect(_on_canvas_context_menu_requested)
+	_graph.node_context_menu_requested.connect(_on_node_context_menu_requested)
 	_graph.warning_provider = _compute_node_warnings   # GraphView pulls soft-validation badges each layout
 	_graph.call_deferred("set_graph", _graph_model)
 
@@ -514,6 +515,57 @@ func _show_canvas_context_menu(world_pos: Vector2) -> void:
 	popup.reset_size()
 	popup.position = Vector2i(get_global_mouse_position())
 	popup.popup()
+
+
+# Right-click on a node → a small popup to make it the journey's start. The "start" is the single
+# entry point the runtime plays from and the save-time reachability check walks out from; every node
+# not reachable from it is flagged as an unplayable island. Mirrors the canvas menu's styling.
+func _on_node_context_menu_requested(node_id: String) -> void:
+	_show_node_context_menu(node_id)
+
+
+func _show_node_context_menu(node_id: String) -> void:
+	if not _graph or not (_graph_model.get("nodes", {}) as Dictionary).has(node_id):
+		return
+	var popup: PopupPanel = PopupPanel.new()
+	popup.wrap_controls = true
+	add_child(popup)
+
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = UITheme.PANEL_BG
+	panel_style.border_color = UITheme.PURPLE_BRIGHT
+	panel_style.border_width_left = 2; panel_style.border_width_right = 2
+	panel_style.border_width_top = 2; panel_style.border_width_bottom = 2
+	panel_style.content_margin_left = 8; panel_style.content_margin_right = 8
+	panel_style.content_margin_top = 8; panel_style.content_margin_bottom = 8
+	popup.add_theme_stylebox_override("panel", panel_style)
+
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.custom_minimum_size = Vector2(190, 0)
+	popup.add_child(vbox)
+
+	var already_start: bool = str(_graph_model.get("start", "")) == node_id
+	var start_b: Button = _ctx_menu_button(("✓ START NODE" if already_start else "★ SET AS START"), UITheme.CYAN, func() -> void:
+		popup.queue_free()
+		_set_node_as_start(node_id)
+	)
+	vbox.add_child(start_b)
+
+	popup.reset_size()
+	popup.position = Vector2i(get_global_mouse_position())
+	popup.popup()
+
+
+# Designates `node_id` as the start node. Undoable; refreshes so the START badge moves and the
+# reachability ("unreachable island") badges re-evaluate against the new entry point.
+func _set_node_as_start(node_id: String) -> void:
+	if str(_graph_model.get("start", "")) == node_id:
+		return
+	_push_undo()
+	_graph_model["start"] = node_id
+	_refresh_graph()
+	_show_status("Start set — the journey now begins at this node.", false)
 
 
 # One left-aligned, full-width button for the canvas context menu.
@@ -1064,8 +1116,9 @@ func _show_shortcuts_overlay() -> void:
 			["Ctrl + 3", "Add a storyboard"],
 			["Ctrl + 4", "Add a fork"],
 		]],
-		["RIGHT-CLICK THE CANVAS", [
+		["RIGHT-CLICK", [
 			["Right-click empty space", "Menu: add a node / note / group at the cursor"],
+			["Right-click a node", "Menu: set it as the journey's start"],
 		]],
 		["SELECT & MOVE", [
 			["Click a node", "Select it (edit it in the side panel)"],

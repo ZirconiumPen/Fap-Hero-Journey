@@ -134,6 +134,9 @@ signal frame_toggle_collapse(index: int)
 # Carries the world-space position under the cursor so created items land where the author clicked.
 signal canvas_context_menu_requested(world_position: Vector2)
 
+# Right-click on a node → the builder shows that node's context menu (e.g. Set as start).
+signal node_context_menu_requested(node_id: String)
+
 # "You are here" marker (map mode). A glowing ring around the current node, child
 # of _canvas so it pans/zooms with the graph.
 const MARKER_PAD: float = 9.0
@@ -297,8 +300,9 @@ func _layout_graph() -> void:
 		var n: Dictionary = nodes[id]
 		_current_layout_node_id = id   # read by _make_node to mark the selected node
 		var disp: Dictionary = _graph_display_item(n)
-		if not map_mode:               # author-only soft-validation badge (never on the player map)
+		if not map_mode:               # author-only badges (never on the player map)
 			disp["warning"] = str(_node_warnings.get(id, ""))
+			disp["is_start"] = (id == str(_graph_model.get("start", "")))
 		var ctrl: Control = _make_node(disp, JourneyGraph.is_end(_graph_model, id))
 		ctrl.position = n.get("pos", Vector2.ZERO)
 		ctrl.set_meta("graph_node_id", id)
@@ -394,6 +398,11 @@ func _on_graph_node_gui_input(event: InputEvent, node_id: String) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
+	if mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+		# Right-click → node context menu (the builder owns the popup). Connect-drag/selection unaffected.
+		node_context_menu_requested.emit(node_id)
+		accept_event()
+		return
 	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
 	if _connect_mode:
@@ -778,6 +787,19 @@ func _make_node(item: Dictionary, is_terminal: bool = false) -> Control:
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(icon_lbl)
+
+	# Start-of-journey marker — a bright "START" tag pinned to the front of the row so the entry point
+	# is obvious at a glance (the structural sibling of END OF RUN on the terminal node). The flag is
+	# set in _layout_graph for author mode only, so it never shows on the player map.
+	if item.get("is_start", false):
+		var start_lbl: Label = Label.new()
+		start_lbl.text = "START"
+		start_lbl.add_theme_color_override("font_color", UITheme.CYAN)
+		start_lbl.add_theme_font_size_override("font_size", 11)
+		start_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		start_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(start_lbl)
+		row.move_child(start_lbl, 0)
 
 	# Labels column
 	var col: VBoxContainer = VBoxContainer.new()
