@@ -35,7 +35,7 @@ public partial class FunscriptPlayer : Node
 
     private static readonly string[] KnownAxes = { "L1", "L2", "R0", "R1", "R2" };
 
-    private enum OutputMode { Buttplug, Serial }
+    private enum StrokeBackend { None, Serial, Buttplug }
 
     private List<Action> _actions = new List<Action>();
 
@@ -46,11 +46,12 @@ public partial class FunscriptPlayer : Node
     private bool _playing = false;
     private double _positionMs = 0.0;
     private int _actionIndex = 0;
-    private bool? _isLinearDevice = null;
-    private int _deviceIndex = -1;
-    private int _vibChannelCount = 0; // resolved in ResolveOutput(); 0 for non-vibrators
+    // Resolved routing plan (rebuilt by BuildRoutingPlan): the stroke has one target; vibe actuators
+    // fan out per their source (vibe1 / vibe2 / stroke). Constrict lands in Slice 3c.
+    private StrokeBackend _strokeBackend = StrokeBackend.None;
+    private int _strokeDeviceIndex = -1;   // Buttplug linear device index when _strokeBackend == Buttplug
+    private readonly List<(int Index, int Channel, string Source)> _vibeRoutes = new List<(int Index, int Channel, string Source)>();
     private bool _syncedThisFrame = false;
-    private OutputMode _outputMode = OutputMode.Buttplug;
     private bool _outputResolved = false;
     private int _rangeMin = 0;
     private int _rangeMax = 100;
@@ -106,6 +107,10 @@ public partial class FunscriptPlayer : Node
     private ScoreService _score;
     private Node _settings;
 
+    // The pure route resolver (GDScript static, unit-tested). Loaded once; called with the settings
+    // config + the live Buttplug catalog to produce the dispatch plan.
+    private GDScript _deviceRoutingScript;
+
     public override void _Ready()
     {
         _serial = GetNode<SerialDeviceService>("/root/SerialDeviceService");
@@ -113,6 +118,7 @@ public partial class FunscriptPlayer : Node
         _inventory = GetNode<InventoryService>("/root/InventoryService");
         _score = GetNode<ScoreService>("/root/ScoreService");
         _settings = GetNode("/root/SettingsService");
+        _deviceRoutingScript = GD.Load<GDScript>("res://scripts/device/DeviceRouting.gd");
     }
 
     /// Push updated range-clamp values directly into the player.
@@ -139,14 +145,12 @@ public partial class FunscriptPlayer : Node
         _actionIndex = 0;
         _positionMs = 0.0;
         _playing = false;
-        // Fully invalidate the resolve cache — a new round must re-pick the
-        // device. Resetting only _isLinearDevice would leave _outputResolved
-        // true if Options had been opened between rounds (Pause → EaseToNeutral
-        // → ResolveOutput re-sets it), so Play() would skip re-resolution and
-        // _isLinearDevice would stay null. SendCommand then falls through to
-        // the vibrator branch even for linear devices like the Handy.
-        _isLinearDevice = null;
-        _deviceIndex = -1;
+        // Fully invalidate the resolve cache — a new round must rebuild the routing plan.
+        // _outputResolved = false forces Play()/Resume() to re-run BuildRoutingPlan even if Options
+        // was opened between rounds (Pause → EaseToNeutral → ResolveOutput would otherwise leave it true).
+        _strokeBackend = StrokeBackend.None;
+        _strokeDeviceIndex = -1;
+        _vibeRoutes.Clear();
         _outputResolved = false;
 
         foreach (var kv in _axes)
@@ -350,8 +354,6 @@ public partial class FunscriptPlayer : Node
     // (which have no axis scripts) receive no unnecessary secondary-axis traffic.
     private void _SendNeutralToUnloadedAxes()
     {
-        if (_outputMode != OutputMode.Serial)
-            return;
         if (_axes.Count == 0)
             return; // no multi-axis scripts → nothing to park
 
@@ -408,8 +410,9 @@ public partial class FunscriptPlayer : Node
         foreach (var kv in _vibScripts)
             kv.Value.Index = 0;
 
-        _isLinearDevice = null;
-        _deviceIndex = -1;
+        _strokeBackend = StrokeBackend.None;
+        _strokeDeviceIndex = -1;
+        _vibeRoutes.Clear();
         _outputResolved = false;
     }
 
@@ -457,8 +460,8 @@ public partial class FunscriptPlayer : Node
     // sudden linear strokes are, so no ease is needed.
     private void _StartEaseIn()
     {
-        if (_isLinearDevice == false)
-            return; // vibrators: no ease-in
+        if (_strokeBackend == StrokeBackend.None)
+            return; // no stroke target: nothing to ease
 
         if (_actions.Count == 0)
             return;
@@ -487,38 +490,31 @@ public partial class FunscriptPlayer : Node
 
         double homeNorm = _homePosition / 100.0;
 
-        if (_outputMode == OutputMode.Serial)
+        // Stroke target homes to the user position.
+        if (_strokeBackend == StrokeBackend.Serial)
         {
             var serial = _serial;
             if (serial != null && serial.SerialConnected)
-            {
-                // L0 homes to the user-configured position.
                 serial.SendLinear(_homeEaseMs, homeNorm);
-                // Secondary axes always return to centre — home position is L0-only.
-                foreach (var axis in _axes.Keys)
-                    serial.SendAxis(axis, _homeEaseMs, 0.5);
-            }
-            return;
+        }
+        else if (_strokeBackend == StrokeBackend.Buttplug)
+        {
+            var bp = _buttplug;
+            if (bp != null && bp.BpConnected && _strokeDeviceIndex >= 0)
+                bp.SendLinear(_strokeDeviceIndex, _homeEaseMs, homeNorm);
         }
 
-        var bp = _buttplug;
-        if (bp == null || !bp.BpConnected || _deviceIndex < 0)
-            return;
+        // Secondary axes (serial) always return to centre.
+        var serialAx = _serial;
+        if (serialAx != null && serialAx.SerialConnected)
+            foreach (var axis in _axes.Keys)
+                serialAx.SendAxis(axis, _homeEaseMs, 0.5);
 
-        if (_isLinearDevice == true)
-        {
-            bp.SendLinear(_deviceIndex, _homeEaseMs, homeNorm);
-        }
-        else if (_vibScripts.Count > 0)
-        {
-            // Explicitly silence every vibration channel loaded from vib scripts.
-            for (int ch = 0; ch < Math.Max(1, _vibChannelCount); ch++)
-                bp.SendVibrateChannel(_deviceIndex, ch, 0.0);
-        }
-        else
-        {
-            bp.SendVibrate(_deviceIndex, 0.0);
-        }
+        // Silence every mapped vibe actuator.
+        var bpv = _buttplug;
+        if (bpv != null && bpv.BpConnected)
+            foreach (var route in _vibeRoutes)
+                bpv.SendVibrateChannel(route.Index, route.Channel, 0.0);
     }
 
     // Call this each frame from GameLoop to keep funscript in sync with the video clock.
@@ -551,9 +547,8 @@ public partial class FunscriptPlayer : Node
                 _actionIndex++;
             }
 
-            // Dispatch secondary axes (serial only). Applies the same smoothstep
-            // ease-in as L0 so all axes blend in together from neutral at round start.
-            if (_outputMode == OutputMode.Serial)
+            // Secondary axes → the serial device whenever it's connected (serial T-code only). Same
+            // smoothstep ease-in as L0 so all axes blend in from neutral together at round start.
             {
                 var serial = _serial;
                 if (serial != null && serial.SerialConnected)
@@ -604,35 +599,21 @@ public partial class FunscriptPlayer : Node
                 }
             }
 
-            // Dispatch vib scripts (Buttplug vibrators only).
-            // Uses the same _positionMs clock as the main script so both are in sync.
-            // Channel 0 (vib1) is mirrored to channel 1 when no vib2 script is loaded
-            // and the device reports 2+ vibration channels.
-            if (_outputMode == OutputMode.Buttplug && _isLinearDevice == false && _vibScripts.Count > 0)
+            // Vibe scripts (vibe1 / vibe2) → their mapped actuators, on the same clock as L0.
+            if (_vibScripts.Count > 0)
             {
-                var bpVib = _buttplug;
-                if (bpVib != null && bpVib.BpConnected && _deviceIndex >= 0)
+                foreach (var vibEntry in _vibScripts)
                 {
-                    bool hasCh1 = _vibScripts.ContainsKey(1);
-
-                    foreach (var vibEntry in _vibScripts)
+                    string source = vibEntry.Key == 0 ? "vibe1" : "vibe2";
+                    var vstate = vibEntry.Value;
+                    while (vstate.Index < vstate.Actions.Count)
                     {
-                        int channel = vibEntry.Key;
-                        var vstate = vibEntry.Value;
-                        while (vstate.Index < vstate.Actions.Count)
-                        {
-                            if (vstate.Actions[vstate.Index].AtMs > _positionMs)
-                                break;
+                        if (vstate.Actions[vstate.Index].AtMs > _positionMs)
+                            break;
 
-                            double intensity = Math.Clamp(vstate.Actions[vstate.Index].Pos / 100.0, 0.0, 1.0) * _vibeIntensity;
-                            bpVib.SendVibrateChannel(_deviceIndex, channel, intensity);
-
-                            // Mirror channel 0 → channel 1 when no separate vib2 script.
-                            if (channel == 0 && !hasCh1 && _vibChannelCount >= 2)
-                                bpVib.SendVibrateChannel(_deviceIndex, 1, intensity);
-
-                            vstate.Index++;
-                        }
+                        double intensity = vstate.Actions[vstate.Index].Pos / 100.0 * _vibeIntensity;
+                        SendToVibeSource(source, intensity);
+                        vstate.Index++;
                     }
                 }
             }
@@ -649,9 +630,8 @@ public partial class FunscriptPlayer : Node
                 _SendFillerCommand();
             }
 
-            // Vibrators can't interpolate, so update them frequently with a
-            // triangle-wave intensity that mirrors the linear stroke position.
-            if (_isLinearDevice == false)
+            // Vibrators can't interpolate — update mapped actuators frequently with a triangle wave.
+            if (_vibeRoutes.Count > 0)
             {
                 _fillerVibTickMs += delta * 1000.0;
                 if (_fillerVibTickMs >= FillerVibTickIntervalMs)
@@ -670,20 +650,19 @@ public partial class FunscriptPlayer : Node
         target = Math.Clamp(target, _rangeMin, _rangeMax);
         uint dur = (uint)_fillerHalfCycleMs;
 
-        if (_outputMode == OutputMode.Serial)
+        // Linear filler → the stroke target. Vibrators are handled by _SendFillerVibrateTick.
+        if (_strokeBackend == StrokeBackend.Serial)
         {
             var serial = _serial;
             if (serial != null && serial.SerialConnected)
                 serial.SendLinear(dur, target / 100.0);
-            return;
         }
-
-        var bp = _buttplug;
-        if (bp == null || !bp.BpConnected || _deviceIndex < 0) return;
-
-        if (_isLinearDevice == true)
-            bp.SendLinear(_deviceIndex, dur, target / 100.0);
-        // Vibrators are handled by _SendFillerVibrateTick, not here.
+        else if (_strokeBackend == StrokeBackend.Buttplug)
+        {
+            var bp = _buttplug;
+            if (bp != null && bp.BpConnected && _strokeDeviceIndex >= 0)
+                bp.SendLinear(_strokeDeviceIndex, dur, target / 100.0);
+        }
     }
 
     // Compute current triangle-wave intensity for a vibrator and send it.
@@ -695,18 +674,19 @@ public partial class FunscriptPlayer : Node
         double pos = fromPos + (toPos - fromPos) * t;
         pos = Math.Clamp(pos, _rangeMin, _rangeMax);
 
+        // Filler ignores per-actuator source (it's a global idle wave) → drive every vibe actuator.
         var bp = _buttplug;
-        if (bp == null || !bp.BpConnected || _deviceIndex < 0) return;
-        bp.SendVibrate(_deviceIndex, pos / 100.0 * _vibeIntensity);
+        if (bp == null || !bp.BpConnected)
+            return;
+        double intensity = Math.Clamp(pos / 100.0 * _vibeIntensity, 0.0, 1.0);
+        foreach (var route in _vibeRoutes)
+            bp.SendVibrateChannel(route.Index, route.Channel, intensity);
     }
 
     private void ResolveOutput()
     {
         if (_outputResolved)
             return;
-
-        string mode = _settings.Call("get_output_mode").AsString();
-        _outputMode = mode == "serial" ? OutputMode.Serial : OutputMode.Buttplug;
 
         // Cache device range limits so SendCommand doesn't hit disk per-action.
         _rangeMin = _settings.Call("get_range_min").AsInt32();
@@ -727,29 +707,108 @@ public partial class FunscriptPlayer : Node
 
         // Cache device latency offset and vibrator intensity scale. Both can be
         // overridden live by Options via their setters, but seed from disk here.
+        // (Per-backend serial/intiface delays arrive in Slice 3b.)
         _latencyOffsetMs = _settings.Call("get_latency_offset_ms").AsInt32();
         _vibeIntensity = Math.Clamp(_settings.Call("get_vibe_intensity").AsInt32(), 0, 100) / 100f;
         _maxStrokeSpeed = Math.Max(0, _settings.Call("get_max_stroke_speed").AsInt32());
 
-        if (_outputMode == OutputMode.Serial)
+        BuildRoutingPlan();
+        _outputResolved = true;
+    }
+
+    // Rebuilds the stroke target + vibe routes from the saved routing config, resolved (by the pure
+    // GDScript resolver) against the live Buttplug catalog. Falls back to the legacy
+    // output_mode / selected_device when no routing has been configured yet, so existing single-device
+    // setups keep working until they map devices in Options (Slice 4).
+    private void BuildRoutingPlan()
+    {
+        _strokeBackend = StrokeBackend.None;
+        _strokeDeviceIndex = -1;
+        _vibeRoutes.Clear();
+
+        string strokeTarget = _settings.Call("get_stroke_target").AsString();
+        var vibRoutes = _settings.Call("get_vibration_routes").AsGodotDictionary();
+        var constrictRoutes = _settings.Call("get_constrict_routes").AsGodotDictionary();
+
+        if (string.IsNullOrEmpty(strokeTarget) && vibRoutes.Count == 0)
         {
-            // Serial T-code devices are always linear; nothing else to resolve.
-            _isLinearDevice = true;
-            _deviceIndex = 0;
+            BuildLegacyPlan();
+            return;
+        }
+
+        var catalog = _buttplug != null ? _buttplug.GetDeviceCatalog() : new Godot.Collections.Array();
+        var plan = _deviceRoutingScript
+            .Call("resolve", strokeTarget, vibRoutes, constrictRoutes, catalog)
+            .AsGodotDictionary();
+
+        var stroke = plan["stroke"].AsGodotDictionary();
+        if (stroke.Count > 0)
+        {
+            string backend = stroke["backend"].AsString();
+            if (backend == "serial")
+            {
+                _strokeBackend = StrokeBackend.Serial;
+            }
+            else if (backend == "bp" && _buttplug != null)
+            {
+                int idx = _buttplug.GetDeviceIndexById(stroke["device"].AsString());
+                if (idx >= 0)
+                {
+                    _strokeBackend = StrokeBackend.Buttplug;
+                    _strokeDeviceIndex = idx;
+                }
+            }
+        }
+
+        foreach (var v in plan["vibration"].AsGodotArray())
+        {
+            var route = v.AsGodotDictionary();
+            int idx = _buttplug != null ? _buttplug.GetDeviceIndexById(route["device"].AsString()) : -1;
+            if (idx >= 0)
+                _vibeRoutes.Add((idx, route["channel"].AsInt32(), route["source"].AsString()));
+        }
+    }
+
+    // Backward-compat: derive a plan from the pre-routing output_mode / selected_device so a user who
+    // hasn't opened the new routing UI keeps their existing single device. Removed once routing is the
+    // only path (Slice 4+).
+    private void BuildLegacyPlan()
+    {
+        string mode = _settings.Call("get_output_mode").AsString();
+        if (mode == "serial")
+        {
+            _strokeBackend = StrokeBackend.Serial;
+            return;
+        }
+
+        var bp = _buttplug;
+        if (bp == null)
+            return;
+        int idx = bp.GetSelectedDeviceIndex();
+        if (idx < 0)
+            return;
+
+        if (bp.DeviceSupportsLinear(idx))
+        {
+            _strokeBackend = StrokeBackend.Buttplug;
+            _strokeDeviceIndex = idx;
         }
         else
         {
-            var bp = _buttplug;
-            if (bp != null)
+            // Vibrator: map each channel to its vib script, else follow the stroke — mirrors old behaviour.
+            int channels = Math.Max(1, bp.GetVibrationChannelCount(idx));
+            for (int ch = 0; ch < channels; ch++)
             {
-                _deviceIndex = bp.GetSelectedDeviceIndex();
-                _isLinearDevice = _deviceIndex >= 0 && bp.DeviceSupportsLinear(_deviceIndex);
-                // Vibration channel count is fixed for the resolved device — cache it
-                // so the per-frame vib dispatch never re-enumerates device features.
-                _vibChannelCount = (_isLinearDevice == false && _deviceIndex >= 0) ? bp.GetVibrationChannelCount(_deviceIndex) : 0;
+                string source;
+                if (_vibScripts.ContainsKey(ch))
+                    source = ch == 0 ? "vibe1" : "vibe2";
+                else if (_vibScripts.Count > 0)
+                    source = "vibe1";
+                else
+                    source = "stroke";
+                _vibeRoutes.Add((idx, ch, source));
             }
         }
-        _outputResolved = true;
     }
 
     private void SendCommand(int index)
@@ -786,7 +845,7 @@ public partial class FunscriptPlayer : Node
         // device doesn't receive an inconsistent target during the blend window.
         // Vibrators are exempt — _StartEaseIn() never sets _easing for them, but
         // guard here too so any stale flag can never affect vibrator output.
-        if (_easing && _isLinearDevice != false)
+        if (_easing)
         {
             double elapsed = _positionMs - _easeStartMs;
             float t = (float)Math.Clamp(elapsed / _easeDurationMs, 0.0, 1.0);
@@ -813,45 +872,43 @@ public partial class FunscriptPlayer : Node
         if (index + 1 < _actions.Count)
             _score?.AddStroke(scoreAmplitude);
 
-        if (_outputMode == OutputMode.Serial)
+        // Follow-stroke vibe actuators track the commanded stroke position as intensity.
+        SendToVibeSource("stroke", currentPos / 100.0 * _vibeIntensity);
+
+        // Stroke → the single stroke target (serial or a Buttplug linear). No target = score/vibe only.
+        if (index + 1 >= _actions.Count)
+            return;
+
+        double targetNormalised = nextPos / 100.0;
+        uint durationMs = (uint)Math.Max(1, (int)(_actions[index + 1].AtMs - _actions[index].AtMs));
+        durationMs = _CapDuration(currentPos, nextPos, durationMs);
+
+        if (_strokeBackend == StrokeBackend.Serial)
         {
             var serial = _serial;
-
-            if (serial == null || !serial.SerialConnected)
-                return;
-
-            if (index + 1 >= _actions.Count)
-                return;
-
-            double targetNormalised = nextPos / 100.0;
-            uint durationMs = (uint)Math.Max(1, (int)(_actions[index + 1].AtMs - _actions[index].AtMs));
-            durationMs = _CapDuration(currentPos, nextPos, durationMs);
-            serial.SendLinear(durationMs, targetNormalised);
-
-            return;
+            if (serial != null && serial.SerialConnected)
+                serial.SendLinear(durationMs, targetNormalised);
         }
+        else if (_strokeBackend == StrokeBackend.Buttplug)
+        {
+            var bp = _buttplug;
+            if (bp != null && bp.BpConnected && _strokeDeviceIndex >= 0)
+                bp.SendLinear(_strokeDeviceIndex, durationMs, targetNormalised);
+        }
+    }
 
+    // Fan an intensity (0–1) out to every resolved vibe actuator whose source matches.
+    private void SendToVibeSource(string source, double intensity)
+    {
+        if (_vibeRoutes.Count == 0)
+            return;
         var bp = _buttplug;
-        if (bp == null || !bp.BpConnected || _deviceIndex < 0)
+        if (bp == null || !bp.BpConnected)
             return;
-
-        if (_isLinearDevice == true)
-        {
-            if (index + 1 >= _actions.Count)
-                return;
-
-            double targetNormalised = nextPos / 100.0;
-            uint durationMs = (uint)Math.Max(1, (int)(_actions[index + 1].AtMs - _actions[index].AtMs));
-            durationMs = _CapDuration(currentPos, nextPos, durationMs);
-            bp.SendLinear(_deviceIndex, durationMs, targetNormalised);
-        }
-        else
-        {
-            // Vibrators: hold the current keyframe intensity.
-            // Skip if vib scripts are loaded — per-channel dispatch runs in _Process().
-            if (_vibScripts.Count == 0)
-                bp.SendVibrate(_deviceIndex, currentPos / 100.0 * _vibeIntensity);
-        }
+        double clamped = Math.Clamp(intensity, 0.0, 1.0);
+        foreach (var route in _vibeRoutes)
+            if (route.Source == source)
+                bp.SendVibrateChannel(route.Index, route.Channel, clamped);
     }
 
     private static bool HasBlockEffect(Godot.Collections.Array effects)

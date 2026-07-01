@@ -38,6 +38,14 @@ const DEFAULT_HOME_EASE_MS: int = 2000
 const DEFAULT_LATENCY_OFFSET_MS: int = 0
 const DEFAULT_VIBE_INTENSITY: int = 100
 const DEFAULT_MAX_STROKE_SPEED: int = 0  # 0 = unlimited (units/sec)
+
+# ── Device routing (one stroker + per-actuator Buttplug vibe/constrict routes) ──
+# Actuator id: "<name>#<occurrence>:<linear|vibrate|constrict>:<channel>". Stroke target is
+# such an id (a Buttplug linear) or the sentinel "serial". Serial stays a single T-code device
+# and is NOT part of the per-actuator mapping (Buttplug-only, by design).
+const DEFAULT_STROKE_TARGET: String = ""
+const DEFAULT_VIBRATION_ROUTES: Dictionary = {}  # { actuator_id: "vibe1"|"vibe2"|"stroke" }
+const DEFAULT_CONSTRICT_ROUTES: Dictionary = {}  # { actuator_id: true }
 const DEFAULT_HUD_HIDE_DELAY: float = 3.0  # seconds
 const DEFAULT_UI_SCALE: float = 1.0  # Window.content_scale_factor multiplier
 const DEFAULT_BEAT_BAR_ENABLED: bool = false
@@ -154,6 +162,31 @@ func get_vibe_intensity() -> int:
 
 func get_max_stroke_speed() -> int:
 	return int(_config.get_value("device", "max_stroke_speed", DEFAULT_MAX_STROKE_SPEED))
+
+
+# ── Device routing ──
+func get_stroke_target() -> String:
+	return str(_config.get_value("routing", "stroke_target", DEFAULT_STROKE_TARGET))
+
+
+func get_vibration_routes() -> Dictionary:
+	var v: Variant = _config.get_value("routing", "vibration_routes", {})
+	return (v as Dictionary).duplicate() if v is Dictionary else {}
+
+
+func get_constrict_routes() -> Dictionary:
+	var v: Variant = _config.get_value("routing", "constrict_routes", {})
+	return (v as Dictionary).duplicate() if v is Dictionary else {}
+
+
+# Per-backend output delay (ms). Both default to the legacy single latency_offset_ms, so a
+# setup's tuned value carries forward until the user overrides a backend explicitly.
+func get_serial_delay_ms() -> int:
+	return int(_config.get_value("device", "serial_delay_ms", get_latency_offset_ms()))
+
+
+func get_intiface_delay_ms() -> int:
+	return int(_config.get_value("device", "intiface_delay_ms", get_latency_offset_ms()))
 
 
 func get_hud_hide_delay() -> float:
@@ -334,6 +367,27 @@ func set_vibe_intensity(value: int) -> void:
 
 func set_max_stroke_speed(value: int) -> void:
 	_config.set_value("device", "max_stroke_speed", value)
+
+
+# ── Device routing ──
+func set_stroke_target(value: String) -> void:
+	_config.set_value("routing", "stroke_target", value)
+
+
+func set_vibration_routes(value: Dictionary) -> void:
+	_config.set_value("routing", "vibration_routes", value)
+
+
+func set_constrict_routes(value: Dictionary) -> void:
+	_config.set_value("routing", "constrict_routes", value)
+
+
+func set_serial_delay_ms(value: int) -> void:
+	_config.set_value("device", "serial_delay_ms", value)
+
+
+func set_intiface_delay_ms(value: int) -> void:
+	_config.set_value("device", "intiface_delay_ms", value)
 
 
 func set_hud_hide_delay(value: float) -> void:
