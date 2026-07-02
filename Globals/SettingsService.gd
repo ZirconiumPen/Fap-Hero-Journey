@@ -376,10 +376,6 @@ func set_selected_device(value: String) -> void:
 	_config.set_value("intiface", "selected_device", value)
 
 
-func set_output_mode(value: String) -> void:
-	_config.set_value("output", "mode", value)
-
-
 func set_serial_port(value: String) -> void:
 	_config.set_value("serial", "port", value)
 
@@ -414,10 +410,6 @@ func set_home_position(value: int) -> void:
 
 func set_home_ease_ms(value: int) -> void:
 	_config.set_value("device", "home_ease_ms", value)
-
-
-func set_latency_offset_ms(value: int) -> void:
-	_config.set_value("device", "latency_offset_ms", value)
 
 
 func set_vibe_intensity(value: int) -> void:

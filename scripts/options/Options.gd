@@ -20,8 +20,6 @@ const TAB_NAMES: Array = ["GENERAL", "CONNECTION", "DEVICE", "ABOUT"]
 
 const DEFAULT_BP_ADDRESS: String = "ws://localhost:12345"
 const DEFAULT_BAUD_RATE: int = 115200
-const OUTPUT_MODES: Array = ["Buttplug (Intiface)", "Serial T-code (SR6 / OSR2)"]
-const OUTPUT_MODE_KEYS: Array = ["buttplug", "serial"]
 
 const RESOLUTIONS: Array = [
 	Vector2i(1280, 720),
@@ -74,9 +72,6 @@ var _ffmpeg_status_label: Label = null
 var _auto_transcode_toggle: Button = null
 
 @onready
-var _output_mode_dropdown: OptionButton = $ContentPanel/ContentScroll/MarginWrapper/ContentVBox/OutputSection/OutputModeRow/OutputModeDropdown
-
-@onready
 var _serial_port_dropdown: OptionButton = $ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialPortRow/SerialPortDropdown
 @onready
 var _serial_refresh_btn: Button = $ContentPanel/ContentScroll/MarginWrapper/ContentVBox/SerialSection/SerialPortRow/SerialRefreshBtn
@@ -118,8 +113,6 @@ var _home_slider: HSlider = null
 var _home_value_lbl: Label = null
 var _home_ease_input: LineEdit = null
 
-var _latency_slider: HSlider = null
-var _latency_value_lbl: Label = null
 var _vibe_slider: HSlider = null
 var _vibe_value_lbl: Label = null
 var _max_speed_slider: HSlider = null
@@ -162,7 +155,6 @@ func _ready() -> void:
 	_apply_layout()
 	_apply_theme()
 	_populate_resolution_dropdown()
-	_populate_output_mode_dropdown()
 	_refresh_serial_ports()
 	_load_settings()
 	_connect_signals()
@@ -509,7 +501,6 @@ func _apply_layout() -> void:
 
 	_res_dropdown.custom_minimum_size = Vector2(220, 0)
 	_device_dropdown.custom_minimum_size = Vector2(220, 0)
-	_output_mode_dropdown.custom_minimum_size = Vector2(280, 0)
 	_serial_port_dropdown.custom_minimum_size = Vector2(180, 0)
 
 	# ── Device Range section (built entirely in code) ─────────────────────────
@@ -1096,7 +1087,6 @@ func _apply_theme() -> void:
 	_style_slider(_master_slider)
 	_style_option_button(_res_dropdown)
 	_style_option_button(_device_dropdown)
-	_style_option_button(_output_mode_dropdown)
 	_style_option_button(_serial_port_dropdown)
 	_style_line_edit(_address_input)
 	_style_line_edit(_serial_baud_input)
@@ -1238,12 +1228,6 @@ func _populate_resolution_dropdown() -> void:
 		_res_dropdown.add_item("%d × %d" % [res.x, res.y])
 
 
-func _populate_output_mode_dropdown() -> void:
-	_output_mode_dropdown.clear()
-	for label: String in OUTPUT_MODES:
-		_output_mode_dropdown.add_item(label)
-
-
 func _refresh_serial_ports() -> void:
 	var current: String = ""
 	if _serial_port_dropdown.item_count > 0 and _serial_port_dropdown.selected >= 0:
@@ -1293,11 +1277,6 @@ func _load_settings() -> void:
 	_style_toggle(_auto_toggle, auto_connect)
 
 	_restore_device_selection(SettingsService.get_selected_device())
-
-	var mode_idx: int = OUTPUT_MODE_KEYS.find(SettingsService.get_output_mode())
-	if mode_idx < 0:
-		mode_idx = 0
-	_output_mode_dropdown.selected = mode_idx
 
 	var saved_port: String = SettingsService.get_serial_port()
 	if saved_port != "":
@@ -1417,9 +1396,6 @@ func _save_settings() -> void:
 			_device_dropdown.get_item_text(_device_dropdown.selected)
 		)
 
-	var mode_idx: int = clampi(_output_mode_dropdown.selected, 0, OUTPUT_MODE_KEYS.size() - 1)
-	SettingsService.set_output_mode(OUTPUT_MODE_KEYS[mode_idx])
-
 	if _serial_port_dropdown.selected >= 0 and _serial_port_dropdown.item_count > 0:
 		SettingsService.set_serial_port(
 			_serial_port_dropdown.get_item_text(_serial_port_dropdown.selected)
@@ -1518,10 +1494,6 @@ func _connect_signals() -> void:
 	_connect_btn.pressed.connect(_on_connect_pressed)
 	_scan_btn.pressed.connect(_on_scan_pressed)
 	_device_dropdown.item_selected.connect(_on_device_selected)
-
-	_bp_test_btn.pressed.connect(_on_bp_test_pressed)
-
-	_output_mode_dropdown.item_selected.connect(_on_output_mode_selected)
 	_serial_refresh_btn.pressed.connect(_refresh_serial_ports)
 	_serial_connect_btn.pressed.connect(_on_serial_connect_pressed)
 	_serial_test_btn.pressed.connect(_on_serial_test_pressed)
@@ -2012,30 +1984,6 @@ func _on_scan_pressed() -> void:
 	ButtplugService.StartScan()
 
 
-func _on_bp_test_pressed() -> void:
-	if not ButtplugService.BpConnected:
-		_set_status("● NOT CONNECTED", UITheme.ERROR)
-		return
-	var idx: int = ButtplugService.GetSelectedDeviceIndex()
-	if idx < 0:
-		_set_status("● NO DEVICE SELECTED", UITheme.ERROR)
-		return
-	_bp_test_btn.disabled = true
-	if ButtplugService.DeviceSupportsLinear(idx):
-		# Linear stroker: full stroke up, full stroke down, return to centre.
-		ButtplugService.SendLinear(idx, 600, 1.0)
-		await get_tree().create_timer(0.7).timeout
-		ButtplugService.SendLinear(idx, 600, 0.0)
-		await get_tree().create_timer(0.7).timeout
-		ButtplugService.SendLinear(idx, 400, 0.5)
-	else:
-		# Vibrator: pulse at full intensity then stop.
-		ButtplugService.SendVibrate(idx, 1.0)
-		await get_tree().create_timer(0.7).timeout
-		ButtplugService.SendVibrate(idx, 0.0)
-	_bp_test_btn.disabled = not ButtplugService.BpConnected or _device_dropdown.item_count == 0
-
-
 func _on_bp_connected() -> void:
 	_is_connected = true
 	_set_connected_ui(true)
@@ -2437,10 +2385,6 @@ func _apply_fullscreen(enabled: bool) -> void:
 # ---------------------------------------------------------------------------
 # Output mode + Serial
 # ---------------------------------------------------------------------------
-
-
-func _on_output_mode_selected(_index: int) -> void:
-	_save_settings()
 
 
 func _on_serial_auto_toggled(pressed: bool) -> void:
