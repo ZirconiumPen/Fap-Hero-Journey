@@ -32,22 +32,44 @@ var _video_aspect: AspectRatioContainer = null
 var _aspect_set: bool = false
 var _video_ok: bool = false
 var _play_btn: Button = null
+# Audio toggle: ON by default in trim mode (cut points often sit on musical
+# beats / scene changes), muted by default in the plain preview (no surprise
+# audio in the builder) — toggleable either way once a video is confirmed.
+var _audio_btn: Button = null
+var _audio_on: bool = false
+
+# Trim mode (✂ SET IN PREVIEW): the footer gains IN/OUT/CLEAR/APPLY controls and
+# the graph shades outside the window. `_on_trim_applied` is the round editor's
+# callback (trim_in_ms, trim_out_ms); its validity is what enables the mode.
+var _trim_mode: bool = false
+var _trim_in: int = 0
+var _trim_out: int = 0
+var _on_trim_applied: Callable = Callable()
+var _trim_label: Label = null
 
 
 # Builds and shows the overlay over `parent`. `modifiers` are stroke-affecting
 # effect dicts (each {kind, factor?/min?/max?}); pass [] for none. `mod_label`
 # names them ("Boss Modifiers" / "Curse effects" / "Boon effects").
 # video_path may be "" (graph-only) or a non-decodable codec (falls back too).
+# Passing a valid `on_trim_applied` opens in TRIM mode, seeded with trim_in/out.
 func open(
 	parent: Control,
 	funscript_path: String,
 	video_path: String,
 	modifiers: Array,
 	round_name: String,
-	mod_label: String = "Boss Modifiers"
+	mod_label: String = "Boss Modifiers",
+	trim_in: int = 0,
+	trim_out: int = 0,
+	on_trim_applied: Callable = Callable()
 ) -> void:
 	_modifiers = modifiers
 	_mod_label = mod_label
+	_trim_mode = on_trim_applied.is_valid()
+	_trim_in = trim_in
+	_trim_out = trim_out
+	_on_trim_applied = on_trim_applied
 	_build_ui(round_name)
 	parent.add_child(self)
 	move_to_front()  # sit above the builder's graph / side panel siblings
@@ -56,6 +78,8 @@ func open(
 	_graph.set_raw(raw)
 	_refresh_modified()
 	_setup_video(video_path)
+	if _trim_mode:
+		_sync_trim()
 
 
 func _build_ui(round_name: String) -> void:
@@ -122,7 +146,7 @@ func _build_ui(round_name: String) -> void:
 	video_pane.add_child(_video_aspect)
 	_video = VideoStreamPlayer.new()
 	_video.expand = true
-	_video.volume_db = -80.0  # muted by default — no surprise audio in the builder
+	_video.volume_db = -80.0  # start silent; _apply_audio sets the real state once confirmed
 	_video_aspect.add_child(_video)
 	_video_pane = video_pane
 	col.add_child(video_pane)
@@ -156,6 +180,17 @@ func _build_ui(round_name: String) -> void:
 	_play_btn.pressed.connect(_toggle_play)
 	footer.add_child(_play_btn)
 
+	# Audio toggle (also disabled until a video confirms).
+	_audio_on = _trim_mode
+	_audio_btn = UITheme.make_icon_btn("🔊", true, UITheme.PURPLE_BRIGHT)
+	_audio_btn.tooltip_text = "Toggle preview audio"
+	_audio_btn.pressed.connect(
+		func() -> void:
+			_audio_on = not _audio_on
+			_apply_audio()
+	)
+	footer.add_child(_audio_btn)
+
 	# Zoom controls — adjust the horizontal time scale of the graph.
 	var zoom_out: Button = UITheme.make_icon_btn("ZOOM −", false, UITheme.PURPLE_BRIGHT)
 	zoom_out.tooltip_text = "Zoom out (show more time)"
@@ -165,6 +200,46 @@ func _build_ui(round_name: String) -> void:
 	zoom_in.tooltip_text = "Zoom in (show less time, more detail)"
 	zoom_in.pressed.connect(func() -> void: _graph.zoom_by(1.25))
 	footer.add_child(zoom_in)
+
+	# Trim mode: place the window with the playhead, then apply back to the round.
+	if _trim_mode:
+		var set_in: Button = UITheme.make_icon_btn("⟦ IN", false, UITheme.TOXIC_GREEN)
+		set_in.tooltip_text = "Set the trim start to the playhead"
+		set_in.pressed.connect(
+			func() -> void:
+				_trim_in = int(_graph.get_playhead())
+				_sync_trim()
+		)
+		footer.add_child(set_in)
+		var set_out: Button = UITheme.make_icon_btn("OUT ⟧", false, UITheme.AMBER)
+		set_out.tooltip_text = "Set the trim end to the playhead"
+		set_out.pressed.connect(
+			func() -> void:
+				_trim_out = int(_graph.get_playhead())
+				_sync_trim()
+		)
+		footer.add_child(set_out)
+		var trim_clear: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
+		trim_clear.tooltip_text = "Clear the trim window (keep the full video)"
+		trim_clear.pressed.connect(
+			func() -> void:
+				_trim_in = 0
+				_trim_out = 0
+				_sync_trim()
+		)
+		footer.add_child(trim_clear)
+		var trim_apply: Button = UITheme.make_icon_btn("✔ APPLY TRIM", false, UITheme.SUCCESS)
+		trim_apply.tooltip_text = "Write this window to the round (baked at the next save)"
+		trim_apply.pressed.connect(
+			func() -> void:
+				_on_trim_applied.call(_trim_in, _trim_out)
+				_close()
+		)
+		footer.add_child(trim_apply)
+		_trim_label = Label.new()
+		_trim_label.add_theme_font_size_override("font_size", 11)
+		_trim_label.add_theme_color_override("font_color", UITheme.TOXIC_GREEN)
+		footer.add_child(_trim_label)
 
 	if not _modifiers.is_empty():
 		var toggle: CheckButton = CheckButton.new()
@@ -367,6 +442,8 @@ func _setup_video(path: String) -> void:
 	if started:
 		_video_ok = true
 		_play_btn.disabled = false
+		_audio_btn.disabled = false
+		_apply_audio()
 		_update_play_btn()
 		_apply_aspect()
 		set_process(true)
@@ -420,10 +497,31 @@ func _update_play_btn() -> void:
 	_play_btn.text = "⏸ PAUSE" if _is_advancing() else "▶ PLAY"
 
 
+func _apply_audio() -> void:
+	_video.volume_db = 0.0 if _audio_on else -80.0
+	_audio_btn.text = "🔊" if _audio_on else "🔇"
+
+
 # Graph scrub → seek the video to that time.
 func _on_scrubbed(ms: float) -> void:
 	if _video_ok:
 		_video.stream_position = ms / 1000.0
+
+
+# Pushes the current trim window to the graph markers + the footer readout.
+func _sync_trim() -> void:
+	_graph.set_trim(float(_trim_in), float(_trim_out) if _trim_out > 0 else -1.0)
+	if _trim_label:
+		if _trim_in <= 0 and _trim_out <= 0:
+			_trim_label.text = "NO TRIM"
+		else:
+			_trim_label.text = (
+				"TRIM %s – %s"
+				% [
+					JourneyData.ms_to_mmss(_trim_in),
+					JourneyData.ms_to_mmss(_trim_out) if _trim_out > 0 else "END",
+				]
+			)
 
 
 # ===========================================================================
@@ -454,7 +552,16 @@ class _Graph:
 	var _length_ms: float = 1.0
 	var _playhead_ms: float = 0.0
 	var _dragging: bool = false
+	# Trim markers (trim mode only): in >= 0 shows the IN line, out > 0 the OUT
+	# line; the excluded regions outside the window are shaded. -1/-1 = off.
+	var _trim_in_ms: float = -1.0
+	var _trim_out_ms: float = -1.0
 	var time_label_format: Callable = func(ms: float) -> String: return str(int(ms))
+
+	func set_trim(in_ms: float, out_ms: float) -> void:
+		_trim_in_ms = in_ms
+		_trim_out_ms = out_ms
+		queue_redraw()
 
 	func set_raw(points: Array) -> void:
 		_raw = points
@@ -633,8 +740,60 @@ class _Graph:
 		if _has_modified and _modified.size() >= 2:
 			_draw_curve(_curve_px(_modified, area), UITheme.CYAN, 2.0)
 
+		if _trim_in_ms >= 0.0 or _trim_out_ms > 0.0:
+			_draw_trim(area, font)
 		_draw_playhead(area, font)
 		_draw_y_labels(area, font)
+
+	# Shades everything outside the trim window and draws the IN / OUT marker
+	# lines, so the author sees exactly what the bake will keep.
+	func _draw_trim(area: Rect2, font: Font) -> void:
+		var shade: Color = Color(0, 0, 0, 0.55)
+		var right: float = area.position.x + area.size.x
+		if _trim_in_ms > 0.0:
+			var x_in: float = clampf(_time_to_x(_trim_in_ms), area.position.x, right)
+			draw_rect(
+				Rect2(area.position.x, area.position.y, x_in - area.position.x, area.size.y),
+				shade,
+				true
+			)
+		if _trim_out_ms > 0.0:
+			var x_out: float = clampf(_time_to_x(_trim_out_ms), area.position.x, right)
+			draw_rect(Rect2(x_out, area.position.y, right - x_out, area.size.y), shade, true)
+		if _trim_in_ms >= 0.0:
+			var xi: float = _time_to_x(maxf(_trim_in_ms, 0.0))
+			draw_line(
+				Vector2(xi, area.position.y),
+				Vector2(xi, area.position.y + area.size.y),
+				UITheme.TOXIC_GREEN,
+				2.0
+			)
+			draw_string(
+				font,
+				Vector2(xi + 4, area.position.y + area.size.y - 6),
+				"⟦ IN",
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				10,
+				UITheme.TOXIC_GREEN
+			)
+		if _trim_out_ms > 0.0:
+			var xo: float = _time_to_x(_trim_out_ms)
+			draw_line(
+				Vector2(xo, area.position.y),
+				Vector2(xo, area.position.y + area.size.y),
+				UITheme.AMBER,
+				2.0
+			)
+			draw_string(
+				font,
+				Vector2(xo - 34, area.position.y + area.size.y - 6),
+				"OUT ⟧",
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				10,
+				UITheme.AMBER
+			)
 
 	# Position labels pinned to the left edge of the visible area (over a small
 	# backing strip so curves don't run through the text) as the plot scrolls.

@@ -40,6 +40,7 @@ const CAUSE_CANCELLED: String = "cancelled"
 const CAUSE_SRC_UNREADABLE: String = "src_unreadable"
 const CAUSE_DST_UNWRITABLE: String = "dst_unwritable"
 const CAUSE_TRANSCODE_FAILED: String = "transcode_failed"
+const CAUSE_TRIM_INVALID: String = "trim_invalid"
 const CAUSE_UNKNOWN_COPY_ERROR: String = "unknown_copy_error"
 # Graph-editor structural causes (L4 validation).
 const CAUSE_NO_START: String = "no_start"
@@ -571,9 +572,15 @@ func _run_audit() -> Dictionary:
 		var node: Dictionary = _graph_model["nodes"][nid]
 		if str(node.get("type", "")) != "round":
 			continue
-		var fs_path: String = str((node.get("data", {}) as Dictionary).get("funscript_path", ""))
+		var data: Dictionary = node.get("data", {})
+		var fs_path: String = str(data.get("funscript_path", ""))
 		if fs_path != "" and FileAccess.file_exists(fs_path):
 			var actions: Array = JourneyData.read_funscript_actions(fs_path)
+			# A pending trim ships trimmed — score and time what will actually play.
+			var t_in: int = int(data.get("trim_start_ms", 0))
+			var t_out: int = int(data.get("trim_end_ms", 0))
+			if t_in > 0 or t_out > 0:
+				actions = JourneyData.trim_action_points(actions, t_in, t_out)
 			round_scores[nid] = JourneyAudit.baseline_score(actions)
 			if not actions.is_empty():
 				round_lengths[nid] = int((actions[-1] as Vector2).x)
@@ -2792,50 +2799,79 @@ func _validate_presave() -> bool:
 const SAFE_PIX_FMTS: Array[String] = ["yuv420p", "yuvj420p"]
 
 
-# Populates _transcode_plan by probing every video source in the tree. With
-# auto-transcode off, the plan stays empty (everything is copied as-is). With it
-# on, a source is planned for transcoding when its codec isn't H.264, or it's
-# H.264 in a pixel format the decoder can't handle. Returns false — and shows a
-# clear, actionable modal — when auto-transcode is on but ffmpeg can't be run,
-# so the save never produces a silently-unplayable video.
+# The _transcode_plan key for a (source, trim) combo. Untrimmed keeps the bare
+# source path (legacy shape); a pending trim gets its own entry so the same
+# source can be cut differently — or not at all — by different rounds.
+func _transcode_plan_key(src: String, trim_in: int, trim_out: int) -> String:
+	if trim_in <= 0 and trim_out <= 0:
+		return src
+	return "%s|trim:%d-%d" % [src, trim_in, trim_out]
+
+
+# Populates _transcode_plan by probing every (video source, pending trim) combo
+# in the graph. A combo is planned for encoding when its codec isn't H.264, its
+# pixel format is undecodable (10-bit, 4:2:2, …) — or it carries a TRIM, which
+# always re-encodes for a frame-accurate cut (a keyframe-snapped copy could land
+# seconds off and silently desync the rebased funscript). Trims are baked even
+# with auto-transcode OFF, so ffmpeg is required whenever any trim is pending.
+# Returns false — with an actionable modal — when ffmpeg is needed but can't run.
 func _build_transcode_plan() -> bool:
 	_transcode_plan = {}
 	if not JourneyData.graph_has_any_video(_graph_model):
 		return true
 
-	# Auto-transcode disabled: copy every video verbatim and require nothing of
-	# ffmpeg. The author has opted to manage compatibility themselves (and this
-	# is the escape hatch for setups where ffmpeg can't run, e.g. some Wine).
-	if not SettingsService.get_auto_transcode():
+	# Every round's (source, trim) combo; identical combos plan (and pool) once.
+	var combos: Dictionary = {}  # plan key → {src, trim_in, trim_out}
+	var any_trim: bool = false
+	for nid: String in _graph_model.get("nodes", {}):
+		var node: Dictionary = _graph_model["nodes"][nid]
+		if str(node.get("type", "")) != "round":
+			continue
+		var data: Dictionary = node.get("data", {})
+		var src: String = str(data.get("video_path", ""))
+		if src == "":
+			continue
+		var t_in: int = int(data.get("trim_start_ms", 0))
+		var t_out: int = int(data.get("trim_end_ms", 0))
+		any_trim = any_trim or t_in > 0 or t_out > 0
+		combos[_transcode_plan_key(src, t_in, t_out)] = {
+			"src": src, "trim_in": t_in, "trim_out": t_out
+		}
+
+	# Auto-transcode disabled: copy videos verbatim and require nothing of
+	# ffmpeg (the escape hatch for setups where ffmpeg can't run, e.g. some
+	# Wine) — UNLESS a trim is pending, which can only ship as a re-encode.
+	if not SettingsService.get_auto_transcode() and not any_trim:
 		return true
 
-	# Honest fallback: without ffprobe we can neither verify nor convert videos.
-	# Rather than silently copy and hope (the old behavior, which produced
-	# unplayable rounds), stop with guidance — including the new custom-path
-	# option, which is the usual fix under Wine. (Turning off auto-transcode is
-	# the other way out.)
+	# Honest fallback: without ffprobe/ffmpeg we can neither verify, convert,
+	# nor cut videos. Stop with guidance rather than silently copy and hope.
 	if not _ffmpeg_available():
 		_show_save_error_single(
 			"CANNOT SAVE JOURNEY",
 			CAUSE_FFMPEG_MISSING,
 			"Journey",
-			"ffmpeg / ffprobe could not be run, so videos can't be verified or converted to a format the player can decode.",
-			"Set a custom ffmpeg location in Options → Transcoding (a folder containing ffmpeg and ffprobe), or install ffmpeg on your PATH. If your videos are already H.264, you can instead turn off Auto-Transcode in Options → Transcoding to use them as-is. (Under Wine, the bundled Windows ffmpeg may not launch — a system ffmpeg path usually fixes this.)"
+			"ffmpeg / ffprobe could not be run, so videos can't be verified, converted, or trimmed.",
+			"Set a custom ffmpeg location in Options → Transcoding (a folder containing ffmpeg and ffprobe), or install ffmpeg on your PATH. If your videos are already H.264 and untrimmed, you can instead turn off Auto-Transcode in Options → Transcoding to use them as-is. (Under Wine, the bundled Windows ffmpeg may not launch — a system ffmpeg path usually fixes this.)"
 		)
 		return false
 
-	var all_video_sources: Array = JourneyData.graph_video_sources(_graph_model)
+	var auto_transcode: bool = SettingsService.get_auto_transcode()
+	var src_info: Dictionary = {}  # src → {codec, pix_fmt}; probed once per source
+	var src_duration: Dictionary = {}  # src → full duration (s); probed once
+	for key: String in combos:
+		var combo: Dictionary = combos[key]
+		var src: String = str(combo["src"])
+		var t_in: int = int(combo["trim_in"])
+		var t_out: int = int(combo["trim_out"])
+		var is_trim: bool = t_in > 0 or t_out > 0
+		if not auto_transcode and not is_trim:
+			continue  # transcode off: only pending trims are baked
 
-	# Probe every unique source. Same source used in multiple rounds is identity-
-	# by-path so we only probe once; the plan is consulted at every save site.
-	# A source is transcoded when its codec isn't H.264, or it's H.264 in a pixel
-	# format the runtime decoder can't handle (10-bit, 4:2:2, …).
-	for src: String in all_video_sources:
-		if _transcode_plan.has(src):
-			continue
-		var info: Dictionary = _get_video_stream_info(src)
-		var codec: String = info["codec"]
-		var pix: String = info["pix_fmt"]
+		if not src_info.has(src):
+			src_info[src] = _get_video_stream_info(src)
+		var codec: String = (src_info[src] as Dictionary)["codec"]
+		var pix: String = (src_info[src] as Dictionary)["pix_fmt"]
 
 		var reason: String = ""
 		if codec == "":
@@ -2844,9 +2880,23 @@ func _build_transcode_plan() -> bool:
 			reason = codec  # wrong codec (HEVC/AV1/VP9/…)
 		elif pix != "" and not (pix in SAFE_PIX_FMTS):
 			reason = "%s %s" % [codec, pix]  # h264 but undecodable profile
+		if is_trim and reason == "":
+			reason = "trim"  # fine codec, but the cut itself demands the encode
+		if reason == "":
+			continue
 
-		if reason != "":
-			_transcode_plan[src] = {"codec": reason, "duration": _video_duration_seconds(src)}
+		if not src_duration.has(src):
+			src_duration[src] = _video_duration_seconds(src)
+		var duration: float = float(src_duration[src])
+		if is_trim:
+			# Progress-bar duration = the trimmed window's length.
+			var end_s: float = (t_out / 1000.0) if t_out > 0 else duration
+			if duration > 0.0:
+				end_s = minf(end_s, duration)
+			duration = maxf(0.0, end_s - t_in / 1000.0)
+		_transcode_plan[key] = {
+			"codec": reason, "duration": duration, "trim_in": t_in, "trim_out": t_out
+		}
 
 	return true
 
@@ -3061,16 +3111,27 @@ func _save_round_node_media(
 	# No per-round folder is created; all playback assets pool into content/ by hash.
 	saved_data["folder"] = _next_round_folder_slug()
 
+	# Pending trim (consumed by this save): the video is cut and every script
+	# rebased to the window; journey.json never carries the trim itself.
+	var trim_in: int = int(data_in.get("trim_start_ms", 0))
+	var trim_out: int = int(data_in.get("trim_end_ms", 0))
+	var trimmed: bool = trim_in > 0 or trim_out > 0
+
 	# Funscript → content pool (stored + parsed once per source; stats cached by fingerprint).
 	var fs_src: String = str(data_in.get("funscript_path", ""))
 	var funscript_rel: String = ""
 	var fs_stats: Dictionary = {"count": 0, "length_ms": 0}
 	if fs_src != "":
-		var fs_pool: Dictionary = _assign_pooled_media(fs_src, fs_src.get_extension())
+		var fs_pool: Dictionary = _assign_pooled_media(
+			fs_src, fs_src.get_extension(), trim_in, trim_out
+		)
 		funscript_rel = fs_pool["rel"]
 		if fs_pool["copy"]:
 			var fs_dst: String = abs_dir + "/" + funscript_rel
-			_copy_file(fs_src, fs_dst)
+			if trimmed:
+				_write_trimmed_funscript(fs_src, fs_dst, trim_in, trim_out)
+			else:
+				_copy_file(fs_src, fs_dst)
 			fs_stats = JourneyData.read_funscript_stats(fs_dst)
 			_pooled_fs_stats[fs_pool["fingerprint"]] = fs_stats
 		else:
@@ -3079,25 +3140,34 @@ func _save_round_node_media(
 	saved_data["action_count"] = fs_stats["count"]
 	saved_data["length_ms"] = fs_stats["length_ms"]
 
-	# Secondary-axis scripts — pooled, keyed by axis (suffix preserved via _channel_pool_ext).
+	# Secondary-axis scripts — pooled, keyed by axis (suffix preserved via
+	# _channel_pool_ext); a pending trim rebases them to the same window.
 	var axis_in: Dictionary = data_in.get("axis_scripts", {})
 	var axis_rel: Dictionary = {}
 	for axis: String in axis_in:
 		var ax_src: String = str(axis_in[axis])
 		var ax_rel: String = _pool_small_file(
-			ax_src, abs_dir, _channel_pool_ext(JourneyData.AXIS_SUFFIXES.get(axis, ""), ax_src)
+			ax_src,
+			abs_dir,
+			_channel_pool_ext(JourneyData.AXIS_SUFFIXES.get(axis, ""), ax_src),
+			trim_in,
+			trim_out
 		)
 		if ax_rel != "":
 			axis_rel[axis] = ax_rel
 	saved_data["axis_scripts"] = axis_rel
 
-	# Vibrator-channel scripts — pooled, keyed by channel.
+	# Vibrator-channel scripts — pooled, keyed by channel; trimmed identically.
 	var vib_in: Dictionary = data_in.get("vib_scripts", {})
 	var vib_rel: Dictionary = {}
 	for ch: String in vib_in:
 		var vib_src: String = str(vib_in[ch])
 		var vib_rel_path: String = _pool_small_file(
-			vib_src, abs_dir, _channel_pool_ext(JourneyData.VIB_SUFFIXES.get(ch, ""), vib_src)
+			vib_src,
+			abs_dir,
+			_channel_pool_ext(JourneyData.VIB_SUFFIXES.get(ch, ""), vib_src),
+			trim_in,
+			trim_out
 		)
 		if vib_rel_path != "":
 			vib_rel[ch] = vib_rel_path
@@ -3119,16 +3189,19 @@ func _save_round_node_media(
 		# then deletes the old rNNN/ folder. No-op for content/-pooled journeys (their folder is a slug).
 		vid_src = JourneyData.find_video_in_round(str(data_in.get("folder", "")))
 	if vid_src != "":
-		var is_transcode: bool = _transcode_plan.has(vid_src)
+		var plan_key: String = _transcode_plan_key(vid_src, trim_in, trim_out)
+		var is_transcode: bool = _transcode_plan.has(plan_key)
 		var vid_ext: String = "mp4" if is_transcode else vid_src.get_extension()
-		var vid_pool: Dictionary = _assign_pooled_media(vid_src, vid_ext)
+		var vid_pool: Dictionary = _assign_pooled_media(vid_src, vid_ext, trim_in, trim_out)
 		video_rel = vid_pool["rel"]
 		if vid_pool["copy"]:
 			var vid_dst: String = abs_dir + "/" + video_rel
 			if is_transcode:
-				var info: Dictionary = _transcode_plan[vid_src]
+				var info: Dictionary = _transcode_plan[plan_key]
 				_update_modal_round(modal, rorder, total, round_name, info["codec"])
-				var ok: bool = await _transcode_video(vid_src, vid_dst, info["duration"], modal)
+				var ok: bool = await _transcode_video(
+					vid_src, vid_dst, info["duration"], modal, trim_in, trim_out
+				)
 				if not ok:
 					if _transcode_cancel:
 						_show_save_error_single(
@@ -3437,7 +3510,14 @@ func _video_duration_seconds(path: String) -> float:
 	return (out[0] as String).strip_edges().to_float()
 
 
-func _transcode_video(input: String, output: String, duration: float, modal: Control) -> bool:
+func _transcode_video(
+	input: String,
+	output: String,
+	duration: float,
+	modal: Control,
+	trim_in_ms: int = 0,
+	trim_out_ms: int = 0
+) -> bool:
 	_transcode_cancel = false
 
 	var progress_abs: String = ProjectSettings.globalize_path(TRANSCODE_PROGRESS_FILE)
@@ -3446,29 +3526,40 @@ func _transcode_video(input: String, output: String, duration: float, modal: Con
 	if pf:
 		pf.close()
 
-	var args: PackedStringArray = [
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		ProjectSettings.globalize_path(input),
-		"-c:v",
-		"libx264",
-		"-preset",
-		"fast",
-		"-crf",
-		"22",
-		"-pix_fmt",
-		"yuv420p",
-		"-c:a",
-		"aac",
-		"-b:a",
-		"192k",
-		"-progress",
-		progress_abs,
-		ProjectSettings.globalize_path(output),
-	]
+	var args: PackedStringArray = []
+	args.append_array(["-y", "-hide_banner", "-loglevel", "error"])
+	# Trim bake: -ss before -i (fast input seek; frame-accurate because we
+	# always re-encode) + an explicit -t duration after it. `duration` is
+	# already the trimmed length, so the progress bar stays honest.
+	if trim_in_ms > 0:
+		args.append_array(["-ss", "%.3f" % (trim_in_ms / 1000.0)])
+	args.append_array(["-i", ProjectSettings.globalize_path(input)])
+	if trim_out_ms > 0 or trim_in_ms > 0:
+		var trim_len: float = duration
+		if trim_len > 0.0:
+			args.append_array(["-t", "%.3f" % trim_len])
+	(
+		args
+		. append_array(
+			[
+				"-c:v",
+				"libx264",
+				"-preset",
+				"fast",
+				"-crf",
+				"22",
+				"-pix_fmt",
+				"yuv420p",
+				"-c:a",
+				"aac",
+				"-b:a",
+				"192k",
+				"-progress",
+				progress_abs,
+				ProjectSettings.globalize_path(output),
+			]
+		)
+	)
 
 	_transcode_pid = OS.create_process(_ffmpeg_binary("ffmpeg"), args)
 	if _transcode_pid <= 0:
@@ -3660,9 +3751,13 @@ func _copy_image_deduped(
 # (content/m_<fp>.<ext>), `copy` is true only the FIRST time this source is seen —
 # the caller does the actual transcode/copy then and skips it on repeats. `ext`
 # is the destination extension (mp4 for transcoded video, else the source ext).
+# A pending trim joins the fingerprint, so the same source trimmed differently
+# by two rounds pools to two files while identical trims still share one.
 # Mirrors JourneyData.plan_media_pool's first-sighting logic with a live map.
-func _assign_pooled_media(src: String, ext: String) -> Dictionary:
-	var fp: String = JourneyData.media_fingerprint(src)
+func _assign_pooled_media(
+	src: String, ext: String, trim_in: int = 0, trim_out: int = 0
+) -> Dictionary:
+	var fp: String = JourneyData.media_fingerprint(src, trim_in, trim_out)
 	var rel: String = JourneyData.pooled_media_rel(fp, ext)
 	var is_new: bool = not _pooled_media.has(fp)
 	if is_new:
@@ -3675,16 +3770,61 @@ func _assign_pooled_media(src: String, ext: String) -> Dictionary:
 # reused assets are stored once. Returns the journey-root-relative pooled path
 # ("" for an empty source). `ext_override` sets the pooled file's extension —
 # used to keep the channel suffix on axis/vib scripts (e.g. "pitch.funscript");
-# falls back to the source's extension when empty. A copy failure sets
-# _save_aborted (surfaced at the next checkpoint), like the other _copy_file sites.
-func _pool_small_file(src: String, abs_dir: String, ext_override: String = "") -> String:
+# falls back to the source's extension when empty. A pending trim writes the
+# rebased funscript instead of a verbatim copy (funscript-family files only —
+# callers never pass trim for images). A copy failure sets _save_aborted
+# (surfaced at the next checkpoint), like the other _copy_file sites.
+func _pool_small_file(
+	src: String, abs_dir: String, ext_override: String = "", trim_in: int = 0, trim_out: int = 0
+) -> String:
 	if src == "":
 		return ""
 	var ext: String = ext_override if ext_override != "" else src.get_extension()
-	var pool: Dictionary = _assign_pooled_media(src, ext)
+	var pool: Dictionary = _assign_pooled_media(src, ext, trim_in, trim_out)
 	if pool["copy"]:
-		_copy_file(src, abs_dir + "/" + pool["rel"])
+		if trim_in > 0 or trim_out > 0:
+			_write_trimmed_funscript(src, abs_dir + "/" + pool["rel"], trim_in, trim_out)
+		else:
+			_copy_file(src, abs_dir + "/" + pool["rel"])
 	return pool["rel"]
+
+
+# Writes `src` to `dst` with its actions trimmed to [trim_in, trim_out] and
+# rebased to t=0 (JourneyData.trim_funscript_json; other metadata preserved).
+# An unparseable source is copied verbatim instead — storing the full script
+# beats losing it, and the video bake proceeds regardless. Failure semantics
+# match _copy_file (sets _save_aborted for the next checkpoint).
+func _write_trimmed_funscript(src: String, dst: String, trim_in: int, trim_out: int) -> void:
+	var f: FileAccess = FileAccess.open(src, FileAccess.READ)
+	if f == null:
+		printerr("JourneyBuilder: cannot read: " + src)
+		_save_aborted = true
+		_save_abort_error = {
+			"result": {"ok": false, "reason": CAUSE_SRC_UNREADABLE, "detail": src},
+			"item": src.get_file(),
+		}
+		return
+	var text: String = f.get_as_text()
+	f.close()
+	var parser: JSON = JSON.new()
+	if parser.parse(text) != OK or not (parser.data is Dictionary):
+		printerr("JourneyBuilder: funscript unparseable, copying untrimmed: " + src)
+		_copy_file(src, dst)
+		return
+	var trimmed: Dictionary = JourneyData.trim_funscript_json(
+		parser.data as Dictionary, trim_in, trim_out
+	)
+	var out_f: FileAccess = FileAccess.open(dst, FileAccess.WRITE)
+	if out_f == null:
+		printerr("JourneyBuilder: cannot write: " + dst)
+		_save_aborted = true
+		_save_abort_error = {
+			"result": {"ok": false, "reason": CAUSE_DST_UNWRITABLE, "detail": dst},
+			"item": dst.get_file(),
+		}
+		return
+	out_f.store_string(JSON.stringify(trimmed))
+	out_f.close()
 
 
 # Builds the pooled extension for a channel script so it keeps the standard
@@ -4170,6 +4310,51 @@ func _save_check_fork_graph(node: Dictionary, ctx: String, issues: Array) -> voi
 func _save_check_round(round_data: Dictionary, ctx: String, issues: Array) -> void:
 	var name: String = (round_data.get("name", "") as String).strip_edges()
 	var label: String = '%s "%s"' % [ctx, name] if name != "" else ctx
+
+	# A pending trim must be a real window (out after in) that starts inside the
+	# content — a start past the end would bake a near-empty video with an empty
+	# funscript. The funscript's length is the cheap duration proxy here; an
+	# out-point past the end stays fine (ffmpeg simply stops at the end).
+	var trim_in: int = int(round_data.get("trim_start_ms", 0))
+	var trim_out: int = int(round_data.get("trim_end_ms", 0))
+	if trim_out > 0 and trim_in >= trim_out:
+		(
+			issues
+			. append(
+				{
+					"cause": CAUSE_TRIM_INVALID,
+					"item": label,
+					"detail":
+					(
+						"Trim start (%s) is at or past trim end (%s)."
+						% [_audit_mmss(trim_in), _audit_mmss(trim_out)]
+					),
+					"hint": "Fix the trim window in the round editor, or clear the trim.",
+				}
+			)
+		)
+	elif trim_in > 0:
+		var fs_len: int = int(
+			JourneyData.read_funscript_stats(str(round_data.get("funscript_path", ""))).get(
+				"length_ms", 0
+			)
+		)
+		if fs_len > 0 and trim_in >= fs_len:
+			(
+				issues
+				. append(
+					{
+						"cause": CAUSE_TRIM_INVALID,
+						"item": label,
+						"detail":
+						(
+							"Trim start (%s) is past the end of the content (%s)."
+							% [_audit_mmss(trim_in), _audit_mmss(fs_len)]
+						),
+						"hint": "Lower the trim start in the round editor, or clear the trim.",
+					}
+				)
+			)
 
 	# Names are display-only now (see short-folder slug scheme). Any character
 	# is fine — only empty names need to be flagged, since the name is the

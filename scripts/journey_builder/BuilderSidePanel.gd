@@ -1236,6 +1236,10 @@ func _make_side_round_editor(arr: Array, idx: int, reselect: Callable) -> Contro
 	)
 	col.add_child(preview_btn)
 
+	# ── Trim (pending; baked at save) ───────────────────────────────────────────
+	col.add_child(_side_section_separator())
+	col.add_child(_make_trim_section(arr, idx, reselect))
+
 	# Secondary device scripts (optional, collapsed) — they round out the media group.
 	col.add_child(_side_section_separator())
 	col.add_child(_make_axis_expander(arr, idx))
@@ -1373,6 +1377,127 @@ func _make_side_shop_editor(arr: Array, idx: int) -> Control:
 	mult_spin.value_changed.connect(func(v: float) -> void: arr[idx]["price_multiplier"] = v)
 	col.add_child(mult_spin)
 	return col
+
+
+# ✂ TRIM — a pending per-round video trim, consumed by the next save: the video
+# is cut frame-accurately (ffmpeg re-encode) and every funscript rebased to the
+# window. journey.json never carries the trim; after a save the trimmed copy is
+# the round's new baseline (tighter re-trims possible, widening is not).
+# `reselect` rebuilds the panel after the preview overlay applies a window.
+func _make_trim_section(arr: Array, idx: int, reselect: Callable) -> Control:
+	var round_data: Dictionary = arr[idx]
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.add_child(_side_field_label("✂ TRIM  (BAKED AT SAVE)"))
+
+	var readout: Label = Label.new()
+	readout.add_theme_font_size_override("font_size", 11)
+	readout.add_theme_color_override("font_color", UITheme.SEPARATOR)
+	readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var start_edit: LineEdit = LineEdit.new()
+	start_edit.placeholder_text = "0:00"
+	start_edit.tooltip_text = "Trim start (m:ss)"
+	start_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_line_edit(start_edit)
+	var dash: Label = Label.new()
+	dash.text = "–"
+	dash.add_theme_color_override("font_color", UITheme.PURPLE_MID)
+	var end_edit: LineEdit = LineEdit.new()
+	end_edit.placeholder_text = "end"
+	end_edit.tooltip_text = "Trim end (m:ss; empty = to the end)"
+	end_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_line_edit(end_edit)
+	var clear_btn: Button = UITheme.make_icon_btn("✕", false, UITheme.MAGENTA)
+	clear_btn.tooltip_text = "Clear the trim (keep the full video)"
+	row.add_child(start_edit)
+	row.add_child(dash)
+	row.add_child(end_edit)
+	row.add_child(clear_btn)
+	box.add_child(row)
+	box.add_child(readout)
+
+	var refresh := func() -> void:
+		var t_in: int = int(arr[idx].get("trim_start_ms", 0))
+		var t_out: int = int(arr[idx].get("trim_end_ms", 0))
+		if t_in <= 0 and t_out <= 0:
+			readout.text = "NO TRIM — FULL LENGTH"
+			return
+		var total_ms: int = int(
+			JourneyData.read_funscript_stats(str(arr[idx].get("funscript_path", ""))).get(
+				"length_ms", 0
+			)
+		)
+		var end_ms: int = t_out if t_out > 0 else total_ms
+		var kept: int = maxi(0, end_ms - t_in)
+		var text: String = (
+			"TRIM %s – %s"
+			% [
+				JourneyData.ms_to_mmss(t_in),
+				JourneyData.ms_to_mmss(t_out) if t_out > 0 else "END",
+			]
+		)
+		if kept > 0:
+			text += "  ·  %s KEPT" % JourneyData.ms_to_mmss(kept)
+		if t_out > 0 and t_in >= t_out:
+			text = "⚠ INVALID — START IS AT OR PAST END"
+		readout.text = text
+
+	var apply := func() -> void:
+		arr[idx]["trim_start_ms"] = JourneyData.mmss_to_ms(start_edit.text)
+		arr[idx]["trim_end_ms"] = JourneyData.mmss_to_ms(end_edit.text)
+		refresh.call()
+		_owner._refresh_graph()  # update the node's ✂ pending-trim badge live
+
+	start_edit.text = (
+		JourneyData.ms_to_mmss(int(round_data.get("trim_start_ms", 0)))
+		if int(round_data.get("trim_start_ms", 0)) > 0
+		else ""
+	)
+	end_edit.text = (
+		JourneyData.ms_to_mmss(int(round_data.get("trim_end_ms", 0)))
+		if int(round_data.get("trim_end_ms", 0)) > 0
+		else ""
+	)
+	start_edit.text_submitted.connect(func(_t: String) -> void: apply.call())
+	start_edit.focus_exited.connect(apply)
+	end_edit.text_submitted.connect(func(_t: String) -> void: apply.call())
+	end_edit.focus_exited.connect(apply)
+	clear_btn.pressed.connect(
+		func() -> void:
+			start_edit.text = ""
+			end_edit.text = ""
+			apply.call()
+	)
+	refresh.call()
+
+	# Visual picking: the funscript preview overlay in trim mode (graph + synced
+	# video where decodable) writes the applied window back and rebuilds the panel.
+	var pick_btn: Button = UITheme.make_icon_btn(
+		"✂ SET IN PREVIEW", str(round_data.get("funscript_path", "")) == "", UITheme.CYAN
+	)
+	pick_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pick_btn.pressed.connect(
+		func() -> void:
+			FunscriptPreview.new().open(
+				_owner,
+				str(arr[idx].get("funscript_path", "")),
+				str(arr[idx].get("video_path", "")),
+				[],
+				str(arr[idx].get("name", "")),
+				"Modifiers",
+				int(arr[idx].get("trim_start_ms", 0)),
+				int(arr[idx].get("trim_end_ms", 0)),
+				func(t_in: int, t_out: int) -> void:
+					arr[idx]["trim_start_ms"] = t_in
+					arr[idx]["trim_end_ms"] = t_out
+					reselect.call(idx)
+			)
+	)
+	box.add_child(pick_btn)
+	return box
 
 
 # ⚖ ON ARRIVAL — the audit's view of the player state reaching this node:

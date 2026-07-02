@@ -321,6 +321,10 @@ static func coerce_node_save_data(type: String, data: Dictionary) -> Dictionary:
 	out.erase("type")  # node-level — lives outside data on disk
 	out.erase("node_id")  # node-level — the node's dict key IS its id
 	out.erase("paths")  # legacy tree key; fork choices are out-edges in the graph
+	# A pending trim is CONSUMED by the save (the baked media IS the trim) —
+	# journey.json never carries trim values.
+	out.erase("trim_start_ms")
+	out.erase("trim_end_ms")
 	# Scalars get coercing overwrites (value types — no aliasing). Collection fields (arrays /
 	# dicts) are ALREADY deep-copied into `out`; only fill a default when ABSENT — reassigning
 	# `out[k] = data.get(k, …)` would re-alias the source's live array/dict and let a later
@@ -938,7 +942,10 @@ static func find_video_in_round(folder: String) -> String:
 # multi-GB videos every save. Two rounds reusing the same source file produce the
 # same fingerprint (so they pool to one file); editing the source (new size or
 # mtime) yields a new fingerprint, so a re-save picks up the changed bytes.
-static func media_fingerprint(src: String) -> String:
+# A pending trim joins the identity (two rounds trimming one source identically
+# still pool to one file; different trims get distinct files). Untrimmed keeps
+# the exact legacy identity string, so existing pooled rels stay stable.
+static func media_fingerprint(src: String, trim_start_ms: int = 0, trim_end_ms: int = 0) -> String:
 	var abs: String = ProjectSettings.globalize_path(src)
 	var size: int = 0
 	var f: FileAccess = FileAccess.open(abs, FileAccess.READ)
@@ -947,6 +954,8 @@ static func media_fingerprint(src: String) -> String:
 		f.close()
 	var mtime: int = FileAccess.get_modified_time(abs)
 	var identity: String = "%s|%d|%d" % [abs, size, mtime]
+	if trim_start_ms > 0 or trim_end_ms > 0:
+		identity += "|trim:%d-%d" % [trim_start_ms, trim_end_ms]
 	return identity.sha256_text().substr(0, 16)
 
 
@@ -1066,6 +1075,93 @@ static func read_funscript_actions(path: String) -> Array:
 	f.close()
 	points.sort_custom(func(p: Vector2, q: Vector2) -> bool: return p.x < q.x)
 	return points
+
+
+# ── Funscript trim (per-round video trim bake) ───────────────────────────────
+
+
+# Trims time-sorted Vector2(at_ms, pos) action points to the [in_ms, out_ms]
+# window and rebases them to t=0. out_ms <= 0 means "to the end". Boundary
+# strokes are preserved by SYNTHESIZING an interpolated point exactly at each
+# cut that lands mid-stroke — otherwise the device would snap from its home
+# position to the first kept action (or stop short of the last stroke's true
+# position at the out-cut). Returns [] when the window is empty/invalid.
+static func trim_action_points(points: Array, in_ms: int, out_ms: int) -> Array:
+	var end_ms: int = out_ms if out_ms > 0 else (1 << 62)
+	if in_ms >= end_ms:
+		return []
+	var out: Array = []
+	for i: int in points.size():
+		var p: Vector2 = points[i]
+		if p.x < in_ms:
+			continue
+		if p.x > end_ms:
+			break
+		# Entering the window mid-stroke: anchor the interpolated position at t=0.
+		if out.is_empty() and p.x > in_ms and i > 0:
+			out.append(Vector2(0, _pos_at(points[i - 1], p, in_ms)))
+		out.append(Vector2(p.x - in_ms, p.y))
+	# Leaving the window mid-stroke: anchor the interpolated position at the end.
+	if not out.is_empty():
+		var last_kept: Vector2 = out[-1]
+		if last_kept.x + in_ms < end_ms:
+			for i: int in points.size():
+				var p: Vector2 = points[i]
+				if p.x > end_ms and i > 0 and (points[i - 1] as Vector2).x < end_ms:
+					out.append(Vector2(end_ms - in_ms, _pos_at(points[i - 1], p, end_ms)))
+					break
+	elif points.size() >= 2:
+		# The whole window sits inside one long stroke: two interpolated anchors.
+		for i: int in range(1, points.size()):
+			var a: Vector2 = points[i - 1]
+			var b: Vector2 = points[i]
+			if a.x <= in_ms and b.x >= end_ms:
+				out.append(Vector2(0, _pos_at(a, b, in_ms)))
+				out.append(Vector2(end_ms - in_ms, _pos_at(a, b, end_ms)))
+				break
+	return out
+
+
+# "m:ss" (or "h:mm:ss", or plain seconds) → milliseconds. Empty/garbage → 0.
+static func mmss_to_ms(text: String) -> int:
+	var t: String = text.strip_edges()
+	if t == "":
+		return 0
+	var total: float = 0.0
+	for part: String in t.split(":"):
+		total = total * 60.0 + part.to_float()
+	return maxi(0, roundi(total * 1000.0))
+
+
+# Milliseconds → "m:ss" (the format mmss_to_ms accepts back).
+static func ms_to_mmss(ms: int) -> String:
+	var s: int = maxi(0, ms) / 1000
+	return "%d:%02d" % [s / 60, s % 60]
+
+
+# Linear position between two action points at time t.
+static func _pos_at(a: Vector2, b: Vector2, t: float) -> float:
+	if b.x <= a.x:
+		return b.y
+	return roundf(lerpf(a.y, b.y, (t - a.x) / (b.x - a.x)))
+
+
+# Trims a parsed funscript JSON dict: actions replaced by the trimmed/rebased
+# set (as {at, pos} ints), every other metadata key preserved. Used by the
+# save bake for the main funscript and each axis/vib sibling.
+static func trim_funscript_json(fs: Dictionary, in_ms: int, out_ms: int) -> Dictionary:
+	var points: Array = []
+	for a in fs.get("actions", []):
+		if a is Dictionary:
+			points.append(Vector2(float(a.get("at", 0)), float(a.get("pos", 0))))
+	points.sort_custom(func(p: Vector2, q: Vector2) -> bool: return p.x < q.x)
+	var trimmed: Array = trim_action_points(points, in_ms, out_ms)
+	var out: Dictionary = fs.duplicate(true)
+	var actions: Array = []
+	for p: Vector2 in trimmed:
+		actions.append({"at": int(p.x), "pos": int(p.y)})
+	out["actions"] = actions
+	return out
 
 
 static func read_funscript_stats(path: String) -> Dictionary:

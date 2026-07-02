@@ -984,6 +984,18 @@ func _type_sublabel(item: Dictionary) -> String:
 			# type (the banner shows before a boss round's intro card).
 			if item.get("is_checkpoint", false):
 				rlabel += "   ◆ CHECKPOINT"
+			# Pending-trim marker (editor only by construction: saved journeys
+			# never carry trim keys — the save consumes them into the media).
+			var t_in: int = int(item.get("trim_start_ms", 0))
+			var t_out: int = int(item.get("trim_end_ms", 0))
+			if t_in > 0 or t_out > 0:
+				rlabel += (
+					"   ✂ %s–%s"
+					% [
+						JourneyData.ms_to_mmss(t_in),
+						JourneyData.ms_to_mmss(t_out) if t_out > 0 else "END",
+					]
+				)
 			return "%s   ♦ %d" % [rlabel, c] if c > 0 else rlabel
 		"shop":
 			return "SHOP"
