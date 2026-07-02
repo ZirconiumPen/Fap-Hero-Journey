@@ -1006,11 +1006,7 @@ func _on_tab_changed(idx: int) -> void:
 			_transcode_section
 		],
 		# CONNECTION
-		[
-			get_node(VBOX + "IntifaceSection"),
-			get_node(VBOX + "SerialSection"),
-			_routing_section
-		],
+		[get_node(VBOX + "IntifaceSection"), get_node(VBOX + "SerialSection"), _routing_section],
 		# DEVICE
 		[_range_section, _filler_section],
 		# ABOUT
@@ -2052,6 +2048,7 @@ func _on_bp_error(message: String) -> void:
 # Device routing (multi-device): device cards + per-actuator source assignment.
 # ---------------------------------------------------------------------------
 
+
 func _build_routing_section() -> void:
 	# The routing UI supersedes the old output-mode dropdown + single device picker.
 	var vbox_path: String = "ContentPanel/ContentScroll/MarginWrapper/ContentVBox/"
@@ -2153,14 +2150,28 @@ func _refresh_routing_cards() -> void:
 	else:
 		for entry: Dictionary in catalog:
 			var dev_id: String = str(entry.get("id", ""))
-			var body: VBoxContainer = _make_routing_card(str(entry.get("name", dev_id)).to_upper(), UITheme.PURPLE_BRIGHT)
+			var body: VBoxContainer = _make_routing_card(
+				str(entry.get("name", dev_id)).to_upper(), UITheme.PURPLE_BRIGHT
+			)
 			if bool(entry.get("linear", false)):
-				_add_stroker_row(body, DeviceRouting.make_actuator_id(dev_id, "linear", 0), "Linear")
+				_add_stroker_row(
+					body, DeviceRouting.make_actuator_id(dev_id, "linear", 0), "Linear"
+				)
 			for ch in int(entry.get("vibrate_channels", 0)):
-				_add_vibe_row(body, DeviceRouting.make_actuator_id(dev_id, "vibrate", ch), "Vibrate %d" % (ch + 1))
+				_add_vibe_row(
+					body,
+					DeviceRouting.make_actuator_id(dev_id, "vibrate", ch),
+					"Vibrate %d" % (ch + 1)
+				)
 			for ch in int(entry.get("constrict_channels", 0)):
-				_add_constrict_row(body, DeviceRouting.make_actuator_id(dev_id, "constrict", ch), "Constrict %d" % (ch + 1))
-			_add_device_test_row(body, int(entry.get("index", -1)), bool(entry.get("linear", false)))
+				_add_constrict_row(
+					body,
+					DeviceRouting.make_actuator_id(dev_id, "constrict", ch),
+					"Constrict %d" % (ch + 1)
+				)
+			_add_device_test_row(
+				body, int(entry.get("index", -1)), bool(entry.get("linear", false))
+			)
 
 	_update_stroker_summary()
 
@@ -2340,7 +2351,9 @@ func _update_stroker_summary() -> void:
 	if target == DeviceRouting.SERIAL_TARGET:
 		_stroker_summary_lbl.text = "Stroker: Serial (T-code)"
 	elif target != "":
-		_stroker_summary_lbl.text = "Stroker: %s" % str(DeviceRouting.parse_actuator_id(target).get("device", target))
+		_stroker_summary_lbl.text = (
+			"Stroker: %s" % str(DeviceRouting.parse_actuator_id(target).get("device", target))
+		)
 	else:
 		_stroker_summary_lbl.text = "Stroker: (none set)"
 

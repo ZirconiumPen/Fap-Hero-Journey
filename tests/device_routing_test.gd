@@ -12,7 +12,7 @@ func _catalog() -> Array:
 
 
 func _find_vibe(plan: Dictionary, device: String, channel: int) -> Dictionary:
-	for e: Dictionary in (plan["vibration"] as Array):
+	for e: Dictionary in plan["vibration"] as Array:
 		if e["device"] == device and int(e["channel"]) == channel:
 			return e
 	return {}
@@ -61,7 +61,9 @@ func test_vibration_routes_resolve() -> void:
 
 
 func test_vibration_follow_stroke_source() -> void:
-	var plan: Dictionary = DeviceRouting.resolve("", {"Max 2#0:vibrate:0": "stroke"}, {}, _catalog())
+	var plan: Dictionary = DeviceRouting.resolve(
+		"", {"Max 2#0:vibrate:0": "stroke"}, {}, _catalog()
+	)
 	assert_str(str(_find_vibe(plan, "Max 2#0", 0).get("source", ""))).is_equal("stroke")
 
 
@@ -72,19 +74,25 @@ func test_vibration_absent_device_dropped() -> void:
 
 func test_vibration_channel_out_of_range_dropped() -> void:
 	# Edge 2 exposes channels 0 and 1; channel 2 does not exist.
-	var plan: Dictionary = DeviceRouting.resolve("", {"Edge 2#0:vibrate:2": "vibe1"}, {}, _catalog())
+	var plan: Dictionary = DeviceRouting.resolve(
+		"", {"Edge 2#0:vibrate:2": "vibe1"}, {}, _catalog()
+	)
 	assert_int((plan["vibration"] as Array).size()).is_equal(0)
 
 
 func test_vibration_invalid_source_dropped() -> void:
-	var plan: Dictionary = DeviceRouting.resolve("", {"Edge 2#0:vibrate:0": "bogus"}, {}, _catalog())
+	var plan: Dictionary = DeviceRouting.resolve(
+		"", {"Edge 2#0:vibrate:0": "bogus"}, {}, _catalog()
+	)
 	assert_int((plan["vibration"] as Array).size()).is_equal(0)
 
 
 func test_constrict_enabled_present() -> void:
 	var plan: Dictionary = DeviceRouting.resolve("", {}, {"Max 2#0:constrict:0": true}, _catalog())
 	assert_int((plan["constrict"] as Array).size()).is_equal(1)
-	assert_str(str(((plan["constrict"] as Array)[0] as Dictionary).get("device", ""))).is_equal("Max 2#0")
+	assert_str(str(((plan["constrict"] as Array)[0] as Dictionary).get("device", ""))).is_equal(
+		"Max 2#0"
+	)
 
 
 func test_constrict_disabled_skipped() -> void:
@@ -108,7 +116,11 @@ func test_empty_config() -> void:
 func test_full_example() -> void:
 	var plan: Dictionary = DeviceRouting.resolve(
 		"Solace Pro#0:linear:0",
-		{"Max 2#0:vibrate:0": "stroke", "Edge 2#0:vibrate:0": "vibe1", "Edge 2#0:vibrate:1": "vibe2"},
+		{
+			"Max 2#0:vibrate:0": "stroke",
+			"Edge 2#0:vibrate:0": "vibe1",
+			"Edge 2#0:vibrate:1": "vibe2"
+		},
 		{"Max 2#0:constrict:0": true},
 		_catalog()
 	)

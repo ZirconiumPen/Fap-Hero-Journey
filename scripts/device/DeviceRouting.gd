@@ -41,7 +41,10 @@ static func parse_actuator_id(id: String) -> Dictionary:
 #     "constrict": [ {"device": <id>, "channel": <int>}, ... ],
 #   }
 static func resolve(
-	stroke_target: String, vibration_routes: Dictionary, constrict_routes: Dictionary, catalog: Array
+	stroke_target: String,
+	vibration_routes: Dictionary,
+	constrict_routes: Dictionary,
+	catalog: Array
 ) -> Dictionary:
 	var by_id: Dictionary = {}
 	for entry: Dictionary in catalog:
@@ -56,7 +59,9 @@ static func resolve(
 		var s: Dictionary = parse_actuator_id(stroke_target)
 		if not s.is_empty() and s["kind"] == "linear" and by_id.has(s["device"]):
 			if bool((by_id[s["device"]] as Dictionary).get("linear", false)):
-				plan["stroke"] = {"backend": "bp", "device": s["device"], "channel": int(s["channel"])}
+				plan["stroke"] = {
+					"backend": "bp", "device": s["device"], "channel": int(s["channel"])
+				}
 
 	# Vibration — each mapped actuator that's present with a valid channel + source.
 	for aid: String in vibration_routes:
@@ -79,7 +84,10 @@ static func resolve(
 		var c: Dictionary = parse_actuator_id(aid)
 		if c.is_empty() or c["kind"] != "constrict" or not by_id.has(c["device"]):
 			continue
-		if int(c["channel"]) >= int((by_id[c["device"]] as Dictionary).get("constrict_channels", 0)):
+		if (
+			int(c["channel"])
+			>= int((by_id[c["device"]] as Dictionary).get("constrict_channels", 0))
+		):
 			continue
 		(plan["constrict"] as Array).append({"device": c["device"], "channel": int(c["channel"])})
 

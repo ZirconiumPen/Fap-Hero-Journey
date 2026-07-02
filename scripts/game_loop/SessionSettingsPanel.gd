@@ -97,8 +97,13 @@ func _build() -> void:
 	_serial_delay_lbl.text = "%d ms" % SettingsService.get_serial_delay_ms()
 	_serial_delay_slider.value_changed.connect(_on_serial_delay_changed)
 
-	vb.add_child(
-		_hint_label("Shifts each backend's output for device / Bluetooth / serial lag. Positive = acts earlier.")
+	(
+		vb
+		. add_child(
+			_hint_label(
+				"Shifts each backend's output for device / Bluetooth / serial lag. Positive = acts earlier."
+			)
+		)
 	)
 
 

@@ -217,11 +217,15 @@ func get_constrict_level1_sustain_ms() -> int:
 
 
 func get_constrict_release_threshold() -> float:
-	return float(_config.get_value("constrict", "release_threshold", DEFAULT_CONSTRICT_RELEASE_THRESHOLD))
+	return float(
+		_config.get_value("constrict", "release_threshold", DEFAULT_CONSTRICT_RELEASE_THRESHOLD)
+	)
 
 
 func get_constrict_release_sustain_ms() -> int:
-	return int(_config.get_value("constrict", "release_sustain_ms", DEFAULT_CONSTRICT_RELEASE_SUSTAIN_MS))
+	return int(
+		_config.get_value("constrict", "release_sustain_ms", DEFAULT_CONSTRICT_RELEASE_SUSTAIN_MS)
+	)
 
 
 func get_constrict_min_hold_ms() -> int:
@@ -241,7 +245,9 @@ func get_constrict_level2_sustain_ms() -> int:
 
 
 func get_constrict_level2_final_percent() -> float:
-	return float(_config.get_value("constrict", "level2_final_percent", DEFAULT_CONSTRICT_L2_FINAL_PCT))
+	return float(
+		_config.get_value("constrict", "level2_final_percent", DEFAULT_CONSTRICT_L2_FINAL_PCT)
+	)
 
 
 func get_constrict_hold_on_pause() -> bool:

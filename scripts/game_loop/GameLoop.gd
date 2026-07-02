@@ -66,10 +66,10 @@ const STROKE_RANGE_STEP: int = 5
 # auto-hiding HUD so it stays visible even when the rest of the HUD fades.
 var _device_warning_banner: PanelContainer = null
 var _device_warning_label: Label = null
-var _device_ever_seen: bool = false   # a device was present at some point this run (Slice 6 warning gate)
+var _device_ever_seen: bool = false  # a device was present at some point this run (Slice 6 warning gate)
 
-const DELAY_STEP: int = 10            # [ ] ; ' nudge the per-backend delays by this many ms
-var _delay_toast: Label = null        # transient "delay X ms" feedback for the delay hotkeys
+const DELAY_STEP: int = 10  # [ ] ; ' nudge the per-backend delays by this many ms
+var _delay_toast: Label = null  # transient "delay X ms" feedback for the delay hotkeys
 var _delay_toast_tween: Tween = null
 @onready var _end_timer: Timer = $EndTimer
 @onready var _transition: ColorRect = $TransitionLayer/TransitionOverlay
